@@ -62,28 +62,28 @@ x-app: &app
   volumes:
     - models:/cache
   environment: &app-env
-    LOG_LEVEL: ${LOG_LEVEL}
+    LOG_LEVEL: ${LOG_LEVEL:?set LOG_LEVEL}
     # Who may use the desk; the first is the owner. The gateway maps callers to these ids.
     ALLOWED_USERS: ${ALLOWED_USERS:-mat,max}
     # The app role: row-level security applies to it (services/db/init).
-    DATABASE_URL: postgresql://lauretta_app:${DB_APP_PASSWORD:?set DB_APP_PASSWORD (random, e.g. openssl rand -hex 32)}@db:5432/${DB_NAME}
+    DATABASE_URL: postgresql://lauretta_app:${DB_APP_PASSWORD:?set DB_APP_PASSWORD (random, e.g. openssl rand -hex 32)}@db:5432/${DB_NAME:?set DB_NAME}
     BROKER_URL: redis://:${BROKER_PASSWORD:?set BROKER_PASSWORD}@broker:6379/0
-    DB_POOL_MIN: ${DB_POOL_MIN}
-    DB_POOL_MAX: ${DB_POOL_MAX}
+    DB_POOL_MIN: ${DB_POOL_MIN:?set DB_POOL_MIN}
+    DB_POOL_MAX: ${DB_POOL_MAX:?set DB_POOL_MAX}
     # Models go through the gateway, which holds vLLM's key. Only the worker calls a model, so
     # only it gets the gateway's internal key (below).
     AGENT_PROVIDER: openai
     AGENT_BASE_URL: http://gateway:3000/v1
     # vLLM's served model name.
     AGENT_MODEL: gpt-oss-120b
-    AGENT_TEMPERATURE: ${AGENT_TEMPERATURE}
-    AGENT_MAX_TOKENS: ${AGENT_MAX_TOKENS}
-    AGENT_TIMEOUT: ${AGENT_TIMEOUT}
-    AGENT_RECURSION_LIMIT: ${AGENT_RECURSION_LIMIT}
-    PIPELINE_MAX_REVISIONS: ${PIPELINE_MAX_REVISIONS}
-    EMBED_MODEL: ${EMBED_MODEL}
-    EMBED_DIMS: ${EMBED_DIMS}
-    SEC_USER_AGENT: ${SEC_USER_AGENT}
+    AGENT_TEMPERATURE: ${AGENT_TEMPERATURE:?set AGENT_TEMPERATURE}
+    AGENT_MAX_TOKENS: ${AGENT_MAX_TOKENS:?set AGENT_MAX_TOKENS}
+    AGENT_TIMEOUT: ${AGENT_TIMEOUT:?set AGENT_TIMEOUT}
+    AGENT_RECURSION_LIMIT: ${AGENT_RECURSION_LIMIT:?set AGENT_RECURSION_LIMIT}
+    PIPELINE_MAX_REVISIONS: ${PIPELINE_MAX_REVISIONS:?set PIPELINE_MAX_REVISIONS}
+    EMBED_MODEL: ${EMBED_MODEL:?set EMBED_MODEL}
+    EMBED_DIMS: ${EMBED_DIMS:?set EMBED_DIMS}
+    SEC_USER_AGENT: ${SEC_USER_AGENT:?set SEC_USER_AGENT}
     # Queue and API tuning; the defaults match src/settings.py.
     BROKER_MIN_IDLE_MS: ${BROKER_MIN_IDLE_MS:-60000}
     BROKER_MAX_DELIVERIES: ${BROKER_MAX_DELIVERIES:-3}
@@ -105,9 +105,9 @@ services:
     image: pgvector/pgvector:0.8.6-pg17
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER:?set DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:?set DB_NAME}
       # Read once, by services/db/init/01-app-role.sh, when the volume is first created. Changing
       # them later also needs `ALTER ROLE ... PASSWORD` (README, Users and isolation).
       DB_APP_PASSWORD: ${DB_APP_PASSWORD:?set DB_APP_PASSWORD}
@@ -126,11 +126,14 @@ services:
   broker:
     image: valkey/valkey:9.0.6-alpine
     restart: unless-stopped
-    command: ["valkey-server", "--requirepass", "${BROKER_PASSWORD:?set BROKER_PASSWORD}", "--appendonly", "yes"]
+    command: ["valkey-server", "--requirepass", "${BROKER_PASSWORD:?set BROKER_PASSWORD}", "--appendonly", "yes",
+              "--maxmemory", "200mb", "--maxmemory-policy", "noeviction"]
     environment:
-      REDISCLI_AUTH: ${BROKER_PASSWORD}
+      REDISCLI_AUTH: ${BROKER_PASSWORD:?set BROKER_PASSWORD}
     volumes:
       - brokerdata:/data
+    # maxmemory (200mb, noeviction) sits below this limit, so a full broker refuses writes with
+    # an OOM error instead of being killed by the kernel.
     mem_limit: 256m
     networks: [api-data, worker-data]
     healthcheck:
@@ -182,7 +185,7 @@ services:
     networks: [worker-data]
     environment:
       <<: *app-env
-      DATABASE_SETUP_URL: postgresql://lauretta_migrator:${DB_MIGRATOR_PASSWORD:?set DB_MIGRATOR_PASSWORD (random, e.g. openssl rand -hex 32)}@db:5432/${DB_NAME}
+      DATABASE_SETUP_URL: postgresql://lauretta_migrator:${DB_MIGRATOR_PASSWORD:?set DB_MIGRATOR_PASSWORD (random, e.g. openssl rand -hex 32)}@db:5432/${DB_NAME:?set DB_NAME}
     healthcheck:
       disable: true
 
@@ -390,9 +393,9 @@ services:
     stop_signal: SIGTERM
     environment:
       PGHOST: db
-      PGUSER: ${DB_USER}
-      PGPASSWORD: ${DB_PASSWORD}
-      PGDATABASE: ${DB_NAME}
+      PGUSER: ${DB_USER:?set DB_USER}
+      PGPASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+      PGDATABASE: ${DB_NAME:?set DB_NAME}
       BACKUP_KEEP: ${BACKUP_KEEP:-14}
     volumes:
       - ./services/backup/backup.sh:/ops/backup.sh:ro

@@ -31,6 +31,11 @@ broker:
 stream-check *args:
     cd services/agent && uv run python scripts/stream_check.py {{ args }}
 
+# Create or migrate the checkpoint tables in the local database (as DATABASE_SETUP_URL, else
+# DATABASE_URL). The Spark uses the compose `migrate` service instead.
+migrate:
+    cd services/agent && uv run python -m src.db.migrate
+
 # docker: start the local database (loopback DB_PORT) for chat and research on this machine.
 up:
     docker compose -f docker-compose.dev.yaml up -d --wait db

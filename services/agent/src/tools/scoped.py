@@ -8,16 +8,12 @@ from langgraph.prebuilt import ToolRuntime
 from pydantic import BaseModel, ConfigDict
 
 from src.graph.ctx import Ctx
-from src.tools.models import (
-    ForgetArgs,
+from src.tools.models import ForgetArgs, RecallArgs, RememberArgs, SetHoldingArgs, TickerArgs
+from src.tools.persona_args import (
     ProposeSoulArgs,
-    RecallArgs,
-    RememberArgs,
-    SetHoldingArgs,
     SetIdentityArgs,
     SetUserDetailsArgs,
     SkipSetupStepArgs,
-    TickerArgs,
 )
 
 

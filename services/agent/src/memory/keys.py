@@ -52,6 +52,8 @@ SETUP_SKIPS: dict[SkippableStep, str] = {
 }
 SETUP_KEYS = tuple(SETUP_SKIPS.values())
 SKIPPED = "skipped"
+# Saved for team_names when the investor renamed anyone at all: the step is answered, not skipped.
+ANSWERED = "answered"
 
 
 def keys_of(kind: KeyedKind) -> tuple[str, ...]:

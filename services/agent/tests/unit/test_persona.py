@@ -14,7 +14,7 @@ from src.persona.soul import check_soul
 from src.prompts.notes import TIMED_OUT, WAITING
 from src.prompts.progress import ROLES
 from src.prompts.soul import DEFAULT_SOUL, SOUL_MAX_CHARS
-from src.tools.models import ProposeSoulArgs, SetIdentityArgs, SetUserDetailsArgs
+from src.tools.persona_args import ProposeSoulArgs, SetIdentityArgs, SetUserDetailsArgs
 
 
 def keyed(kind: str, key: str, value: str, created: str = "2026-09-16") -> dict:

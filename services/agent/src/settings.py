@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     # The longest `POST /v1/jobs?wait=` may block before answering 202. The gateway's
     # requestTimeout (30s) bounds the time to response headers, so stay under it.
     API_MAX_WAIT_S: PositiveInt = 25
-    # An SSE stream ends with `error STREAM_TIMEOUT` after this long; the job carries on.
+    # An SSE stream ends with a `timeout` event (STREAM_TIMEOUT) after this long; the job goes on.
     API_MAX_STREAM_S: PositiveInt = 900
     # Speech (speaches: faster-whisper and Kokoro on CPU), reached by the API only. Unset, the
     # voice routes answer 503.

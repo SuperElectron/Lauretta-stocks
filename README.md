@@ -178,6 +178,7 @@ Before the first deploy, see that:
 
 ```bash
 just deploy             # from the Mac: git pull on the Spark, build natively, migrate, start the stack
+just deploy staging     # the same for staging: deploy staging first, main once the phase is reviewed
 just ps                 # container status and health
 just logs worker        # follow the worker's logs (omit the name for every service)
 just backup             # a database dump now, into backups/ on the Spark

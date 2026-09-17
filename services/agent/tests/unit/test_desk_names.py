@@ -19,12 +19,15 @@ class FactsTable:
 
     def __init__(self) -> None:
         self.rows: list[dict[str, Any]] = []
-        # The user each transaction was scoped to.
+        # The user each transaction was scoped to, and the persona locks taken.
         self.scopes: list[str] = []
+        self.locks: list[str] = []
 
     async def execute(self, sql: str, params: tuple) -> "FactsTable":
         if "set_config('app.user_id'" in sql:
             self.scopes.append(params[0])
+        elif "pg_advisory_xact_lock" in sql:
+            self.locks.append(params[0])
         elif sql.lstrip().startswith("SELECT"):
             user_id, subject, key = params
             wanted = (user_id, subject, key, "active")

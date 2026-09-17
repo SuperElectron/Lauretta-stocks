@@ -8,7 +8,7 @@ import json
 from datetime import date
 from typing import Any
 
-from src.graph.state import Stage
+from src.graph.state import Opening, Stage
 from src.prompts import analyst, assistant, checker, strategist
 from src.prompts.rules import RULES
 
@@ -24,8 +24,13 @@ def render_assistant_prompt(
     stage: Stage,
     names: dict[str, str],
     soul_change: str = "",
+    opening: Opening = "",
 ) -> str:
-    """`setup` is the rendered `<setup>` block; `names` the desk's current names by key."""
+    """`setup` is the rendered `<setup>` block; `names` the desk's current names by key;
+    `opening` adds the first-contact intro or the greeting to the stage."""
+    instruction = assistant.STAGE_INSTRUCTION[stage].format(**names)
+    if opening:
+        instruction += "\n" + assistant.OPENING[opening].format(**names)
     parts = [
         assistant.HEAD.format(today=_today(), **names),
         f"<rules>\n{RULES}\n</rules>",
@@ -33,7 +38,7 @@ def render_assistant_prompt(
         context,
         soul_change,
         setup,
-        f"<stage>{stage}: {assistant.STAGE_INSTRUCTION[stage].format(**names)}</stage>",
+        f"<stage>{stage}: {instruction}</stage>",
     ]
     return "\n".join(part for part in parts if part)
 
