@@ -434,6 +434,20 @@ services:
       TS_SERVE_CONFIG: /config/serve.json
       TS_ENABLE_HEALTH_CHECK: "true"
       TS_LOCAL_ADDR_PORT: 127.0.0.1:9002
+    # containerboot applies serve.json but, on a fresh container, does not advertise the Service,
+    # so the tailnet address times out. Advertise it once the config is in, and forward stop
+    # signals to containerboot. Healthy only once advertised.
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        rm -f /tmp/advertised;
+        /usr/local/bin/containerboot & pid=$$!;
+        trap 'kill -TERM $$pid; wait $$pid' TERM INT;
+        until tailscale serve status --json 2>/dev/null | grep -q '"svc:lauretta"'; do
+        kill -0 $$pid || exit 1; sleep 2; done;
+        tailscale serve advertise svc:lauretta && touch /tmp/advertised;
+        wait $$pid
     volumes:
       - tsstate:/var/lib/tailscale
       # A directory mount, so containerboot sees changes to serve.json.
@@ -441,7 +455,7 @@ services:
     mem_limit: 128m
     networks: [edge]
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9002/healthz"]
+      test: ["CMD-SHELL", "test -f /tmp/advertised && wget -q -O /dev/null http://127.0.0.1:9002/healthz"]
       interval: 30s
       retries: 5
       start_period: 30s
