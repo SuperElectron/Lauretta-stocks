@@ -4,8 +4,8 @@ Every check runs before the stream opens, so a refusal is a status code. The SSE
 event's stream entry id: a reconnecting client sends it back as `Last-Event-ID` and resumes
 after it. FastAPI sends `: ping` every 15s while idle and sets `Cache-Control: no-cache` and
 `X-Accel-Buffering: no`. The stream ends after `done` or `error`; when the job is found finished
-or expired with nothing more to send; or after `API_MAX_STREAM_S` with `error STREAM_TIMEOUT`
-(the job itself carries on).
+or expired with nothing more to send; or after `API_MAX_STREAM_S` with `timeout STREAM_TIMEOUT`
+(the job itself carries on, so a client can tell the cap from a failed job).
 """
 
 import asyncio
@@ -17,10 +17,10 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from src.api.deps import BrokerDep, JobId, JobStatusDep, SettingsDep
 from src.queue import events, keys
-from src.queue.models import TERMINAL, Error
+from src.queue.models import TERMINAL, Timeout
 
 router = APIRouter()
-STREAM_TIMEOUT = Error(
+STREAM_TIMEOUT = Timeout(
     code="STREAM_TIMEOUT",
     message="this stream reached its time limit; the job carries on, reconnect to follow it",
 )

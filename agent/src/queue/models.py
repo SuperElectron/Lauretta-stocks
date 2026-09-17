@@ -2,7 +2,8 @@
 
 Events, in the order a client may see them: `progress`, `tool`, `token`, `message_end` (text
 before a tool call is complete), `reset` (discard the partial message), `notice`, and last
-`done` or `error`.
+`done` or `error`. The API alone sends `timeout` when a stream reaches its cap; it is never
+stored, and the job carries on.
 """
 
 from datetime import UTC, datetime
@@ -97,6 +98,14 @@ class Error(Event):
     """Only an `AgentError`'s code and message, or `INTERNAL`; never a trace or payload."""
 
     type = "error"
+    code: str
+    message: str
+
+
+class Timeout(Event):
+    """Sent by the API, not the worker: this stream hit `API_MAX_STREAM_S`, the job goes on."""
+
+    type = "timeout"
     code: str
     message: str
 

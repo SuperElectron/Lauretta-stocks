@@ -250,14 +250,14 @@ async def test_sse_ends_when_the_job_expires_while_streaming(client, broker):
     assert [f["event"] for f in parse_sse(response.text)] == ["token"]
 
 
-async def test_sse_gives_up_after_the_stream_cap_but_the_job_goes_on(broker):
+async def test_sse_ends_with_timeout_at_the_stream_cap_but_the_job_goes_on(broker):
     async with client_for(broker, API_MAX_STREAM_S=1) as client:
         job_id = await submitted(client)
         await events.publish(broker, job_id, Token(text="Hi"), 60)
         response = await asyncio.wait_for(client.get(f"/v1/jobs/{job_id}/events"), 5)
 
     frames = parse_sse(response.text)
-    assert [f["event"] for f in frames] == ["token", "error"]
+    assert [f["event"] for f in frames] == ["token", "timeout"]
     assert "id" not in frames[-1]
     assert json.loads(frames[-1]["data"])["code"] == "STREAM_TIMEOUT"
     assert await broker.hget(keys.job(job_id), "status") == "queued"

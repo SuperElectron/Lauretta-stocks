@@ -3,10 +3,18 @@
 - A job's own failure ends in an `error` event with an `AgentError`'s code and message, or
   `INTERNAL` for anything else, whose details go to the worker log only. Either way the job is
   finished and acked.
-- A broker failure while publishing or marking is raised, so the consumer leaves the job
-  pending for another delivery.
+- A broker failure while publishing the outcome or marking the status is raised, so the
+  consumer leaves the job pending for another delivery. One inside the run itself (a token or
+  progress event, the thread lock) is caught like any failure of the job and ends as
+  `INTERNAL`; if that outcome cannot be published either, it is raised as above, and the
+  redelivered job fails `JOB_INTERRUPTED`.
 - A job delivered again is never run again once it started. If it already published `done` or
   `error`, only its status is brought up to date; otherwise it fails `JOB_INTERRUPTED`.
+- Edge case: if the broker is unreachable for longer than `BROKER_MIN_IDLE_MS` while worker A
+  runs a job, worker B may reclaim it and publish `JOB_INTERRUPTED`, and A may later publish
+  `done` too. Readers stop at the first terminal event, so they see `JOB_INTERRUPTED`, while
+  the status ends as whichever outcome was marked last. Not guarded against: it needs a long
+  broker outage, and the turn A finished is still in the thread.
 """
 
 import json
