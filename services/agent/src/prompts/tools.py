@@ -14,3 +14,9 @@ TOO_MANY_PROPOSALS = (
     "not proposed: {cap} soul proposals already wait for the investor's decision; ask them to "
     "approve or reject one first"
 )
+
+# Sent to a research role that replied without calling a tool (`graph/role.py`), before it fails.
+SUBMIT_REMINDER = (
+    "You answered without calling a tool, so nothing was handed in. Your work counts only once "
+    "you call {submit}. Call {submit} now with your result."
+)

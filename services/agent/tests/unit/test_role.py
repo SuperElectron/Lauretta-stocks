@@ -3,7 +3,7 @@ from langchain_core.messages import AIMessage
 
 from src.errors import RoleDidNotSubmit
 from src.graph.ctx import Ctx
-from src.graph.role import build_role
+from src.graph.role import MAX_REMINDERS, build_role
 from src.tools.submit import build_submit_review, build_submit_stock_story
 from tests.utils import REVIEW, STORY, call, scripted
 
@@ -17,12 +17,29 @@ async def test_role_returns_what_it_submitted():
     assert await analyst("prompt", "task", MAT) == STORY
 
 
-async def test_role_that_stops_without_submitting_fails_hard():
-    model = scripted(AIMessage(content="I think it is a buy."))
-    analyst = build_role("analyst", model, [build_submit_stock_story()], recursion_limit=10)
+async def test_role_that_keeps_answering_in_text_fails_hard_after_the_reminders():
+    model = scripted(*[AIMessage(content="I think it is a buy.") for _ in range(MAX_REMINDERS + 1)])
+    analyst = build_role("analyst", model, [build_submit_stock_story()], recursion_limit=20)
 
     with pytest.raises(RoleDidNotSubmit):
         await analyst("prompt", "task", MAT)
+
+
+async def test_role_that_answers_in_text_is_reminded_and_then_submits():
+    seen = []
+
+    class Recording(type(scripted())):
+        def _generate(self, messages, *args, **kwargs):
+            seen.append(messages[-1].content)
+            return super()._generate(messages, *args, **kwargs)
+
+    model = Recording(
+        messages=iter([AIMessage(content="Looks approved to me."), call("submit_review", REVIEW)])
+    )
+    checker = build_role("checker", model, [build_submit_review()], recursion_limit=20)
+
+    assert await checker("prompt", "task", MAT) == REVIEW
+    assert "submit_review" in seen[-1] and "nothing was handed in" in seen[-1]
 
 
 async def test_invalid_submission_goes_back_to_the_model_to_fix():
