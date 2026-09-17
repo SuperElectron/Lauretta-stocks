@@ -32,11 +32,12 @@ research pipeline (LangGraph)                                                   
   team's results.
 - **Setup** (`graph/setup.py`, wording in `prompts/setup.py`): the context node computes the
   steps from memory every turn (`investor_name`, `team_names` optional, `core_profile` from
-  `memory/topics.py`, `holdings` optional) into `setup` and `next_step` in `ChatState`, and
-  renders a `<setup>` checklist with the one next step. `skip_setup_step` stores a
-  `setup_team_names`/`setup_holdings` fact when the investor declines an optional step, so it is
-  never asked again. The pipeline reads the same computed setup for the Strategist's unknown
-  core topics.
+  `memory/topics.py`, `holdings` optional) into `setup` in `ChatState`, and renders a `<setup>`
+  checklist with the one next step. `skip_setup_step` stores a `setup_team_names` or
+  `setup_holdings` fact (value `skipped`, never returned by memory search) when the investor
+  declines an optional step, so it is never asked again. Persona facts, memories and holdings
+  are read once per turn or run (`context.load_known`); the pipeline builds the same setup from
+  them for the Strategist's unknown core topics.
 - **Stage** (`setup`/`ready`) is decided in code from `setup`, never by the model: `setup` while
   any step is still to do.
 - **Persona** (chat assistant only): `<rules>` (code, `prompts/rules.py`) then `<soul>`,

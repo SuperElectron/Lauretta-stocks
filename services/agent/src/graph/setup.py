@@ -6,18 +6,16 @@ shows it, `skipped` when the investor declined an optional one (a `setup_*` fact
 
 from typing import Any, Literal
 
-from psycopg_pool import AsyncConnectionPool
-
-from src.db.queries import facts, holdings, memories
-from src.graph.context import PER_TOPIC, unknown_topics
+from src.graph.context import Known, unknown_topics
 from src.graph.state import Stage
 from src.memory.keys import SETUP_SKIPS
-from src.persona.layers import NAME_KEYS, Persona, build_persona
+from src.persona.layers import Persona
 from src.prompts import setup as wording
 from src.prompts.identity import IDENTITY_DEFAULTS
 
 SetupStep = Literal["investor_name", "team_names", "core_profile", "holdings"]
 
+TEAM_NAME_KEYS = ("analyst_name", "checker_name", "strategist_name")
 # In the order they are offered, with whether the step is required.
 STEPS: tuple[tuple[SetupStep, bool], ...] = (
     ("investor_name", True),
@@ -29,7 +27,9 @@ STEPS: tuple[tuple[SetupStep, bool], ...] = (
 
 def compute_setup(persona: Persona, unknown: list[str], holding_count: int) -> list[dict[str, Any]]:
     """Every step with its status; `missing` lists the core topics still unknown."""
-    renamed = any(persona.identity.get(key) != IDENTITY_DEFAULTS[key] for key in NAME_KEYS)
+    # Only the research team counts: a name for the Director alone, as the old onboarding
+    # stored, does not mean the team was offered.
+    renamed = any(persona.identity.get(key) != IDENTITY_DEFAULTS[key] for key in TEAM_NAME_KEYS)
     done = {
         "investor_name": bool(persona.user.get("preferred_name")),
         "team_names": renamed,
@@ -39,18 +39,16 @@ def compute_setup(persona: Persona, unknown: list[str], holding_count: int) -> l
     steps = []
     for step, required in STEPS:
         skip = SETUP_SKIPS.get(step)
-        skipped = skip is not None and bool(persona.user.get(skip[0]))
+        skipped = skip is not None and bool(persona.user.get(skip))
         status = "done" if done[step] else "skipped" if skipped else "todo"
         missing = list(unknown) if step == "core_profile" else []
         steps.append({"step": step, "status": status, "required": required, "missing": missing})
     return steps
 
 
-async def load_setup(pool: AsyncConnectionPool, user_id: str) -> list[dict[str, Any]]:
-    persona = build_persona(await facts.persona_rows(pool, user_id))
-    remembered = await memories.by_topic(pool, user_id, PER_TOPIC)
-    positions = await holdings.all_of(pool, user_id)
-    return compute_setup(persona, unknown_topics(remembered), len(positions))
+def setup_of(known: Known) -> list[dict[str, Any]]:
+    """The setup, from what was already read this turn or run."""
+    return compute_setup(known.persona, unknown_topics(known.remembered), len(known.positions))
 
 
 def next_step(setup: list[dict[str, Any]]) -> str | None:

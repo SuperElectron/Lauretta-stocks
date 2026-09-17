@@ -44,12 +44,14 @@ KEYS: dict[str, Key] = {
 }
 
 SkippableStep = Literal["team_names", "holdings"]
-# Each optional setup step: the fact that marks it skipped and the value it is saved with.
-SETUP_SKIPS: dict[str, tuple[str, str]] = {
-    "team_names": ("setup_team_names", "declined"),
-    "holdings": ("setup_holdings", "none"),
+# Each optional setup step and the fact that marks it skipped, saved as `SKIPPED`: neutral, so
+# "would rather not say" is never read as "holds nothing".
+SETUP_SKIPS: dict[SkippableStep, str] = {
+    "team_names": "setup_team_names",
+    "holdings": "setup_holdings",
 }
-SETUP_KEYS = tuple(key for key, _ in SETUP_SKIPS.values())
+SETUP_KEYS = tuple(SETUP_SKIPS.values())
+SKIPPED = "skipped"
 
 
 def keys_of(kind: KeyedKind) -> tuple[str, ...]:

@@ -50,6 +50,7 @@ def render_analyst_prompt(
         review = previous["review"]
         parts.append(
             analyst.REVISION.format(
+                **names,
                 story=json.dumps(previous["story"]),
                 changes=json.dumps(review["required_changes"]),
                 issues=json.dumps(review["data_issues"]),
@@ -66,7 +67,7 @@ def render_checker_prompt(
     names: dict[str, str],
 ) -> str:
     """The Checker's prompt: the head (warning on the last round), the draft, the last review."""
-    last = checker.LAST_ROUND if last_round else ""
+    last = checker.LAST_ROUND.format(**names) if last_round else ""
     parts = [checker.HEAD.format(ticker=ticker, today=_today(), last_round=last, **names)]
     parts.append(f"<draft>{json.dumps(story)}</draft>")
     if previous_review is not None:

@@ -9,11 +9,12 @@ from psycopg_pool import AsyncConnectionPool
 
 from src.db.queries import theses
 from src.graph import emit
-from src.graph.context import advisor_user_block, investor_blocks, names_of_desk
+from src.graph.context import advisor_user_block, investor_blocks, load_known
 from src.graph.render import render_advisor_prompt, render_analyst_prompt, render_checker_prompt
 from src.graph.role import Role
-from src.graph.setup import load_setup, missing_core
+from src.graph.setup import missing_core, setup_of
 from src.graph.state import PipelineState
+from src.persona.layers import desk_names
 from src.prompts import analyst as analyst_text
 from src.prompts import checker as checker_text
 from src.prompts import progress
@@ -37,13 +38,11 @@ def build_pipeline(
     pool: AsyncConnectionPool, user_id: str, team: Team, max_revisions: int
 ) -> CompiledStateGraph:
     async def load_context(_state: PipelineState) -> dict[str, object]:
-        investor, _unknown = await investor_blocks(pool, user_id)
-        # The same setup state the chat reads: no sizing while a core topic is unknown.
-        unknown = missing_core(await load_setup(pool, user_id))
-        user = await advisor_user_block(pool, user_id)
-        names = await names_of_desk(pool, user_id)
+        known = await load_known(pool, user_id)
         return {
-            "investor": investor, "user": user, "unknown": unknown, "names": names,
+            "investor": investor_blocks(known), "user": advisor_user_block(known),
+            # The same setup state the chat reads: no sizing while a core topic is unknown.
+            "unknown": missing_core(setup_of(known)), "names": desk_names(known.persona),
             "revisions": 0, "story": None,
         }  # fmt: skip
 

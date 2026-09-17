@@ -33,8 +33,8 @@ Example market gap: Consensus prices capex as a permanent margin drag, but depre
 """
 
 REVISION = """<revision>
-The Checker sent your draft back. Fix every required change, re-pull any figure it disputes, \
-and submit a complete story again.
+{checker_name} (the Checker) sent your draft back. Fix every required change, re-pull any \
+figure it disputes, and submit a complete story again.
 <draft>{story}</draft>
 <required_changes>{changes}</required_changes>
 <data_issues>{issues}</data_issues>

@@ -24,8 +24,11 @@ def template(text: str, **fields: str) -> str:
 _ROLES = "|".join(re.escape(role) for role in progress.ROLES.values())
 _DETAILS = (progress.ASSISTANT_WORKING, progress.ASSISTANT_RETRYING, progress.SAVING)
 _OWN = "|".join(re.escape(detail) for detail in _DETAILS)
+_ROLE_DETAILS = (progress.ANALYST_DRAFTING, progress.ANALYST_REDRAFTING, progress.CHECKER_CHECKING,
+                 progress.CHECKER_VERDICT, progress.STRATEGIST_SIZING)  # fmt: skip
+_WORK = "|".join(template(detail) for detail in _ROLE_DETAILS)
 _LINES = [
-    template(progress.ROLE_LINE, role=f"(?:{_ROLES})"),
+    template(progress.ROLE_LINE, role=f"(?:{_ROLES})", detail=f"(?:{_WORK})"),
     template(progress.LINE, detail=f"(?:{_OWN})"),
 ]
 _LINES += [template(line) for line in progress.TOOL.values()]

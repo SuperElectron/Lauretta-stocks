@@ -7,7 +7,7 @@ from psycopg_pool import AsyncConnectionPool
 
 from src.db.queries import facts, soul
 from src.memory.embedder import Embedder
-from src.memory.keys import SETUP_SKIPS
+from src.memory.keys import SETUP_SKIPS, SKIPPED, SkippableStep
 from src.persona.approval import SHORT_ID_CHARS
 from src.tools.models import ProposeSoulArgs, SetIdentityArgs, SetUserDetailsArgs, SkipSetupStepArgs
 
@@ -70,12 +70,11 @@ def build_set_user_details(pool: AsyncConnectionPool, embedder: Embedder, user_i
 
 def build_skip_setup_step(pool: AsyncConnectionPool, embedder: Embedder, user_id: str) -> BaseTool:
     @tool(args_schema=SkipSetupStepArgs)
-    async def skip_setup_step(step: str) -> dict[str, Any]:
+    async def skip_setup_step(step: SkippableStep) -> dict[str, Any]:
         """Mark an optional setup step skipped so it is never asked again. Only when the
         investor said so: they keep the team's names, or have no holdings to record.
         """
-        key, value = SETUP_SKIPS[step]
-        await facts.set_keyed(pool, embedder, user_id, key, value, "chat")
+        await facts.set_keyed(pool, embedder, user_id, SETUP_SKIPS[step], SKIPPED, "chat")
         return {"skipped": step}
 
     return skip_setup_step

@@ -17,7 +17,7 @@ or style they avoid. Search their memories before deciding.
 trades in another currency.
 - If anything is listed as unknown about the investor, do not size: suggest hold if they own \
 it, watch if they do not, and ask for what is missing in questions for the investor.
-- If the Checker did not approve the story, do not suggest buy or add; say why.
+- If {checker_name} (the Checker) did not approve the story, do not suggest buy or add; say why.
 - Weigh the current valuation and the catalyst date against their time horizon.
 - Concentration: say what the position does to their largest weights and sector overlap.
 - Change my mind: tie conditions to the falsifier, the catalyst and a price or weight level.

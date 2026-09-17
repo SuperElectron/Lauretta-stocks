@@ -35,9 +35,8 @@ class ChatState(MessagesState):
     context: str
     # The soul, identity, user and signals blocks; rules are code and added at render.
     persona: str
-    # The guided setup (`graph/setup.py`): each step's status, and the one to take next.
+    # The guided setup (`graph/setup.py`): each step's status.
     setup: list[dict[str, Any]]
-    next_step: str | None
     # Each desk agent's current name, by name key.
     names: dict[str, str]
     # The `<soul_change>` block when this turn's message approved or rejected a proposal.

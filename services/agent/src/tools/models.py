@@ -11,6 +11,9 @@ from src.memory.topics import Topic
 from src.prompts import tools as wording
 from src.prompts.soul import SOUL_MAX_CHARS
 
+# Names go into every system prompt, progress line and report.
+NAME_MAX_CHARS = 40
+
 
 class ToolArgs(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -67,16 +70,28 @@ class FieldUpdateArgs(ToolArgs):
 
 class SetIdentityArgs(FieldUpdateArgs):
     name: str | None = Field(
-        default=None, min_length=1, description="The name the investor chose for you."
+        default=None,
+        min_length=1,
+        max_length=NAME_MAX_CHARS,
+        description="The name the investor chose for you.",
     )
     analyst_name: str | None = Field(
-        default=None, min_length=1, description="The name the investor chose for the Analyst."
+        default=None,
+        min_length=1,
+        max_length=NAME_MAX_CHARS,
+        description="The name the investor chose for the Analyst.",
     )
     checker_name: str | None = Field(
-        default=None, min_length=1, description="The name the investor chose for the Checker."
+        default=None,
+        min_length=1,
+        max_length=NAME_MAX_CHARS,
+        description="The name the investor chose for the Checker.",
     )
     strategist_name: str | None = Field(
-        default=None, min_length=1, description="The name the investor chose for the Strategist."
+        default=None,
+        min_length=1,
+        max_length=NAME_MAX_CHARS,
+        description="The name the investor chose for the Strategist.",
     )
     emoji: str | None = Field(default=None, min_length=1, max_length=8)
     vibe: str | None = Field(

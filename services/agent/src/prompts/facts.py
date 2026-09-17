@@ -21,6 +21,6 @@ SENTENCES = {
     "client": "Last connected with the {} app.",
     "channel": "Last spoke through the {} channel.",
     "last_seen_city": "Last seen near {}.",
-    "setup_team_names": "The investor kept the desk's names at setup ({}).",
-    "setup_holdings": "The investor skipped recording holdings at setup ({}).",
+    "setup_team_names": "Setup step team names: {}.",
+    "setup_holdings": "Setup step holdings: {}.",
 }
