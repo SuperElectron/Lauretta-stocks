@@ -1,0 +1,20 @@
+{
+  "valid": [
+    {"kind": "chat", "thread_id": "main", "message": "how is NVDA doing?", "ticker": null, "user": "mat",
+     "job_id": "0123456789abcdef0123456789abcdef", "client": {"client": "AnythingLLM"}, "channel": "api",
+     "submitted_at": "2026-09-17T08:00:00+00:00"},
+    {"kind": "research", "thread_id": "main", "message": null, "ticker": "NVDA", "user": "max",
+     "job_id": "fedcba9876543210fedcba9876543210", "client": {"client": "mcp"}, "channel": "api",
+     "submitted_at": "2026-09-17T08:00:00+00:00"},
+    {"kind": "chat", "thread_id": "voice", "message": "what did Charlie say?", "ticker": null, "user": "mat",
+     "job_id": "00000000000000000000000000000001", "client": {"client": "voice"}, "channel": "voice",
+     "submitted_at": "2026-09-17T08:00:00+00:00"}
+  ],
+  "invalid": [
+    {"why": "a chat job needs a message", "job": {"kind": "chat", "thread_id": "main", "message": null, "ticker": null, "user": "mat", "job_id": "0123456789abcdef0123456789abcdef", "channel": "api", "submitted_at": "2026-09-17T08:00:00+00:00"}},
+    {"why": "a research job needs a ticker and no message", "job": {"kind": "research", "thread_id": "main", "message": "hi", "ticker": "NVDA", "user": "mat", "job_id": "0123456789abcdef0123456789abcdef", "channel": "api", "submitted_at": "2026-09-17T08:00:00+00:00"}},
+    {"why": "a user id never holds a colon", "job": {"kind": "chat", "thread_id": "main", "message": "hi", "ticker": null, "user": "mat:max", "job_id": "0123456789abcdef0123456789abcdef", "channel": "api", "submitted_at": "2026-09-17T08:00:00+00:00"}},
+    {"why": "unknown channel", "job": {"kind": "chat", "thread_id": "main", "message": "hi", "ticker": null, "user": "mat", "job_id": "0123456789abcdef0123456789abcdef", "channel": "sms", "submitted_at": "2026-09-17T08:00:00+00:00"}},
+    {"why": "thread id with a space", "job": {"kind": "chat", "thread_id": "my thread", "message": "hi", "ticker": null, "user": "mat", "job_id": "0123456789abcdef0123456789abcdef", "channel": "api", "submitted_at": "2026-09-17T08:00:00+00:00"}}
+  ]
+}
