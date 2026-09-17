@@ -51,10 +51,8 @@ def fields(template: str) -> set[str]:
     ("template", "expected"),
     [
         (assistant.HEAD, {"today", *NAMES}),
-        (
-            assistant.STAGE_INSTRUCTION["setup"],
-            {"bot_name", "analyst_name", "checker_name", "strategist_name"},
-        ),
+        (assistant.OPENING["intro"], NAMES),
+        (assistant.OPENING["welcome"], set()),
         (setup.NEXT_STEP["team_names"], NAMES),
         (setup.NEXT_STEP["core_profile"], {"topic"}),
         (setup.NEXT, {"step", "instruction"}),
@@ -97,6 +95,8 @@ def test_templates_take_exactly_their_fields(template, expected):
 def test_every_outcome_and_tool_line_formats():
     values = {"verb": "approve", "short_id": "3f2a", "outcome": "x", "reason": "r", "days": 7}
     assert all(t.format(**values) for t in assistant.SOUL_CHANGE.values())
+    assert all(fields(t) <= set(values) for t in notes.SOUL_DECISION.values())
+    assert set(assistant.SOUL_CHANGE) == set(notes.SOUL_DECISION)
     assert all(fields(line) == {"name"} for line in progress.TOOL.values())
 
 
@@ -107,6 +107,7 @@ def test_each_fact_sentence_takes_one_value_and_every_key_has_one():
 
 def test_stage_instructions_take_only_the_desk_names():
     assert all(fields(text) <= NAMES for text in assistant.STAGE_INSTRUCTION.values())
+    assert all(fields(text) <= NAMES for text in assistant.OPENING.values())
 
 
 def test_no_wording_outside_the_prompts_package():

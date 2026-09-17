@@ -35,14 +35,20 @@ research pipeline (LangGraph)                                                   
   `memory/topics.py`, `holdings` optional) into `setup` in `ChatState`, and renders a `<setup>`
   checklist with the one next step. `skip_setup_step` stores a `setup_team_names` or
   `setup_holdings` fact (value `skipped`, never returned by memory search) when the investor
-  declines an optional step, so it is never asked again. Persona facts, memories and holdings
-  are read once per turn or run (`context.load_known`); the pipeline builds the same setup from
-  them for the Strategist's unknown core topics.
+  declines an optional step, so it is never asked again; `set_identity` saving any name stores
+  `setup_team_names` as `answered`, so the team step closes whoever was renamed. Whether a turn
+  opens with the first-contact intro is code too (`setup.opening`): only while `investor_name`
+  is todo and the thread has no earlier reply; with the name known a new thread greets by name.
+  Persona facts, memories and holdings are read once per turn or run (`context.load_known`); the
+  pipeline builds the same setup from them for the Strategist's unknown core topics.
 - **Stage** (`setup`/`ready`) is decided in code from `setup`, never by the model: `setup` while
   any step is still to do.
 - **Persona** (chat assistant only): `<rules>` (code, `prompts/rules.py`) then `<soul>`,
   `<identity>`, `<user>`, `<signals>`. The soul changes only when the investor replies
-  `approve soul <id>`, which code applies in the context step; the advisor sees `<user>` only.
+  `approve soul <id>`, which code applies in the context step (refused as `stale` when the
+  active soul changed since the proposal), and the notice node appends what it did; the advisor
+  sees `<user>` only and recalls memories only. The `ip` signal is stored but never rendered.
+  Persona writes take a per-user advisory lock (`facts.lock_persona`).
 - **Users**: the owner (`mat`) and Max (`max`) share the desk with isolated data. The gateway
   names the user (`X-Lauretta-User`); graphs are built once and get the user as LangGraph
   runtime context (`graph/ctx.py`: nodes `Runtime[Ctx]`, tools `ToolRuntime[Ctx]`, hidden from
@@ -70,8 +76,9 @@ Paths below are relative to `services/`.
 - `agent/src/graph/render.py`: stitches each system prompt from that wording: a head, then data
   blocks (`<investor>`, `<holdings>`, `<setup>`, `<unknown>`, `<draft>`, `<review>`), then the
   stage.
-- `agent/src/tools/`: one `build_*` factory per tool; argument schemas in `tools/models.py`, and
-  for tools over a user's data `tools/scoped.py` (adds the injected `runtime`).
+- `agent/src/tools/`: one `build_*` factory per tool; argument schemas in `tools/models.py` and
+  `tools/persona_args.py` (persona values: stripped, capped, no `<`/`>`), and for tools over a
+  user's data `tools/scoped.py` (adds the injected `runtime`).
 - `agent/src/data/`: `sec.py` + `xbrl.py` (SEC EDGAR, free, needs `SEC_USER_AGENT`),
   `market.py` (yfinance, free, unofficial).
 - `agent/src/persona/`: persona prompt blocks, the soul cap check, and soul approval.
@@ -86,8 +93,10 @@ Paths below are relative to `services/`.
   `/v1/theses/{ticker}`, `/v1/holdings`, `/healthz`. `api/openai/`: `/v1/models` and
   `/v1/chat/completions` (OpenAI-compatible, streamed, model `lauretta-<user>`), a thin adapter
   over the same jobs. `api/mcpserver/`: the MCP server at `/mcp/` (streamable HTTP, stateless;
-  owner key only at the gateway), tools over the same jobs and reads. The user comes from
-  `deps.current_user` (the gateway's header, checked against `ALLOWED_USERS`); another user's job is 404; threads are keyed by user in `threads`
+  owner key only at the gateway), tools over the same jobs and reads. `api/voice/`:
+  `/v1/audio/transcriptions`, `/v1/audio/speech` and `/v1/voice/turns` over the `speech` service.
+  The user comes from `deps.current_user` (the gateway's header, checked against
+  `ALLOWED_USERS`); another user's job is 404; threads are keyed by user in `threads`
   and found again through `thread_aliases` (hashes of prompt and answer pairs the client resends).
 - `agent/src/queue/`: Valkey Streams: `jobs` (group `workers`, reclaim, `jobs:dead`), per-job
   status hash and `job:{id}:events` stream, per-thread lock. Event models in `queue/models.py`.
@@ -96,9 +105,10 @@ Paths below are relative to `services/`.
   `graph/emit.py` (a no-op under `ainvoke`, so the CLI is unchanged).
 - `agent/src/memory/`: fastembed embeddings (local CPU, 384 dims) for pgvector search.
 - `agent/Dockerfile`, `db/`, `gateway/`, `tailscale/`, `backup/` and the root `docker-compose.yaml`:
-  the Spark stack (gateway, api, worker, broker, db, anythingllm, vllm, backup, tailscale). The
-  gateway sends `/v1/*`, `/mcp` and `/healthz` to api and every other path to AnythingLLM, the
-  web and Android client (`gateway/config.yaml`). Its internal `llm` listener, which the worker calls,
+  the Spark stack (gateway, api, worker, broker, db, anythingllm, vllm, speech, backup,
+  tailscale). The gateway sends `/v1/*`, `/mcp` and `/healthz` to api and every other path to
+  AnythingLLM, the web and Android client (`gateway/config.yaml`). Its internal `llm` listener,
+  which the worker calls,
   forwards to the `vllm` service (gpt-oss-120b on the Spark's GPU) on the private `llm` network.
   The tailscale container hosts the Service `svc:lauretta` (`tailscale/`). AnythingLLM is an
   image with settings in compose; it has no folder.
@@ -108,7 +118,8 @@ Paths below are relative to `services/`.
 
 - `langgraph-docs`, `context7`: current LangGraph/LangChain and library docs. Check them before
   changing graph, tool or checkpointer code; do not rely on memory of these APIs.
-- `postgres`: read-only (restricted) access to the local db on :5433 while `just up` runs. Use it
+- `postgres`: read-only (restricted) access to the local db on :5433 while `just up` runs; set
+  `LAURETTA_LOCAL_DB_URI` (the local `DATABASE_URL`) in your shell first. Use it
   to inspect facts, holdings, theses and checkpoints.
 - `fetch`: read a web page, for example an SEC filing linked in a thesis.
 
@@ -121,7 +132,7 @@ Paths below are relative to `services/`.
 - Prefer free data sources; a paid one needs the owner's approval first.
 - Keep Python files under 150 lines where it is logical.
 - Changing the schema means `just down clean=true` then `just up` (POC, no migrations).
-- Never read or commit `.env`; add new settings to `.env.example` and `src/settings.py`.
+- Never read or commit `.env`; add new settings to `.env.example` and `services/agent/src/settings.py`.
 
 ## Software development lifecycle
 

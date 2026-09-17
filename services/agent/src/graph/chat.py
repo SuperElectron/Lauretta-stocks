@@ -1,8 +1,9 @@
 """The chat graph: reload context, a model node, a tool node, the loop between them, and a notice.
 
 A new investor message that is exactly `approve soul <id>` or `reject soul <id>` is applied by
-code in the context step, before the model runs. A turn that proposed a soul change ends with
-the proposal and its approval phrase appended to the reply, also by code.
+code in the context step, before the model runs, and the reply ends with what it did. A turn that
+proposed a soul change ends with the proposal and its approval phrase. Both are written by code.
+Whether the turn opens with the first-contact intro is decided in code too (`setup.opening`).
 
 The graph is built once for everyone. Each run's user comes from its context (`Ctx`): the context
 step loads that user's data, and the tools read the same context.
@@ -24,9 +25,16 @@ from src.graph.ctx import Ctx, user_of
 from src.graph.history import answered, recent
 from src.graph.llm import complete, with_backoff
 from src.graph.render import render_assistant_prompt
-from src.graph.setup import render_setup, setup_of, stage
+from src.graph.setup import opening, render_setup, setup_of, stage
 from src.graph.state import ChatState
-from src.persona.approval import decide, parse_decision, proposal_notice, proposals_in_turn
+from src.persona.approval import (
+    decide,
+    decision_notice,
+    parse_decision,
+    proposal_notice,
+    proposals_in_turn,
+    soul_change_block,
+)
 from src.persona.layers import desk_names, render_persona
 from src.prompts import progress
 
@@ -49,15 +57,19 @@ def build_chat(
         latest = state["messages"][-1]
         # Only on the investor's own message: after a tool step the decision is already made.
         if isinstance(latest, HumanMessage):
-            decision = parse_decision(latest.text)
-            update["soul_change"] = await decide(pool, user_id, *decision) if decision else ""
+            phrase = parse_decision(latest.text)
+            decision = await decide(pool, user_id, *phrase) if phrase else {}
+            update["soul_decision"] = decision
+            update["soul_change"] = soul_change_block(**decision) if decision else ""
         known = await load_known(pool, user_id)
+        setup = setup_of(known)
         return {
             **update,
             "persona": render_persona(known.persona),
             "context": f"{investor_blocks(known)}\n{await theses_block(pool, user_id)}",
-            "setup": setup_of(known),
+            "setup": setup,
             "names": desk_names(known.persona),
+            "opening": opening(setup, state["messages"]),
         }
 
     async def agent(state: ChatState) -> dict[str, object]:
@@ -69,6 +81,7 @@ def build_chat(
             stage(setup),
             state["names"],
             state["soul_change"],
+            state["opening"],
         )
         history = recent(answered(state["messages"]), HISTORY_MESSAGES)
         emit.progress("assistant", progress.ASSISTANT_WORKING, state["names"]["bot_name"])
@@ -76,13 +89,15 @@ def build_chat(
         return {"messages": [complete(reply)]}
 
     def notice(state: ChatState) -> dict[str, object]:
-        """Appends each soul proposal made this turn to the final reply (same id, so replaced),
-        and sends each to a streaming caller as its own notice."""
-        proposals = proposals_in_turn(state["messages"])
-        if not proposals:
+        """Appends what this turn's soul decision did, then each soul proposal made this turn, to
+        the final reply (same id, so replaced), and sends each to a streaming caller as its own
+        notice."""
+        decision = state.get("soul_decision")
+        notices = [decision_notice(decision)] if decision else []
+        notices.extend(proposal_notice(p) for p in proposals_in_turn(state["messages"]))
+        if not notices:
             return {}
         reply = state["messages"][-1]
-        notices = [proposal_notice(p) for p in proposals]
         for text in notices:
             emit.notice(text)
         text = "\n\n".join([reply.text, *notices])

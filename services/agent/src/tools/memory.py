@@ -25,15 +25,22 @@ def build_remember(pool: AsyncConnectionPool, embedder: Embedder) -> BaseTool:
     return remember
 
 
-def build_recall(pool: AsyncConnectionPool, embedder: Embedder) -> BaseTool:
+def build_recall(
+    pool: AsyncConnectionPool,
+    embedder: Embedder,
+    kinds: tuple[str, ...] = memories.MEMORIES_AND_PROFILE,
+) -> BaseTool:
+    """`kinds`: what the search reaches; the Strategist's recall reaches memories only."""
+
     @tool(args_schema=ScopedRecallArgs)
     async def recall(query: str, runtime: ToolRuntime[Ctx], limit: int = 5) -> dict[str, Any]:
-        """Search what the investor has told us (memories and profile), best match first by
-        meaning, then exact words, with newer facts slightly ahead, and the date each was said.
-        Older facts may be out of date.
+        """Search what the investor has told us, best match first by meaning, then exact words,
+        with newer facts slightly ahead, and the date each was said. Older facts may be out of
+        date.
         """
         user_id = user_of(runtime.context)
-        return {"memories": await memories.search(pool, embedder, user_id, query, limit)}
+        found = await memories.search(pool, embedder, user_id, query, limit, kinds)
+        return {"memories": found}
 
     return recall
 

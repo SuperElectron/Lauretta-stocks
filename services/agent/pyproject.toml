@@ -21,6 +21,7 @@ dependencies = [
     "redis>=8.1.0",
     "httpx2>=2.13.0",
     "mcp>=1,<2",
+    "python-multipart>=0.0.20",
 ]
 
 [dependency-groups]

@@ -5,10 +5,14 @@ The gateway authenticates the caller and names the user in `X-Lauretta-User`, ex
 alone. Stateless: every request stands on its own, so nothing is kept between calls.
 """
 
+import functools
+from collections.abc import Awaitable, Callable
 from typing import Any
 
+from loguru import logger
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
+from pydantic import ValidationError
 from starlette.datastructures import State
 
 from src.api.deps import USER_HEADER
@@ -38,6 +42,27 @@ def desk_for(ctx: Context) -> Desk:
     return Desk(bound.broker, bound.pool, settings, named[0])
 
 
+def guarded[**P, R](tool: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+    """The MCP SDK sends a tool's exception text to the client as is. A `DeskError` carries
+    wording meant for it; anything else is logged here and reaches the client as a plain failure,
+    as an HTTP route's would be a bare 500."""
+
+    @functools.wraps(tool)
+    async def run(*args: P.args, **kwargs: P.kwargs) -> R:
+        try:
+            return await tool(*args, **kwargs)
+        except DeskError:
+            raise
+        except ValidationError as exc:
+            fields = ", ".join(".".join(map(str, e["loc"])) for e in exc.errors())
+            raise DeskError(wording.INVALID_FIELDS.format(fields=fields)) from exc
+        except Exception as exc:
+            logger.bind(tool=tool.__name__).exception("mcp.tool_failed")
+            raise DeskError(wording.MCP_TOOL_FAILED) from exc
+
+    return run
+
+
 def _progress(ctx: Context):
     steps = 0
 
@@ -50,6 +75,7 @@ def _progress(ctx: Context):
 
 
 @mcp.tool()
+@guarded
 async def ask_assistant(message: str, ctx: Context, thread_id: str = "mcp") -> dict[str, Any]:
     """Send a message to the Director, the investor's research assistant, and wait for the
     reply. Conversations continue per thread_id. It never places trades."""
@@ -59,6 +85,7 @@ async def ask_assistant(message: str, ctx: Context, thread_id: str = "mcp") -> d
 
 
 @mcp.tool()
+@guarded
 async def research_stock(ticker: str, ctx: Context) -> dict[str, Any]:
     """Run the research team on a ticker (analyst draft, checker review, strategist suggestion)
     and wait for the saved thesis. Takes minutes; progress is reported as it goes."""
@@ -68,24 +95,28 @@ async def research_stock(ticker: str, ctx: Context) -> dict[str, Any]:
 
 
 @mcp.tool()
+@guarded
 async def start_research(ticker: str, ctx: Context) -> dict[str, str]:
     """Queue a research run on a ticker without waiting; poll it with get_job."""
     return {"job_id": await desk_for(ctx).start(kind="research", ticker=ticker)}
 
 
 @mcp.tool()
+@guarded
 async def get_job(job_id: str, ctx: Context) -> dict[str, Any]:
     """A queued job's status, with its result or error once it has finished."""
     return await desk_for(ctx).job(job_id)
 
 
 @mcp.tool()
+@guarded
 async def get_thesis(ticker: str, ctx: Context) -> dict[str, Any]:
     """The latest saved research thesis on a ticker."""
     return await desk_for(ctx).thesis(ticker)
 
 
 @mcp.tool()
+@guarded
 async def holdings(ctx: Context) -> list[dict[str, Any]]:
     """The investor's recorded holdings."""
     return await desk_for(ctx).holdings()

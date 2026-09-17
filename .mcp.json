@@ -20,7 +20,7 @@
       "command": "uvx",
       "args": ["postgres-mcp", "--access-mode=restricted"],
       "env": {
-        "DATABASE_URI": "postgresql://chancellor:exchequer_local_pw@localhost:5433/exchequer"
+        "DATABASE_URI": "${LAURETTA_LOCAL_DB_URI}"
       }
     },
     "fetch": {

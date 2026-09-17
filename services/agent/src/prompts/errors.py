@@ -13,7 +13,8 @@ JOB_LOST = "its record expired before it finished; ask again"
 AGENT_FAILED = "the agent failed"
 DATABASE_UNAVAILABLE = "the database is unavailable; is `just up` running?"
 CHECKPOINTS_NOT_MIGRATED = (
-    "the checkpoint tables are missing or out of date; run `docker compose run --rm migrate`"
+    "the checkpoint tables are missing or out of date; on the Spark run "
+    "`docker compose run --rm migrate`, locally `just migrate` or set DATABASE_SETUP_URL"
 )
 EMBEDDER_MISMATCH = "the embedding model's size does not match EMBED_DIMS and the facts table"
 ROLE_DID_NOT_SUBMIT = "a research role finished without submitting its result"
@@ -29,6 +30,7 @@ ROLE_STOPPED = "the {role} stopped without submitting its work"
 NO_USER = "the run has no user to act for"
 SOUL_EMPTY = "the soul is empty"
 SOUL_TOO_LONG = "the soul is {chars} chars; the cap is {cap}"
+SOUL_ANGLE_BRACKETS = "the soul contains < or >"
 
 # API errors (`HTTPException` details and OpenAI-style errors).
 NO_SUCH_JOB = "no such job"
@@ -61,3 +63,11 @@ SEC_STATUS = "SEC EDGAR returned {status}"
 # Why a delivery was dead-lettered (the dead-letter stream and the worker log).
 DEAD_INVALID_PAYLOAD = "invalid payload"
 DEAD_UNFINISHED = "not finished in {deliveries} deliveries"
+
+# Voice (`src/api/voice`).
+SPEECH_UNAVAILABLE = "speech is not available right now; try again shortly"
+AUDIO_TOO_LARGE = "the recording is too large; the limit is {limit} MB"
+AUDIO_EMPTY = "no speech was heard in the recording"
+
+# MCP tools (`src/api/mcpserver`): anything unexpected, without its details.
+MCP_TOOL_FAILED = "the desk could not do that; the api log has the details"

@@ -132,3 +132,23 @@ async def test_holdings_are_read_for_the_named_user(broker, monkeypatch):
         result = await client.call_tool("holdings", {})
     assert not result.isError
     assert asked == ["max"]
+
+
+async def test_an_unexpected_failure_reaches_the_client_without_its_details(broker, monkeypatch):
+    async def broken(_pool, _user):
+        raise RuntimeError("password=hunter2 at db:5432")
+
+    monkeypatch.setattr(desk.holdings, "all_of", broken)
+    async with running_api(broker) as url, session(url, "mat") as client:
+        result = await client.call_tool("holdings", {})
+    assert result.isError
+    text = result.content[0].text
+    assert "hunter2" not in text and "5432" not in text
+    assert "the desk could not do that" in text
+
+
+async def test_an_invalid_ticker_names_the_field(broker):
+    async with running_api(broker) as url, session(url, "mat") as client:
+        result = await client.call_tool("start_research", {"ticker": "not a ticker!"})
+    assert result.isError
+    assert "ticker" in result.content[0].text

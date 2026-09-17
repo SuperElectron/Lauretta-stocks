@@ -5,6 +5,8 @@ from typing import Any, Literal, TypedDict
 from langgraph.graph import MessagesState
 
 Stage = Literal["setup", "ready"]
+# How a turn opens the thread (`graph/setup.opening`): first-contact intro, greeting, or neither.
+Opening = Literal["intro", "welcome", ""]
 
 
 class RoleState(MessagesState):
@@ -41,3 +43,6 @@ class ChatState(MessagesState):
     names: dict[str, str]
     # The `<soul_change>` block when this turn's message approved or rejected a proposal.
     soul_change: str
+    # What that decision did (`persona/approval.decide`), for the notice; empty otherwise.
+    soul_decision: dict[str, Any]
+    opening: Opening

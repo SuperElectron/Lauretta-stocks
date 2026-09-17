@@ -1,7 +1,8 @@
 """Long-term memory over the facts table: add (deduplicated), hybrid search, by topic, delete.
 
-Memories are the investor's free-text facts (subject user, kind memory). Search also reaches their
-profile (name, city, currency...), but never signals, setup skips or anything about the assistant.
+Memories are the investor's free-text facts (subject user, kind memory). Search reaches their
+profile (name, city, currency...) too when asked, but never signals, setup skips or anything about
+the assistant.
 """
 
 import hashlib
@@ -20,6 +21,9 @@ KEYWORD_WEIGHT = 0.2
 RECENCY_WEIGHT = 0.1
 # A fact this many days old gets half the recency boost of one said today.
 RECENCY_HALF_LIFE_DAYS = 90
+# What search may return: memories alone, or memories and the investor's profile.
+MEMORIES = ("memory",)
+MEMORIES_AND_PROFILE = ("memory", "profile")
 
 _SEARCH = """WITH scored AS (
     SELECT id::text, kind, topic, key, content, created_at::date::text AS created,
@@ -29,7 +33,7 @@ _SEARCH = """WITH scored AS (
            power(0.5, extract(epoch FROM now() - created_at)::float / 86400 / %(half_life)s)
                AS recency
     FROM facts
-    WHERE user_id = %(user_id)s AND subject = 'user' AND kind IN ('memory', 'profile')
+    WHERE user_id = %(user_id)s AND subject = 'user' AND kind = ANY(%(kinds)s)
       AND status = 'active' AND NOT coalesce(key = ANY(%(hidden_keys)s), false)
   )
   SELECT id, kind, topic, key, content, created, round(similarity::numeric, 3)::float AS similarity,
@@ -66,9 +70,15 @@ async def add(
 
 
 async def search(
-    pool: AsyncConnectionPool, embedder: Embedder, user_id: str, query: str, limit: int
+    pool: AsyncConnectionPool,
+    embedder: Embedder,
+    user_id: str,
+    query: str,
+    limit: int,
+    kinds: tuple[str, ...] = MEMORIES_AND_PROFILE,
 ) -> list[dict[str, Any]]:
-    """The investor's best-matching memories and profile facts, best first."""
+    """The investor's best-matching facts of `kinds` (only `memory` and `profile` exist to
+    search), best first."""
     params = {
         "vector": vector_literal(await embedder.embed(query)),
         "query": query,
@@ -78,6 +88,7 @@ async def search(
         "keyword_weight": KEYWORD_WEIGHT,
         "recency_weight": RECENCY_WEIGHT,
         "limit": limit,
+        "kinds": [kind for kind in kinds if kind in MEMORIES_AND_PROFILE],
         # Setup skips are bookkeeping for the setup flow, not something the investor said.
         "hidden_keys": list(SETUP_KEYS),
     }
