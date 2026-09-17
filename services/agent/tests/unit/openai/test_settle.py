@@ -108,3 +108,27 @@ async def test_a_client_that_reads_to_the_end_finds_the_answer_recorded(
         await client.post("/v1/chat/completions", json=body("hello", stream_=stream_))
 
         assert ("mat", digests.pair_alias("mat", "hello", "answer 1")) in db.aliases
+
+
+async def test_finish_stops_waiting_after_the_timeout_and_logs_the_job(monkeypatch):
+    logged = []
+
+    class Log:
+        def __init__(self, job_id):
+            self.job_id = job_id
+
+        def error(self, event):
+            logged.append((self.job_id, event))
+
+    monkeypatch.setattr(settle.logger, "bind", lambda job_id: Log(job_id))
+    release = asyncio.Event()
+
+    async def stalled(_text, _done):
+        await release.wait()
+
+    task = settle.start("job-2", stalled, "answer", True)
+    await asyncio.wait_for(settle.finish([task], timeout=0.01), timeout=1)
+    assert logged == [("job-2", "openai.answer_recording_slow")]
+    assert not task.done()
+    release.set()
+    await task
