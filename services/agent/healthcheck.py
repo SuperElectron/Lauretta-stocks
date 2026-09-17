@@ -1,19 +1,11 @@
-"""Container healthcheck: `python /app/healthcheck.py api|worker`.
+"""Container healthcheck: `python /app/healthcheck.py worker`.
 
-api: GET /healthz on the local uvicorn must answer 200.
 worker: Postgres and the broker answer, and a `python -m src.worker` process is running.
 Exits 0 when healthy, 1 otherwise, naming the failed check. Never prints a URL or secret.
 """
 
 import os
 import sys
-import urllib.request
-
-
-def _check_api() -> None:
-    with urllib.request.urlopen("http://127.0.0.1:8000/healthz", timeout=3) as resp:
-        if resp.status != 200:
-            raise RuntimeError(f"/healthz answered {resp.status}")
 
 
 def _check_postgres() -> None:
@@ -49,7 +41,6 @@ def _check_worker_process() -> None:
 
 
 CHECKS = {
-    "api": (("api", _check_api),),
     "worker": (
         ("postgres", _check_postgres),
         ("broker", _check_broker),
@@ -60,7 +51,7 @@ CHECKS = {
 
 def main() -> int:
     if len(sys.argv) != 2 or sys.argv[1] not in CHECKS:
-        print("usage: healthcheck.py api|worker")
+        print("usage: healthcheck.py worker")
         return 1
     for name, check in CHECKS[sys.argv[1]]:
         try:

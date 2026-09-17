@@ -4,14 +4,12 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from src.api.openai.chunks import State, map_event
 from src.errors import PersonaInvalid
 from src.graph.render import render_assistant_prompt
 from src.graph.setup import compute_setup, render_setup
 from src.memory.keys import KEYS, keys_of
 from src.persona.layers import build_persona, desk_names, render_fields, render_persona
 from src.persona.soul import check_soul
-from src.prompts.notes import TIMED_OUT, WAITING
 from src.prompts.progress import ROLES
 from src.prompts.soul import DEFAULT_SOUL, SOUL_MAX_CHARS
 from src.tools.persona_args import ProposeSoulArgs, SetIdentityArgs, SetUserDetailsArgs
@@ -70,8 +68,7 @@ def test_no_court_theme_in_the_assistant_prompt_or_the_notes():
         setup = render_setup(compute_setup(persona, ["goals"], 0), names)
         prompt = render_assistant_prompt(render_persona(persona), "", setup, current, names)
         assert not COURT.search(prompt), COURT.search(prompt)
-    error, _ = map_event(State(), "error", {"code": "X", "message": "busy"})
-    notes = [*ROLES.values(), TIMED_OUT, WAITING, error[0].delta["content"]]
+    notes = [*ROLES.values()]
     assert not [note for note in notes if COURT.search(note)]
     assert set(ROLES.values()) == {"Analyst", "Checker", "Strategist"}
 

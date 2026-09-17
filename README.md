@@ -76,6 +76,9 @@ just research MSFT      # put the whole desk on one stock
   and `AGENT_STREAM_REASONING=false` turns it off.
 - **Chat apps:** the desk also speaks the OpenAI Chat Completions dialect, so any chat app
   with an "OpenAI-compatible" provider can connect. See the next section.
+- **Services:** `services/api` (FastAPI: jobs, events, OpenAI chat, MCP, voice) and
+  `services/agent` (LangGraph: the worker and the CLI) are separate services with their own image,
+  dependencies and tests; `contracts/` pins the queue protocol between them. `just test` runs both.
 - **How it works:** see `AGENTS.md`. For the original plan and open questions, see `.cache/PLAN.md` (local only, not committed).
 
 ## Chat apps (AnythingLLM and kin)
@@ -154,7 +157,7 @@ Goose and other MCP clients on the tailnet. It takes the owner's key only (`GATE
   waiting), `get_thesis(ticker)`, `holdings()`.
 - **Goose:** add a remote extension of type *Streamable HTTP* with that URL and the header
   `Authorization: Bearer <GATEWAY_API_KEY>`.
-- **How it runs:** inside api (`src/api/mcpserver/`), stateless, over the same jobs, queue and
+- **How it runs:** inside api (`services/api/src/api/mcpserver/`), stateless, over the same jobs, queue and
   reads as `/v1`; the gateway names the user exactly as for `/v1`.
 
 ## Voice
@@ -268,7 +271,7 @@ on its own:
 | Layer | What holds |
 |---|---|
 | gateway | Names the user in `X-Lauretta-User` and removes any client copy. The owner's key is always `mat`. AnythingLLM's key names the user from the model its workspace chats with (`lauretta-mat`, `lauretta-max`) and may only list models and chat; any other model names nobody. |
-| networks, api edge | api shares networks with the gateway, the database, the broker and speech, so networks alone are not trusted: the gateway adds `X-Lauretta-Gateway` with a secret only it and api hold, and api refuses every request without it (`api/edge.py`; `/healthz` stays open). |
+| networks, api edge | api shares networks with the gateway, the database, the broker and speech, so networks alone are not trusted: the gateway adds `X-Lauretta-Gateway` with a secret only it and api hold, and api refuses every request without it (`services/api/src/api/edge.py`; `/healthz` stays open). |
 | api | Acts only for a user in `ALLOWED_USERS` (else 401). Another user's job, status or events is 404. A chat model must be the caller's own (`lauretta-<user>`, else 404). Threads are keyed `{user}:{thread}` on the server. |
 | queue, worker | A job carries its user; locks, checkpoints and signals are keyed by it. |
 | graphs | The user is LangGraph runtime context (`graph/ctx.py`). Tools read it through `ToolRuntime`, which is not in any schema the model sees, so the model can neither read nor set it. |

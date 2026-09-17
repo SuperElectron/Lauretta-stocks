@@ -56,8 +56,3 @@ def test_the_cli_needs_no_broker_settings():
     assert settings(BROKER_URL=None).BROKER_URL is None
     with pytest.raises(ValueError, match="BROKER_URL"):
         settings(BROKER_URL=None).broker_url()
-
-
-def test_wait_stays_under_the_gateway_timeout_by_default():
-    assert settings().API_MAX_WAIT_S == 25
-    assert settings().API_MAX_STREAM_S == 900

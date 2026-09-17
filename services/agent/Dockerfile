@@ -1,5 +1,5 @@
-# One image for `api` and `worker`; compose picks the command. Builds natively on
-# linux/arm64 (the Spark) and linux/amd64.
+# The agent service: the worker (compose `worker`) and the checkpoint migrate (`migrate`). Builds
+# natively on linux/arm64 (the Spark) and linux/amd64.
 
 FROM python:3.13.15-slim AS build
 
@@ -42,6 +42,6 @@ COPY --chown=app:app healthcheck.py ./healthcheck.py
 USER app
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=6 \
-    CMD ["python", "/app/healthcheck.py", "api"]
+    CMD ["python", "/app/healthcheck.py", "worker"]
 
-CMD ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "src.worker"]
