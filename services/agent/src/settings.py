@@ -37,9 +37,6 @@ class Settings(BaseSettings):
     # Stream the assistant model's own reasoning (unverified thinking) to clients.
     AGENT_STREAM_REASONING: bool = True
     PIPELINE_MAX_REVISIONS: int
-    # How long a chat turn waits with the investor for the research it started, before leaving
-    # the team to finish in the background and reporting it on a later message.
-    RESEARCH_FOLLOW_S: PositiveInt = 900
     EMBED_MODEL: str
     EMBED_DIMS: PositiveInt
     SEC_USER_AGENT: str

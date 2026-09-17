@@ -31,11 +31,8 @@ research pipeline (LangGraph)                                                   
 - **The Director** (the chat assistant) guides the investor through setup, then relays the
   team's results.
 - **Research from chat** (`src/runs.py`, `graph/research.py`): a run takes minutes, so
-  `start_research` queues it (as an ordinary research job, `contracts/job.v1.json`, client
-  `desk`, which writes no signals) and then follows the job's events for `RESEARCH_FOLLOW_S`,
-  relaying its progress so the investor watches the team work. It answers with the result, or
-  with `running` once the wait is up: either way the run belongs to no turn, so a dropped client,
-  a restart or a slow team loses nothing. `research:{user}` on the broker maps ticker
+  `start_research` only queues it (as an ordinary research job, `contracts/job.v1.json`, client
+  `desk`, which writes no signals) and the turn ends. `research:{user}` on the broker maps ticker
   to job id for what the desk started and has not reported; the ticker's field is claimed before
   the job is queued, so one ticker never runs twice at once. Every investor message renders a
   `<research>` block from the job statuses: runs still going are named, a finished or failed one

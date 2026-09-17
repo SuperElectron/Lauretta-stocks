@@ -15,11 +15,9 @@ from src.graph.context import Known
 from src.graph.ctx import Ctx
 from src.graph.research import research_block
 from src.persona.layers import build_persona
-from src.queue import events, keys
-from src.queue.models import Done, Error, Progress
+from src.queue import keys
 from src.runs import LocalRuns, QueuedRuns
 from src.tools.research import build_check_research, build_start_research
-from src.worker.research import RESULT_FIELDS
 from tests.utils import ScriptedModel, runtime_for
 
 TTL = 60
@@ -120,56 +118,13 @@ async def test_the_desk_reports_nothing_when_it_started_nothing(broker):
     assert await research_block(QueuedRuns(broker, TTL), "mat", []) == ("", [])
 
 
-async def test_the_start_tool_gives_up_waiting_and_leaves_the_team_to_it(broker):
-    tool = build_start_research(QueuedRuns(broker, TTL), follow_s=0.05)
+async def test_the_start_tool_never_waits_for_the_run(broker):
+    tool = build_start_research(QueuedRuns(broker, TTL))
 
     answer = await tool.ainvoke({"ticker": "msft", "runtime": runtime_for("mat")})
 
-    assert answer == {"ticker": "MSFT", "status": keys.RUNNING}
-    # Still the desk's to report later.
-    assert [run["ticker"] for run in await QueuedRuns(broker, TTL).active("mat")] == ["MSFT"]
-
-
-async def test_the_start_tool_answers_with_the_result_when_the_team_finishes_in_time(broker):
-    runs = QueuedRuns(broker, TTL)
-    tool = build_start_research(runs, follow_s=5)
-    result = dict.fromkeys(RESULT_FIELDS, "x") | {"ticker": "MSFT"}
-
-    async def team():
-        await asyncio.sleep(0.05)
-        run = (await runs.active("mat"))[0]
-        await events.publish(
-            broker, run["job_id"], Progress(stage="analyst", detail="drafting"), TTL
-        )
-        await events.publish(broker, run["job_id"], Done(result=result), TTL)
-
-    answer, _ = await asyncio.gather(
-        tool.ainvoke({"ticker": "MSFT", "runtime": runtime_for("mat")}), team()
-    )
-
-    assert answer == result
-    # Reported here, so no later turn reports it again.
-    assert await runs.active("mat") == []
-
-
-async def test_a_run_that_failed_while_the_investor_waited_is_answered_as_failed(broker):
-    runs = QueuedRuns(broker, TTL)
-    tool = build_start_research(runs, follow_s=5)
-
-    async def team():
-        await asyncio.sleep(0.05)
-        run = (await runs.active("mat"))[0]
-        await events.publish(
-            broker, run["job_id"], Error(code="ROLE_DID_NOT_SUBMIT", message="no"), TTL
-        )
-
-    answer, _ = await asyncio.gather(
-        tool.ainvoke({"ticker": "MSFT", "runtime": runtime_for("mat")}), team()
-    )
-
-    assert answer["status"] == keys.FAILED
-    assert answer["error"]["code"] == "ROLE_DID_NOT_SUBMIT"
-    assert await runs.active("mat") == []
+    assert answer["ticker"] == "MSFT"
+    assert answer["status"] == keys.QUEUED
 
 
 async def test_a_second_run_of_a_ticker_never_starts_while_one_is_going(broker):
