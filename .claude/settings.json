@@ -23,6 +23,11 @@
       "Read(./.env)",
       "Read(./.env.local)",
       "Read(./.env.bak*)",
+      "Read(./.env.*.local)",
+      "Read(./.env.prod*)",
+      "Read(./.env.spark*)",
+      "Read(./.env.dev*)",
+      "Read(./.env.staging*)",
       "Bash(rm -rf:*)",
       "Bash(git push --force:*)"
     ]
