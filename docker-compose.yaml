@@ -1,24 +1,228 @@
-# Stock research POC: Postgres with pgvector. The agent runs on the host (see justfile).
+# Lauretta Stocks: the research court as a stack.
+#
+#   tailnet https://lauretta.tailae2b1.ts.net -> tailscale -> gateway :18400 -> api :8000
+#                                                              gateway :3000  -> vLLM / OpenRouter
+#   api -> broker -> worker
+#
+# No host ports at all: the tailscale container is the only way in, and it reaches the gateway
+# on the `court` network. Local dev (`just up`) uses docker-compose.dev.yaml, the database alone.
 
 name: lauretta-stocks
 
+networks:
+  court:
+    driver: bridge
+
 volumes:
   pgdata:
+  brokerdata:
+  models:
+  tsstate:
+
+# Provider keys are files mounted into the gateway only; api and worker hold none.
+secrets:
+  openrouter_api_key:
+    environment: OPENROUTER_API_KEY
+  # vLLM `--api-key` on the Spark. If vLLM runs without one, any non-empty value works.
+  spark_vllm_api_key:
+    environment: SPARK_VLLM_API_KEY
+
+x-app: &app
+  build:
+    context: ./agent
+  image: lauretta-stocks-agent:latest
+  restart: unless-stopped
+  networks: [court]
+  volumes:
+    - models:/cache
+  environment:
+    LOG_LEVEL: ${LOG_LEVEL}
+    USER_ID: ${USER_ID}
+    DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+    BROKER_URL: redis://:${BROKER_PASSWORD:?set BROKER_PASSWORD}@broker:6379/0
+    DB_POOL_MIN: ${DB_POOL_MIN}
+    DB_POOL_MAX: ${DB_POOL_MAX}
+    # Models go through the gateway, which holds the keys; the placeholder satisfies the client.
+    AGENT_PROVIDER: openai
+    AGENT_BASE_URL: http://gateway:3000/v1
+    OPENAI_API_KEY: held-by-gateway
+    AGENT_MODEL: ${STACK_AGENT_MODEL:-gpt-oss-120b}
+    AGENT_TEMPERATURE: ${AGENT_TEMPERATURE}
+    AGENT_MAX_TOKENS: ${AGENT_MAX_TOKENS}
+    AGENT_TIMEOUT: ${AGENT_TIMEOUT}
+    AGENT_RECURSION_LIMIT: ${AGENT_RECURSION_LIMIT}
+    PIPELINE_MAX_REVISIONS: ${PIPELINE_MAX_REVISIONS}
+    EMBED_MODEL: ${EMBED_MODEL}
+    EMBED_DIMS: ${EMBED_DIMS}
+    SEC_USER_AGENT: ${SEC_USER_AGENT}
+    # Queue and API tuning; the defaults match src/settings.py.
+    BROKER_MIN_IDLE_MS: ${BROKER_MIN_IDLE_MS:-60000}
+    BROKER_MAX_DELIVERIES: ${BROKER_MAX_DELIVERIES:-3}
+    WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
+    AGENT_LOCK_WAIT_MS: ${AGENT_LOCK_WAIT_MS:-30000}
+    AGENT_LOCK_TTL_MS: ${AGENT_LOCK_TTL_MS:-30000}
+    EVENTS_TTL_S: ${EVENTS_TTL_S:-86400}
+    API_MAX_WAIT_S: ${API_MAX_WAIT_S:-25}
+    API_MAX_STREAM_S: ${API_MAX_STREAM_S:-900}
+  depends_on:
+    db:
+      condition: service_healthy
+    broker:
+      condition: service_healthy
 
 services:
   db:
-    image: pgvector/pgvector:pg17
+    image: pgvector/pgvector:0.8.6-pg17
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
-    ports:
-      - "127.0.0.1:${DB_PORT}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro
+    mem_limit: 1g
+    networks: [court]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       retries: 20
       start_period: 10s
+
+  broker:
+    image: valkey/valkey:9.0.6-alpine
+    restart: unless-stopped
+    command: ["valkey-server", "--requirepass", "${BROKER_PASSWORD:?set BROKER_PASSWORD}", "--appendonly", "yes"]
+    environment:
+      REDISCLI_AUTH: ${BROKER_PASSWORD}
+    volumes:
+      - brokerdata:/data
+    mem_limit: 256m
+    networks: [court]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      retries: 20
+
+  api:
+    <<: *app
+    command: ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    mem_limit: 2g
+    healthcheck:
+      test: ["CMD", "python", "/app/healthcheck.py", "api"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  worker:
+    <<: *app
+    command: ["python", "-m", "src.worker"]
+    # Covers the longest research run, so a deploy lets a job finish instead of killing it mid-run.
+    stop_grace_period: 180s
+    mem_limit: 3g
+    healthcheck:
+      test: ["CMD", "python", "/app/healthcheck.py", "worker"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  gateway:
+    image: cr.agentgateway.dev/agentgateway:v1.5.0
+    restart: unless-stopped
+    command: ["-f", "/etc/agentgateway/config.yaml"]
+    environment:
+      GATEWAY_API_KEY: ${GATEWAY_API_KEY:?set GATEWAY_API_KEY (clients send it as a Bearer token)}
+    # Linux Docker has no host.docker.internal by default; vLLM listens on the Spark host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./ops/gateway:/etc/agentgateway:ro
+      # The image is distroless, so a static busybox is mounted to run the healthcheck.
+      - type: image
+        source: busybox:1.37.0-musl
+        target: /hc
+        read_only: true
+        image:
+          subpath: bin
+    secrets:
+      - openrouter_api_key
+      - spark_vllm_api_key
+    mem_limit: 256m
+    networks: [court]
+    healthcheck:
+      # agentgateway's readiness endpoint: ready once the config is loaded and listeners are up.
+      test: ["CMD", "/hc/busybox", "wget", "-qO-", "http://127.0.0.1:15021/healthz/ready"]
+      interval: 10s
+      retries: 12
+      start_period: 10s
+    depends_on:
+      # The gateway resolves its backends once at start, so it restarts when api is recreated.
+      api:
+        condition: service_healthy
+        restart: true
+
+  # pg_dump at start and nightly into ./backups (git-ignored). A compose service rather than a host cron:
+  # it ships with the stack, needs nothing installed on the Spark, and its pg_dump is the same
+  # version as the server. Restore: `pg_restore -d <db> backups/<file>.dump`.
+  backup:
+    image: pgvector/pgvector:0.8.6-pg17
+    restart: unless-stopped
+    entrypoint: ["/ops/backup.sh"]
+    environment:
+      PGHOST: db
+      PGUSER: ${DB_USER}
+      PGPASSWORD: ${DB_PASSWORD}
+      PGDATABASE: ${DB_NAME}
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+    volumes:
+      - ./ops/backup/backup.sh:/ops/backup.sh:ro
+      - ./backups:/backups
+    mem_limit: 256m
+    networks: [court]
+    # Unhealthy when the newest nightly dump is older than 26 h (a missed night).
+    healthcheck:
+      test: ["CMD-SHELL", "find /backups -name \"$${PGDATABASE}-*.dump\" -mmin -1560 | grep -q ."]
+      interval: 10m
+      retries: 1
+      start_period: 10m
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # The tailnet's only way in: this node (lauretta-host, tag:lauretta) hosts the Tailscale Service
+  # svc:lauretta, HTTPS on 443 at https://lauretta.tailae2b1.ts.net, proxied to the gateway
+  # (ops/tailscale/serve.json). containerboot (v1.96+) advertises the Services in TS_SERVE_CONFIG
+  # itself. Funnel is off; the tailnet policy decides who may connect. Userspace networking needs
+  # no capabilities or tun device: netstack accepts connections to Service IPs.
+  # The Service withdraws when this container stops and returns about 20 s after it starts.
+  tailscale:
+    image: tailscale/tailscale:v1.102.3
+    restart: unless-stopped
+    hostname: lauretta-host
+    environment:
+      # OAuth client secret (scope auth_keys, tag:lauretta only), used as an auth key once; the
+      # state volume holds the login afterwards.
+      TS_AUTHKEY: ${TS_OAUTH_SECRET:?set TS_OAUTH_SECRET (the tag:lauretta OAuth client secret)}?ephemeral=false&preauthorized=true
+      TS_EXTRA_ARGS: --advertise-tags=tag:lauretta
+      TS_AUTH_ONCE: "true"
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "true"
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_ENABLE_HEALTH_CHECK: "true"
+      TS_LOCAL_ADDR_PORT: 127.0.0.1:9002
+    volumes:
+      - tsstate:/var/lib/tailscale
+      # A directory mount, so containerboot sees changes to serve.json.
+      - ./ops/tailscale:/config:ro
+    mem_limit: 128m
+    networks: [court]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9002/healthz"]
+      interval: 30s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      gateway:
+        condition: service_healthy

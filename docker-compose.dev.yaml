@@ -1,0 +1,26 @@
+# Local development on the Mac: only the database, published on loopback so `just chat` and
+# `just research` (running on the host) can reach it. `just up` uses this file alone, so local
+# dev needs none of the stack's keys (compose interpolates a whole file, even with `extends`,
+# hence the copy of `db`). Same project and volume as the full stack; keep the two in step.
+name: lauretta-stocks
+
+volumes:
+  pgdata:
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.6-pg17
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "127.0.0.1:${DB_PORT}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      retries: 20
+      start_period: 10s

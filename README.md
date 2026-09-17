@@ -33,7 +33,7 @@ just research MSFT      # summon the full research team on one stock
 ## Details
 
 - **Needs:** Docker, [uv](https://docs.astral.sh/uv/) and [just](https://just.systems).
-- **Commands:** run `just` to list them all (`chat`, `research`, `up`, `down`, `test`).
+- **Commands:** run `just` to list them all (`chat`, `research`, `up`, `down`, `test`, and `deploy`, `ps`, `logs`, `backup` for the Spark).
 - **Model:** Claude through the Anthropic API by default. The API key is billed separately from a
   Claude Pro subscription. Any OpenAI-compatible server also works (`AGENT_PROVIDER=openai`).
 - **Reports:** `just research` saves a one-page report to `reports/`.
@@ -51,3 +51,55 @@ just research MSFT      # summon the full research team on one stock
   if the first token takes more than 2s after the model starts, or if the tokens come in one
   lump. Set `STREAM_CHECK_API_KEY` when going through the gateway.
 - **How it works:** see `AGENTS.md`. For the original plan and open questions, see `.cache/PLAN.md` (local only, not committed).
+
+## Running on the Spark
+
+On the Mac the court sits at the kitchen table. On the DGX Spark it keeps residence full time:
+the whole household runs in containers behind one guarded door, reachable only over the tailnet.
+
+Before the first deploy, see that:
+
+- the Spark runs Docker Engine 28 or newer (the gateway's healthcheck mounts an image volume);
+- vLLM answers from inside a container at `host.docker.internal:8000` (listening on the host
+  loopback alone is not enough);
+- `DB_PASSWORD` and `BROKER_PASSWORD` are URL-safe (letters, digits, `-`, `_`), since they go
+  into connection URLs;
+- `~/lauretta-stocks` on the Spark is a clone of this repo with its own `.env`, and ssh with a
+  key works (the recipes never prompt for a password).
+
+```bash
+just deploy             # from the Mac: git pull on the Spark, build natively, start the stack
+just ps                 # who is at their post
+just logs worker        # what the worker is muttering (omit the name for everyone)
+just backup             # a database dump now, into backups/ on the Spark
+```
+
+- **The door:** AgentGateway (`ops/gateway/config.yaml`). `/v1` and everything under it need
+  `Authorization: Bearer $GATEWAY_API_KEY`; `/healthz` is open; any other path is 404. It strips
+  the key and any claimed identity (including Tailscale's and forwarding headers) before the api
+  sees the request, rate limits, and never buffers, so streams arrive as they are written. It
+  alone holds the provider keys.
+- **The tailnet:** the court lives at `https://lauretta.tailae2b1.ts.net`. The `tailscale`
+  container joins the tailnet as `lauretta-host` (`tag:lauretta`) and hosts the Tailscale Service
+  `svc:lauretta`, with a real certificate, straight to the gateway. There is nothing to expose by
+  hand: `just deploy` brings it up. Only the owner and His Excellency can reach it, by tailnet
+  policy; Funnel is off. The Spark's `.env` needs `TS_OAUTH_SECRET` (the OAuth client secret,
+  copied from the owner's Mac at deploy). The service withdraws when the container stops and
+  returns about 20 seconds after it starts. If the `tsstate` volume is ever wiped, delete the old,
+  offline `lauretta-host` device in the admin console.
+- **Models:** api and worker ask the gateway's internal `llm` port for `gpt-oss-120b` (vLLM on the
+  Spark) or `openai/gpt-oss-120b` (OpenRouter). Failover between them is issue #4.
+- **Backups:** the `backup` service dumps the database when it starts and at 03:00 UTC into
+  `backups/`, keeps the newest `BACKUP_KEEP`, and turns unhealthy after 26 hours without a dump.
+  Restore with `pg_restore`.
+- **Gotchas:** the gateway's `requestTimeout` bounds only the time to response headers, not a
+  stream; `csrf` is not authentication; and the gateway expands `${...}` even in config comments.
+
+| Port | Bound to | Serves |
+|---|---|---|
+| 443 on `lauretta.tailae2b1.ts.net` | tailnet only (`svc:lauretta`) | HTTPS to the gateway |
+| 18400, 3000, 8000, 5432, 6379 | compose network only | gateway ingress and `llm`, api, db, broker |
+
+The stack publishes no host ports at all. The Spark's own ports (8000-8004 and friends) are left alone; vLLM
+is reached from inside at `host.docker.internal:8000`. For local development, `just up` still
+starts only the database, on loopback `DB_PORT`.

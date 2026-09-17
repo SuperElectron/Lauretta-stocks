@@ -1,0 +1,137 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/agentgateway/agentgateway/v1.5.0/schema/config.json
+#
+# agentgateway v1.5.0: the one door into the stack, and the only holder of provider keys.
+#
+#   18400  ingress  -> api:8000 (/v1/*, /healthz). Not published to the host; the tailscale
+#                      container terminates TLS for svc:lauretta and proxies here.
+#   3000   llm      -> vLLM on the Spark, or OpenRouter. Compose network only, never published.
+#
+# Environment variables in dollar-brace form are expanded when the config loads, comments
+# included, so an unset one (even in a comment) stops the gateway at start.
+
+gateways:
+  ingress:
+    port: 18400
+    protocol: HTTP
+  llm:
+    port: 3000
+    protocol: HTTP
+
+routes:
+  # Liveness for uptime checks. No key, GET only, nothing else on the path.
+  - name: ingress-healthz
+    gateways: [ingress]
+    matches:
+      - path:
+          exact: /healthz
+        method: GET
+    policies:
+      requestHeaderModifier:
+        remove:
+          - Authorization
+          - Cookie
+          - X-Forwarded-User
+          - X-User-Id
+          - X-Principal
+          - Tailscale-User-Login
+          - Tailscale-User-Name
+          - Tailscale-User-Profile-Pic
+          - Tailscale-Headers-Info
+          - X-Forwarded-For
+          - X-Real-IP
+          - Forwarded
+      localRateLimit:
+        - maxTokens: 60
+          tokensPerFill: 60
+          fillInterval: 60s
+          type: requests
+      timeout:
+        requestTimeout: 5s
+    backends:
+      - host: api:8000
+
+  # Identity is the API key for now: no client or proxy header is trusted as a caller's identity.
+  # tailscale serve sets Tailscale-User-Login (and -Name, -Profile-Pic) for user callers and deletes
+  # incoming copies; they are stripped here too until something chooses to trust them.
+  # The API. Every request needs `Authorization: Bearer <GATEWAY_API_KEY>`; anything else is 401.
+  # apiKey in v1.5.0 takes the key inline (or its sha256 hash), not from a file, so compose
+  # passes GATEWAY_API_KEY into the gateway's environment only.
+  # The Authorization header is checked, then removed with every client-supplied identity
+  # header: api never sees the key and never trusts a caller's claim of who they are.
+  # No `buffer` policy, so server-sent events stream through as they are written.
+  - name: ingress-api
+    gateways: [ingress]
+    matches:
+      - path:
+          pathPrefix: /v1/
+    policies:
+      apiKey:
+        mode: strict
+        location:
+          header:
+            name: Authorization
+            prefix: "Bearer "
+        keys:
+          - key: ${GATEWAY_API_KEY}
+      requestHeaderModifier:
+        remove:
+          - Authorization
+          - Cookie
+          - X-Forwarded-User
+          - X-User-Id
+          - X-Principal
+          - Tailscale-User-Login
+          - Tailscale-User-Name
+          - Tailscale-User-Profile-Pic
+          - Tailscale-Headers-Info
+          - X-Forwarded-For
+          - X-Real-IP
+          - Forwarded
+      localRateLimit:
+        - maxTokens: 120
+          tokensPerFill: 120
+          fillInterval: 60s
+          type: requests
+      # requestTimeout bounds only the time to the response headers in v1.5.0, not the body,
+      # so a long research stream is not cut; api bounds the stream itself.
+      timeout:
+        requestTimeout: 30s
+    backends:
+      - host: api:8000
+
+# Model egress. api and worker call http://gateway:3000/v1 with a placeholder key; the gateway
+# attaches the real one. Clients pick the provider by model name:
+#   gpt-oss-120b          -> vLLM on the Spark (host port 8000)
+#   openai/gpt-oss-120b   -> OpenRouter
+# Failover from vLLM to OpenRouter is issue #4; this only makes both addressable.
+llm:
+  gateways: [llm]
+  policies:
+    # Guards OpenRouter spend only (vLLM on the Spark costs nothing per call); a research run
+    # makes many calls, so it is set well above normal use.
+    localRateLimit:
+      - maxTokens: 600
+        tokensPerFill: 600
+        fillInterval: 60s
+        type: requests
+  providers:
+    # vLLM speaks the OpenAI API. host.docker.internal is the Spark itself (compose extra_hosts).
+    - name: vllm
+      provider: openai
+      params:
+        baseUrl: http://host.docker.internal:8000/v1
+        apiKey:
+          file: /run/secrets/spark_vllm_api_key
+    - name: openrouter
+      provider: openrouter
+      params:
+        apiKey:
+          file: /run/secrets/openrouter_api_key
+  models:
+    # Must match vLLM's served model name.
+    - name: gpt-oss-120b
+      provider:
+        reference: vllm
+    - name: openai/gpt-oss-120b
+      provider:
+        reference: openrouter

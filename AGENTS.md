@@ -54,6 +54,9 @@ research pipeline (LangGraph)                                                   
   LangGraph stream parts to events. Nodes report progress, notices and retries through
   `graph/emit.py` (a no-op under `ainvoke`, so the CLI is unchanged).
 - `agent/src/memory/`: fastembed embeddings (local CPU, 384 dims) for pgvector search.
+- `agent/Dockerfile`, `docker-compose.yaml`, `ops/`: the Spark stack (gateway, api, worker, broker,
+  db, backup, tailscale). The tailscale container hosts the Service `svc:lauretta`
+  (`ops/tailscale/`). `docker-compose.dev.yaml` is the local db only, used by `just up`.
 
 ## MCP servers (`.mcp.json`)
 
