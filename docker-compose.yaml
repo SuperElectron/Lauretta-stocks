@@ -220,6 +220,10 @@ services:
     image: pgvector/pgvector:0.8.6-pg17
     restart: unless-stopped
     entrypoint: ["/ops/backup.sh"]
+    # An init as PID 1 forwards stop signals and reaps the script's children (pg_dump, tar). The
+    # image's own stop signal is postgres's SIGINT, which the script ignores while it sleeps.
+    init: true
+    stop_signal: SIGTERM
     environment:
       PGHOST: db
       PGUSER: ${DB_USER}

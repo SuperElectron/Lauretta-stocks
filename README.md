@@ -98,14 +98,16 @@ Director answers.
 - **The first visit** (the owner, straight after the first deploy): the hall asks for a password,
   which is `ANYTHINGLLM_AUTH_TOKEN` from the Spark's `.env`. Then, in Settings > Security, turn on
   multi-user mode and create the admin account, and in Settings > Users (under Admin) create
-  His Excellency's with the role **Default** (not Admin or Manager). From then on everyone signs in with their own account and the password is no
-  longer used. Until this is done, whoever holds the password holds the hall, so do it at once.
+  His Excellency's with the role **Default** (not Admin or Manager). From then on everyone signs
+  in with their own account and the password is no longer used. Until this is done, whoever
+  holds the password holds the hall, so do it at once.
 - **The Android app:** install AnythingLLM from Google Play. In the hall (opened at the tailnet
   address, not `localhost`), go to Settings > AnythingLLM Mobile and scan its QR code with the
   app. The phone must be on the tailnet too. There is no iPhone app; the browser serves.
 - **Documents:** the hall accepts uploads (up to 100 MiB each), but **the Director does not read
   them yet**: the court's endpoint ignores the context AnythingLLM retrieves from them.
-- **Behind the curtain:** AnythingLLM asks the gateway's `/v1` for the model `lauretta`, with
+- **Behind the curtain:** the hall comes preset as the [chat app](#chat-apps-anythingllm-and-kin)
+  described above: it asks the gateway's `/v1` for the model `lauretta`, with
   `GATEWAY_API_KEY`, like any other client, and takes the plain streaming chat path (no agent
   tools). It sits on its own `web` network with the gateway alone and can reach nothing else in
   the stack. It keeps its chats, accounts and documents in the `anythingllm` volume.
@@ -157,14 +159,18 @@ just backup             # a database dump now, into backups/ on the Spark
   an empty `anythingllm` volume while AnythingLLM is stopped. The tars hold AnythingLLM's accounts
   and keys, so keep `backups/` private.
 - **Restarts:** the gateway starts once AnythingLLM has started (it never waits for its health),
-  but recreating `anythingllm` restarts the gateway, which cuts any stream in flight.
+  but recreating `anythingllm` restarts the gateway, which cuts any stream in flight. Deploy with
+  `docker compose up -d` for all services (as `just deploy` does); if `anythingllm` is ever
+  recreated alone, restart the gateway after it, or the gateway keeps its old address.
 - **Gotchas:** the gateway's `requestTimeout` bounds only the time to response headers, not a
   stream; `csrf` is not authentication; and the gateway expands `${...}` even in config comments.
 
 | Port | Bound to | Serves |
 |---|---|---|
 | 443 on `lauretta.tailae2b1.ts.net` | tailnet only (`svc:lauretta`) | HTTPS to the gateway |
-| 18400, 3000, 8000, 3001, 5432, 6379 | compose network only | gateway ingress and `llm`, api, anythingllm, db, broker |
+| 18400, 3000 | compose networks `court` and `web` | gateway ingress and `llm` |
+| 3001 | compose network `web` only | anythingllm |
+| 8000, 5432, 6379 | compose network `court` only | api, db, broker |
 
 The stack publishes no host ports at all. The Spark's own ports (8000-8004 and friends) are left alone; vLLM
 is reached from inside at `host.docker.internal:8000`. For local development, `just up` still

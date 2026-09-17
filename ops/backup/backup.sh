@@ -18,6 +18,8 @@ DB_TRIES=10   # SQLite copies, 2 s apart
 TAR_TRIES=3   # tars, 5 s apart
 SNAP=/tmp/anythingllm-snap
 partials=""
+# Partials left by a run that was killed (no trap ran) are never valid backups.
+rm -f /backups/*.partial
 trap 'for p in $partials; do rm -f -- "$p"; done; rm -rf -- "$SNAP"' EXIT
 
 # prune <glob>: keep the newest BACKUP_KEEP files matching it.
@@ -25,13 +27,19 @@ prune() {
   ls -1t $1 | tail -n +$((BACKUP_KEEP + 1)) | xargs -r rm --
 }
 
-# copy_db: copy anythingllm.db into SNAP, retrying while it changes under the copy.
+# copy_db: copy anythingllm.db into SNAP twice, accepting only when the file held still across
+# both copies and they are identical; retry otherwise.
 copy_db() {
   n=1
   while :; do
     before=$(stat -c %.9Y.%s /anythingllm/anythingllm.db)
     cp -p -- /anythingllm/anythingllm.db "$SNAP/anythingllm.db"
-    [ "$(stat -c %.9Y.%s /anythingllm/anythingllm.db)" = "$before" ] && return 0
+    cp -p -- /anythingllm/anythingllm.db "$SNAP/anythingllm.db.check"
+    if [ "$(stat -c %.9Y.%s /anythingllm/anythingllm.db)" = "$before" ] &&
+      cmp -s -- "$SNAP/anythingllm.db" "$SNAP/anythingllm.db.check"; then
+      rm -f -- "$SNAP/anythingllm.db.check"
+      return 0
+    fi
     [ "$n" -ge "$DB_TRIES" ] && { echo "backup: anythingllm.db kept changing ($n copies)" >&2; exit 1; }
     echo "backup: anythingllm.db changed during copy $n, retrying" >&2
     n=$((n + 1))
