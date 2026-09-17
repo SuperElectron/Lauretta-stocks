@@ -48,6 +48,8 @@ class ChatState(MessagesState):
     # What that decision did (`persona/approval.decide`), for the notice; empty otherwise.
     soul_decision: dict[str, Any]
     opening: Opening
+    # What the desk is researching or has just finished (`graph/research.py`), for this turn.
+    research: str
     # The running summary of the messages before `summarized` (`graph/compaction.py`).
     summary: str
     summarized: int

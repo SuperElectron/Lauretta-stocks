@@ -35,7 +35,7 @@ async def test_a_chat_turn_maps_to_tokens_tools_progress_and_notice():
     events = Events()
     relay = ChatRelay(events)
     research_call = AIMessage(
-        content="", tool_calls=[{"name": "research_stock", "args": {}, "id": "c1"}]
+        content="", tool_calls=[{"name": "start_research", "args": {}, "id": "c1"}]
     )
     parts = [
         part("messages", (HumanMessage("hi"), {"langgraph_node": "context"})),
@@ -49,7 +49,7 @@ async def test_a_chat_turn_maps_to_tokens_tools_progress_and_notice():
             {
                 "tools": {
                     "messages": [
-                        ToolMessage(content="{}", name="research_stock", tool_call_id="c1"),
+                        ToolMessage(content="{}", name="start_research", tool_call_id="c1"),
                     ]
                 }
             },
@@ -65,9 +65,9 @@ async def test_a_chat_turn_maps_to_tokens_tools_progress_and_notice():
         await relay.feed(each)
 
     assert events == [
-        ("tool", {"name": "research_stock", "status": "started"}),
+        ("tool", {"name": "start_research", "status": "started"}),
         ("progress", {"stage": "analyst", "detail": "drafting", "name": None}),
-        ("tool", {"name": "research_stock", "status": "done"}),
+        ("tool", {"name": "start_research", "status": "done"}),
         ("token", {"text": "Buy"}),
         ("token", {"text": " nothing"}),
         ("notice", {"text": "Proposed change to my soul"}),

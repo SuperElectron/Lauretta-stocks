@@ -49,6 +49,11 @@ def request(digest: str) -> str:
     return f"oa:req:{digest}"
 
 
+def runs(user: str) -> str:
+    """What the desk has started for a user and not yet reported: job id to ticker."""
+    return f"research:{user}"
+
+
 def thread_job(user: str, thread_id: str) -> str:
     """The job most recently queued on the user's thread."""
     return f"thread:{thread(user, thread_id)}:job"
