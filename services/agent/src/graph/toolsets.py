@@ -12,6 +12,7 @@ from src.tools.persona import (
     build_propose_soul_change,
     build_set_identity,
     build_set_user_details,
+    build_skip_setup_step,
 )
 from src.tools.portfolio import build_get_portfolio, build_remove_holding, build_set_holding
 from src.tools.research import RunResearch, build_get_thesis, build_research_stock
@@ -61,5 +62,6 @@ def assistant_tools(
         build_get_thesis(pool, user_id),
         build_set_identity(pool, embedder, user_id),
         build_set_user_details(pool, embedder, user_id),
+        build_skip_setup_step(pool, embedder, user_id),
         build_propose_soul_change(pool, embedder, user_id),
     ]

@@ -15,12 +15,14 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from psycopg_pool import AsyncConnectionPool
 
 from src.graph import emit
-from src.graph.context import investor_blocks, persona_blocks, theses_block
+from src.graph.context import investor_blocks, load_known, theses_block
 from src.graph.history import answered, recent
 from src.graph.llm import complete, with_backoff
 from src.graph.render import render_assistant_prompt
-from src.graph.state import ChatState, stage
+from src.graph.setup import render_setup, setup_of, stage
+from src.graph.state import ChatState
 from src.persona.approval import decide, parse_decision, proposal_notice, proposals_in_turn
+from src.persona.layers import desk_names, render_persona
 from src.prompts import progress
 
 # The model sees the latest messages only; long-term facts live in memory, not the transcript.
@@ -44,28 +46,27 @@ def build_chat(
         if isinstance(latest, HumanMessage):
             decision = parse_decision(latest.text)
             update["soul_change"] = await decide(pool, user_id, *decision) if decision else ""
-        persona, unnamed = await persona_blocks(pool, user_id)
-        investor, unknown = await investor_blocks(pool, user_id)
+        known = await load_known(pool, user_id)
         return {
             **update,
-            "persona": persona,
-            "context": f"{investor}\n{await theses_block(pool, user_id)}",
-            "unknown": unknown,
-            "unnamed": unnamed,
+            "persona": render_persona(known.persona),
+            "context": f"{investor_blocks(known)}\n{await theses_block(pool, user_id)}",
+            "setup": setup_of(known),
+            "names": desk_names(known.persona),
         }
 
     async def agent(state: ChatState) -> dict[str, object]:
-        unknown, unnamed = state["unknown"], state["unnamed"]
+        setup, names = state["setup"], state["names"]
         prompt = render_assistant_prompt(
             state["persona"],
             state["context"],
-            unknown,
-            unnamed,
-            stage(unknown, unnamed),
+            render_setup(setup, names),
+            stage(setup),
+            state["names"],
             state["soul_change"],
         )
         history = recent(answered(state["messages"]), HISTORY_MESSAGES)
-        emit.progress("assistant", progress.ASSISTANT_WORKING)
+        emit.progress("assistant", progress.ASSISTANT_WORKING, state["names"]["bot_name"])
         reply = await bound.ainvoke([SystemMessage(content=prompt), *history])
         return {"messages": [complete(reply)]}
 

@@ -15,8 +15,9 @@ RunResearch = Callable[[str], Awaitable[dict[str, Any]]]
 def build_research_stock(run_research: RunResearch) -> BaseTool:
     @tool(args_schema=TickerArgs)
     async def research_stock(ticker: str) -> dict[str, Any]:
-        """Put the desk on one company: the Analyst writes a stock story, Risk re-checks
-        every figure, and the PM sizes it against the investor's book and rules. Takes a minute
+        """Put the desk on one company: the Analyst writes a stock story, the Checker re-checks
+        every figure, and the Strategist sizes it against the investor's book and rules. The
+        result carries each agent's current name in `names`. Takes a minute
         or two and the result is saved. Use it when they ask what to do about a stock and there
         is no recent thesis, or they want a fresh read.
         """
@@ -28,6 +29,7 @@ def build_research_stock(run_research: RunResearch) -> BaseTool:
             "story": final["story"],
             "review": {k: final["review"][k] for k in ("verdict", "summary", "weaknesses")},
             "advice": final["advice"],
+            "names": final["names"],
         }
 
     return research_stock

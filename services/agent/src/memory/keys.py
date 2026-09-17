@@ -20,6 +20,9 @@ class Key:
 
 KEYS: dict[str, Key] = {
     "bot_name": Key("assistant", "identity", SENTENCES["bot_name"]),
+    "analyst_name": Key("assistant", "identity", SENTENCES["analyst_name"]),
+    "checker_name": Key("assistant", "identity", SENTENCES["checker_name"]),
+    "strategist_name": Key("assistant", "identity", SENTENCES["strategist_name"]),
     "bot_emoji": Key("assistant", "identity", SENTENCES["bot_emoji"]),
     "bot_vibe": Key("assistant", "identity", SENTENCES["bot_vibe"]),
     # Reserved for the voice channel; nothing sets it yet.
@@ -35,8 +38,22 @@ KEYS: dict[str, Key] = {
     "client": Key("user", "signal", SENTENCES["client"]),
     "channel": Key("user", "signal", SENTENCES["channel"]),
     "last_seen_city": Key("user", "signal", SENTENCES["last_seen_city"]),
+    # Setup steps the investor chose to skip (`graph/setup.py`); kept apart from their profile.
+    "setup_team_names": Key("user", "profile", SENTENCES["setup_team_names"]),
+    "setup_holdings": Key("user", "profile", SENTENCES["setup_holdings"]),
 }
+
+SkippableStep = Literal["team_names", "holdings"]
+# Each optional setup step and the fact that marks it skipped, saved as `SKIPPED`: neutral, so
+# "would rather not say" is never read as "holds nothing".
+SETUP_SKIPS: dict[SkippableStep, str] = {
+    "team_names": "setup_team_names",
+    "holdings": "setup_holdings",
+}
+SETUP_KEYS = tuple(SETUP_SKIPS.values())
+SKIPPED = "skipped"
 
 
 def keys_of(kind: KeyedKind) -> tuple[str, ...]:
-    return tuple(name for name, key in KEYS.items() if key.kind == kind)
+    """The keys of `kind`, setup skips left out: they are not part of any shown block."""
+    return tuple(name for name, key in KEYS.items() if key.kind == kind and name not in SETUP_KEYS)

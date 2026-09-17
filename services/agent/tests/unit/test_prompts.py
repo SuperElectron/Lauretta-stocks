@@ -7,10 +7,23 @@ from string import Formatter
 import pytest
 
 from src.memory.keys import KEYS
-from src.prompts import analyst, assistant, blocks, errors, notes, pm, progress, report, risk
+from src.persona.layers import NAME_KEYS
+from src.prompts import (
+    analyst,
+    assistant,
+    blocks,
+    checker,
+    errors,
+    notes,
+    progress,
+    report,
+    setup,
+    strategist,
+)
 from src.prompts.facts import SENTENCES
 from tests.unit.wording import wording
 
+NAMES = set(NAME_KEYS)
 SRC = Path(__file__).resolve().parents[2] / "src"
 # `file:symbol` (top-level def, class or assignment) whose strings are not wording, and why.
 ALLOWED = {
@@ -35,20 +48,32 @@ def fields(template: str) -> set[str]:
 @pytest.mark.parametrize(
     ("template", "expected"),
     [
-        (assistant.HEAD, {"today"}),
-        (analyst.HEAD, {"ticker", "today"}),
-        (analyst.REVISION, {"story", "changes", "issues"}),
+        (assistant.HEAD, {"today", *NAMES}),
+        (
+            assistant.STAGE_INSTRUCTION["setup"],
+            {"bot_name", "analyst_name", "checker_name", "strategist_name"},
+        ),
+        (setup.NEXT_STEP["team_names"], NAMES),
+        (setup.NEXT_STEP["core_profile"], {"topic"}),
+        (setup.NEXT, {"step", "instruction"}),
+        (setup.MISSING, {"topics"}),
+        (analyst.HEAD, {"ticker", "today", "analyst_name", "checker_name", "strategist_name"}),
+        (analyst.REVISION, {"story", "changes", "issues", "checker_name"}),
         (analyst.TASK, {"ticker"}),
-        (risk.HEAD, {"ticker", "today", "last_round"}),
-        (risk.PREVIOUS, {"review"}),
-        (risk.LAST_ROUND, set()),
-        (risk.TASK, {"ticker"}),
-        (pm.HEAD, {"ticker", "today"}),
-        (pm.UNKNOWN, {"topics"}),
-        (pm.TASK, {"ticker"}),
-        (progress.LINE, {"title", "detail"}),
+        (
+            checker.HEAD,
+            {"ticker", "today", "last_round", "analyst_name", "checker_name", "strategist_name"},
+        ),
+        (checker.PREVIOUS, {"review"}),
+        (checker.LAST_ROUND, {"strategist_name"}),
+        (checker.TASK, {"ticker"}),
+        (strategist.HEAD, {"ticker", "today", "strategist_name", "checker_name"}),
+        (strategist.UNKNOWN, {"topics"}),
+        (strategist.TASK, {"ticker"}),
+        (progress.LINE, {"name", "detail"}),
+        (progress.ROLE_LINE, {"name", "role", "detail"}),
         (progress.ANALYST_REDRAFTING, {"revision"}),
-        (progress.RISK_VERDICT, {"verdict"}),
+        (progress.CHECKER_VERDICT, {"verdict"}),
         (notes.ERROR, {"message"}),
         (notes.SOUL_PROPOSAL, {"short_id", "reason", "content"}),
         (blocks.SIGNAL_LINE, {"key", "value", "since"}),
@@ -78,8 +103,8 @@ def test_each_fact_sentence_takes_one_value_and_every_key_has_one():
     assert all(sentence.count("{}") == 1 for sentence in SENTENCES.values())
 
 
-def test_stage_instructions_have_no_fields():
-    assert all(not fields(text) for text in assistant.STAGE_INSTRUCTION.values())
+def test_stage_instructions_take_only_the_desk_names():
+    assert all(fields(text) <= NAMES for text in assistant.STAGE_INSTRUCTION.values())
 
 
 def test_no_wording_outside_the_prompts_package():

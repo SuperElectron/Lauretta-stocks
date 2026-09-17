@@ -124,7 +124,7 @@ def check_openai(http: httpx.Client, message: str) -> int:
                     thought = now if thought is None and model_start is not None else thought
                     continue
                 print(f"{now:7.3f}s reasoning: {text.strip()[:160]}")
-                if model_start is None and text.strip() == MODEL_START:
+                if model_start is None and MODEL_START.fullmatch(text.strip()):
                     model_start = now
     if first_reasoning is None:
         print("FAIL: no reasoning delta was streamed")

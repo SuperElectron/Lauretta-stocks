@@ -2,7 +2,7 @@ from src.data.market import trailing_returns
 from src.db.queries.memories import content_hash
 from src.graph.context import render_holdings, render_investor, unknown_topics
 from src.graph.render import render_assistant_prompt
-from src.graph.state import stage
+from src.persona.layers import build_persona, desk_names
 from src.tools.portfolio import valued
 
 MEMORY = {"id": "m1", "topic": "risk_tolerance", "content": "Medium risk", "created": "2026-09-16"}
@@ -13,18 +13,17 @@ def test_investor_block_lists_facts_by_topic_with_dates_and_ids():
     assert "risk_tolerance: Medium risk (2026-09-16, id m1)" in block
 
 
-def test_unknown_core_topics_drive_the_stage():
+def test_unknown_core_topics():
     unknown = unknown_topics([MEMORY])
     assert "risk_tolerance" not in unknown and "goals" in unknown
-    assert stage(unknown, []) == "onboard"
-    assert stage([], []) == "ready"
 
 
-def test_assistant_prompt_carries_stage_and_unknowns():
+def test_assistant_prompt_carries_setup_and_stage():
     investor = "<investor>\nnothing yet\n</investor>"
-    prompt = render_assistant_prompt("<soul>s</soul>", investor, ["goals"], [], "onboard")
-    assert "<unknown>goals</unknown>" in prompt
-    assert "<stage>onboard:" in prompt
+    names = desk_names(build_persona([]))
+    prompt = render_assistant_prompt("<soul>s</soul>", investor, "<setup>x</setup>", "ready", names)
+    assert "<setup>x</setup>" in prompt
+    assert "<stage>ready:" in prompt
 
 
 def test_holdings_block():

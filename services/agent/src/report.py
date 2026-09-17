@@ -3,7 +3,9 @@
 from datetime import date
 from typing import Any
 
+from src.persona.layers import NAME_KEYS
 from src.prompts import report as text
+from src.prompts.identity import IDENTITY_DEFAULTS
 
 
 def _bullets(items: list[str]) -> str:
@@ -13,6 +15,7 @@ def _bullets(items: list[str]) -> str:
 def render_report(final: dict[str, Any]) -> str:
     story, review, advice = final["story"], final["review"], final["advice"]
     weight = advice["target_weight_pct"]
+    names = {key: IDENTITY_DEFAULTS[key] for key in NAME_KEYS} | final.get("names", {})
     snapshot = "\n".join(
         f"| {p['metric']} | {p['value']} | {p['period']} | {p['source']} |"
         for p in story["data_snapshot"]
@@ -39,4 +42,5 @@ def render_report(final: dict[str, Any]) -> str:
         key_risks=_bullets(advice["key_risks"]),
         change_my_mind=_bullets(advice["change_my_mind"]),
         questions=_bullets(advice["questions_for_investor"]),
+        **names,
     )

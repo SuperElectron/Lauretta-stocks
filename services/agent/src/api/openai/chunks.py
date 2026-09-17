@@ -3,7 +3,7 @@
 | job event     | delta                                                               |
 |---------------|---------------------------------------------------------------------|
 | (stream open) | `role: assistant`; then `WAITING` when queued behind another turn    |
-| `progress`    | `reasoning_content`: "Analyst drafting…"                            |
+| `progress`    | `reasoning_content`: "Andy (Analyst) drafting…"                     |
 | `tool`        | `reasoning_content`: "Consulting research stock…"                   |
 | `reasoning`   | `reasoning_content`, as streamed                                    |
 | `token`       | `content`                                                           |
@@ -20,6 +20,7 @@ Anything else is not part of the contract and maps to nothing.
 from dataclasses import dataclass, replace
 from typing import Any
 
+from src.persona.layers import default_name
 from src.prompts import notes, progress
 
 
@@ -55,6 +56,17 @@ def _reasoning(state: State, line: str) -> tuple[list[Part], State]:
     return [Part({"reasoning_content": prefix + line + "\n"})], replace(state, mid_thought=False)
 
 
+def _progress_line(data: dict[str, Any]) -> str:
+    stage, detail = data["stage"], data["detail"]
+    name = data.get("name") or default_name(stage) or stage.capitalize()
+    role = progress.ROLES.get(stage)
+    if role is None:
+        line = progress.LINE.format(name=name, detail=detail)
+    else:
+        line = progress.ROLE_LINE.format(name=name, role=role, detail=detail)
+    return line[0].upper() + line[1:]
+
+
 def map_event(state: State, event: str, data: dict[str, Any]) -> tuple[list[Part], State]:
     """The deltas one job event becomes, and the state after it."""
     if event == "token":
@@ -63,8 +75,7 @@ def map_event(state: State, event: str, data: dict[str, Any]) -> tuple[list[Part
         after = replace(state, mid_thought=not data["text"].endswith("\n"))
         return [Part({"reasoning_content": data["text"]})], after
     if event == "progress":
-        title = progress.TITLES.get(data["stage"], data["stage"].capitalize())
-        return _reasoning(state, progress.LINE.format(title=title, detail=data["detail"]))
+        return _reasoning(state, _progress_line(data))
     if event == "tool":
         name = data["name"].replace("_", " ")
         line = progress.TOOL.get(data["status"], progress.TOOL["error"]).format(name=name)

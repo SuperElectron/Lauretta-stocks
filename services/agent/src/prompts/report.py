@@ -10,12 +10,12 @@ TARGET_WEIGHT = " (target weight {weight:g}%)"
 
 REPORT = """# {ticker} stock story, {today}
 
-**Suggestion: {action}**{target} · Risk: **{verdict}** after {revisions} revision(s) · \
-confidence: {confidence}
+**Suggestion: {action}**{target} · Checker ({checker_name}): **{verdict}** after {revisions} \
+revision(s) · confidence: {confidence}
 
 {disclaimer}
 
-## Story
+## Story ({analyst_name}, Analyst)
 - **Business:** {business}
 - **Driver:** {driver}
 - **Market gap:** {market_gap}
@@ -32,7 +32,7 @@ confidence: {confidence}
 |---|---|---|---|
 {snapshot}
 
-## Risk review
+## Checker review ({checker_name})
 {summary}
 
 **Weaknesses**
@@ -41,7 +41,7 @@ confidence: {confidence}
 **Data issues**
 {data_issues}
 
-## PM
+## Strategist ({strategist_name})
 {rationale}
 
 **Portfolio fit:** {portfolio_fit}

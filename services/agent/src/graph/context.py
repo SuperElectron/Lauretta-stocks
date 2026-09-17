@@ -1,5 +1,6 @@
 """What we know about the investor, rendered as prompt blocks. Read fresh on every step."""
 
+from dataclasses import dataclass
 from typing import Any
 
 from psycopg_pool import AsyncConnectionPool
@@ -8,10 +9,9 @@ from src.db.queries import facts, holdings, memories, theses
 from src.memory.topics import CORE_TOPICS, TOPICS
 from src.persona.layers import (
     ADVISOR_USER_KEYS,
+    Persona,
     build_persona,
     render_fields,
-    render_persona,
-    unnamed,
 )
 from src.prompts import blocks
 
@@ -19,25 +19,32 @@ PER_TOPIC = 3
 THESES_IN_PROMPT = 10
 
 
-async def investor_blocks(pool: AsyncConnectionPool, user_id: str) -> tuple[str, list[str]]:
-    """The `<investor>` and `<holdings>` blocks, and the core topics still unknown."""
-    remembered = await memories.by_topic(pool, user_id, PER_TOPIC)
-    positions = await holdings.all_of(pool, user_id)
-    unknown = unknown_topics(remembered)
-    blocks = "\n".join([render_investor(remembered), render_holdings(positions)])
-    return blocks, unknown
+@dataclass(frozen=True)
+class Known:
+    """Everything a turn or a research run knows about the investor, read once."""
+
+    persona: Persona
+    # The newest few memories per topic.
+    remembered: list[dict[str, Any]]
+    positions: list[dict[str, Any]]
 
 
-async def persona_blocks(pool: AsyncConnectionPool, user_id: str) -> tuple[str, list[str]]:
-    """The `<soul>`, `<identity>`, `<user>` and `<signals>` blocks, and the names still unknown."""
-    persona = build_persona(await facts.persona_rows(pool, user_id))
-    return render_persona(persona), unnamed(persona)
+async def load_known(pool: AsyncConnectionPool, user_id: str) -> Known:
+    return Known(
+        persona=build_persona(await facts.persona_rows(pool, user_id)),
+        remembered=await memories.by_topic(pool, user_id, PER_TOPIC),
+        positions=await holdings.all_of(pool, user_id),
+    )
 
 
-async def advisor_user_block(pool: AsyncConnectionPool, user_id: str) -> str:
+def investor_blocks(known: Known) -> str:
+    """The `<investor>` and `<holdings>` blocks."""
+    return "\n".join([render_investor(known.remembered), render_holdings(known.positions)])
+
+
+def advisor_user_block(known: Known) -> str:
     """The investor's name, country and currency; nothing about the assistant."""
-    persona = build_persona(await facts.persona_rows(pool, user_id))
-    return render_fields("user", persona.user, ADVISOR_USER_KEYS)
+    return render_fields("user", known.persona.user, ADVISOR_USER_KEYS)
 
 
 async def theses_block(pool: AsyncConnectionPool, user_id: str) -> str:

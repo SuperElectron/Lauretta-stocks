@@ -65,7 +65,7 @@ async def test_a_chat_turn_maps_to_tokens_tools_progress_and_notice():
 
     assert events == [
         ("tool", {"name": "research_stock", "status": "started"}),
-        ("progress", {"stage": "analyst", "detail": "drafting"}),
+        ("progress", {"stage": "analyst", "detail": "drafting", "name": None}),
         ("tool", {"name": "research_stock", "status": "done"}),
         ("token", {"text": "Buy"}),
         ("token", {"text": " nothing"}),
@@ -205,15 +205,16 @@ async def test_research_streams_each_stage_then_returns_the_saved_thesis():
     result = await run_research(build_pipeline(None, "friend", team, 1), "msft", events)
 
     assert [data for _, data in events] == [
-        {"stage": "analyst", "detail": "drafting the story"},
-        {"stage": "checker", "detail": "re-checking the numbers"},
-        {"stage": "checker", "detail": "verdict: revise"},
-        {"stage": "analyst", "detail": "redrafting (revision 1)"},
-        {"stage": "checker", "detail": "re-checking the numbers"},
-        {"stage": "checker", "detail": "verdict: approve"},
-        {"stage": "advisor", "detail": "sizing it against your book"},
-        {"stage": "save", "detail": "saving the thesis"},
+        {"stage": "analyst", "detail": "drafting the story", "name": "Sarah"},
+        {"stage": "checker", "detail": "re-checking the numbers", "name": "Charlie"},
+        {"stage": "checker", "detail": "verdict: revise", "name": "Charlie"},
+        {"stage": "analyst", "detail": "redrafting (revision 1)", "name": "Sarah"},
+        {"stage": "checker", "detail": "re-checking the numbers", "name": "Charlie"},
+        {"stage": "checker", "detail": "verdict: approve", "name": "Charlie"},
+        {"stage": "advisor", "detail": "sizing it against your book", "name": "Sammy"},
+        {"stage": "save", "detail": "saving the thesis", "name": "the Director"},
     ]
+    assert result["names"]["analyst_name"] == "Sarah"
     assert result["ticker"] == "MSFT" and result["thesis_id"] == "thesis-1"
     assert result["revisions"] == 1 and result["advice"] == ADVICE
 

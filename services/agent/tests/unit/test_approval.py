@@ -9,6 +9,7 @@ from src.db.queries import facts
 from src.errors import PersonaInvalid
 from src.graph import chat as chat_module
 from src.graph.chat import build_chat
+from src.graph.context import Known
 from src.persona import approval
 from src.persona.approval import (
     decide,
@@ -17,6 +18,7 @@ from src.persona.approval import (
     proposal_notice,
     proposals_in_turn,
 )
+from src.persona.layers import build_persona
 from tests.utils import call, scripted
 
 NOW = datetime(2026, 9, 16, tzinfo=UTC)
@@ -107,8 +109,8 @@ async def test_signals_come_only_from_code_sources():
 async def test_chat_applies_the_phrase_before_the_model_and_appends_notices(monkeypatch):
     decided = []
 
-    async def blocks(_pool, _user_id):
-        return "<soul>s</soul>", []
+    async def load_known(_pool, _user_id):
+        return Known(persona=build_persona([]), remembered=[], positions=[])
 
     async def theses_block(_pool, _user_id):
         return "<theses>\nnone yet\n</theses>"
@@ -117,8 +119,8 @@ async def test_chat_applies_the_phrase_before_the_model_and_appends_notices(monk
         decided.append((verb, short_id))
         return f"<soul_change>approved {short_id}: warmer.</soul_change>"
 
-    for name, double in [("persona_blocks", blocks), ("investor_blocks", blocks),
-                         ("theses_block", theses_block), ("decide", fake_decide)]:  # fmt: skip
+    for name, double in [("load_known", load_known), ("theses_block", theses_block),
+                         ("decide", fake_decide)]:  # fmt: skip
         monkeypatch.setattr(chat_module, name, double)
 
     @tool

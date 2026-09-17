@@ -1,7 +1,7 @@
 """Long-term memory over the facts table: add (deduplicated), hybrid search, by topic, delete.
 
 Memories are the investor's free-text facts (subject user, kind memory). Search also reaches their
-profile (name, city, currency...), but never signals or anything about the assistant.
+profile (name, city, currency...), but never signals, setup skips or anything about the assistant.
 """
 
 import hashlib
@@ -11,6 +11,7 @@ from psycopg_pool import AsyncConnectionPool
 
 from src.db.pool import rows
 from src.memory.embedder import Embedder, vector_literal
+from src.memory.keys import SETUP_KEYS
 
 # Hybrid ranking: meaning leads, exact words help (tickers, names, account types), newer facts
 # edge ahead of older ones that may be out of date. The weights sum to 1.
@@ -29,7 +30,7 @@ _SEARCH = """WITH scored AS (
                AS recency
     FROM facts
     WHERE user_id = %(user_id)s AND subject = 'user' AND kind IN ('memory', 'profile')
-      AND status = 'active'
+      AND status = 'active' AND NOT coalesce(key = ANY(%(hidden_keys)s), false)
   )
   SELECT id, kind, topic, key, content, created, round(similarity::numeric, 3)::float AS similarity,
          round((%(similarity_weight)s * similarity + %(keyword_weight)s * keyword
@@ -76,6 +77,8 @@ async def search(
         "keyword_weight": KEYWORD_WEIGHT,
         "recency_weight": RECENCY_WEIGHT,
         "limit": limit,
+        # Setup skips are bookkeeping for the setup flow, not something the investor said.
+        "hidden_keys": list(SETUP_KEYS),
     }
     return await rows(pool, _SEARCH, params)
 

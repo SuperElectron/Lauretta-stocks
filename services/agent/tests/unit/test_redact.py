@@ -53,7 +53,7 @@ def test_a_long_run_without_whitespace_is_sent_before_the_flush_and_stays_bounde
 
 
 @pytest.mark.parametrize(
-    "tag", ["<theses>", "</unknown>", "<unnamed>", "<stage>", "</soul_change>", "<signals id=1>"]
+    "tag", ["<theses>", "</unknown>", "<setup>", "<stage>", "</soul_change>", "<signals id=1>"]
 )
 def test_pieces_quoting_any_prompt_tag_are_dropped(tag):
     guard = ReasoningFilter([])
