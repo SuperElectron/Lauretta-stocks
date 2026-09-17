@@ -15,6 +15,7 @@ from loguru import logger
 from src.api import events, jobs, reads
 from src.api.openai import routes as openai_routes
 from src.api.openai.models import OpenAIError, error_response
+from src.api.voice import routes as voice_routes
 from src.db.pool import open_pool
 from src.queue.broker import connect
 from src.settings import Settings
@@ -39,7 +40,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app(with_lifespan: bool = True) -> FastAPI:
     """Tests build it without the lifespan and set `app.state` themselves."""
     api = FastAPI(title="Lauretta Stocks", lifespan=lifespan if with_lifespan else None)
-    for module in (jobs, events, reads, openai_routes):
+    for module in (jobs, events, reads, openai_routes, voice_routes):
         api.include_router(module.router)
     api.add_exception_handler(OpenAIError, error_response)
     return api

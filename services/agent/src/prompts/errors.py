@@ -61,3 +61,8 @@ SEC_STATUS = "SEC EDGAR returned {status}"
 # Why a delivery was dead-lettered (the dead-letter stream and the worker log).
 DEAD_INVALID_PAYLOAD = "invalid payload"
 DEAD_UNFINISHED = "not finished in {deliveries} deliveries"
+
+# Voice (`src/api/voice`).
+SPEECH_UNAVAILABLE = "speech is not available right now; try again shortly"
+AUDIO_TOO_LARGE = "the recording is too large; the limit is {limit} MB"
+AUDIO_EMPTY = "no speech was heard in the recording"
