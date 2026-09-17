@@ -51,6 +51,7 @@ async def add(
     sha = content_hash(topic, content)
     inserted = await rows(
         pool,
+        user_id,
         """INSERT INTO facts (user_id, subject, kind, topic, content, sha256, embedding, source)
            VALUES (%s, 'user', 'memory', %s, %s, %s, %s::vector, 'chat')
            ON CONFLICT (user_id, sha256) DO NOTHING RETURNING id""",
@@ -59,7 +60,7 @@ async def add(
     if inserted:
         return {"id": str(inserted[0]["id"]), "deduped": False}
     (existing,) = await rows(
-        pool, "SELECT id FROM facts WHERE user_id = %s AND sha256 = %s", (user_id, sha)
+        pool, user_id, "SELECT id FROM facts WHERE user_id = %s AND sha256 = %s", (user_id, sha)
     )
     return {"id": str(existing["id"]), "deduped": True}
 
@@ -80,13 +81,14 @@ async def search(
         # Setup skips are bookkeeping for the setup flow, not something the investor said.
         "hidden_keys": list(SETUP_KEYS),
     }
-    return await rows(pool, _SEARCH, params)
+    return await rows(pool, user_id, _SEARCH, params)
 
 
 async def by_topic(pool: AsyncConnectionPool, user_id: str, per_topic: int) -> list[dict[str, Any]]:
     """The newest few memories on every topic, newest first. Needs no embedding."""
     return await rows(
         pool,
+        user_id,
         """SELECT id, topic, content, created FROM (
              SELECT id::text, topic, content, created_at::date::text AS created, created_at,
                     row_number() OVER (PARTITION BY topic ORDER BY created_at DESC) AS rank
@@ -99,6 +101,7 @@ async def by_topic(pool: AsyncConnectionPool, user_id: str, per_topic: int) -> l
 async def delete(pool: AsyncConnectionPool, user_id: str, memory_id: str) -> bool:
     deleted = await rows(
         pool,
+        user_id,
         "DELETE FROM facts WHERE user_id = %s AND kind = 'memory' AND id::text = %s RETURNING id",
         (user_id, memory_id),
     )

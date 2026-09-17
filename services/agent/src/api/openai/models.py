@@ -13,8 +13,13 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from src.prompts import errors as wording
 
-# The desk: the only model this API serves.
-MODEL = "lauretta"
+# The desk, one model per user: `lauretta-mat`, `lauretta-max`. AnythingLLM sends no user, so each
+# person's workspace chats with their own model, and the gateway names the user from it.
+MODEL_PREFIX = "lauretta-"
+
+
+def model_for(user_id: str) -> str:
+    return MODEL_PREFIX + user_id
 
 
 class OpenAIError(Exception):

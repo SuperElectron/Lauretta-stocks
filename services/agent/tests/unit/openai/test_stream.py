@@ -52,8 +52,8 @@ async def test_model_reasoning_streams_as_reasoning_and_stays_out_of_the_recorde
         {"content": "Hi"},
         {},
     ]
-    (thread_id,) = db.owners
-    assert db.aliases == {digests.pair_alias("friend", "hello", "Hi"): (thread_id, "friend")}
+    ((_, thread_id),) = db.threads
+    assert db.aliases == {("mat", digests.pair_alias("mat", "hello", "Hi")): thread_id}
 
 
 async def test_only_the_last_user_message_enters_the_graph(client, worker):

@@ -4,6 +4,10 @@ from typing import Any
 
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
+from langchain_core.tools import BaseTool
+from langgraph.prebuilt import ToolRuntime
+
+from src.graph.ctx import Ctx
 
 
 class ScriptedModel(GenericFakeChatModel):
@@ -14,15 +18,31 @@ class ScriptedModel(GenericFakeChatModel):
 
 
 class Recorder:
-    """A role double that returns scripted results and keeps the prompts it was given."""
+    """A role double that returns scripted results and keeps the prompts and contexts it was
+    given."""
 
     def __init__(self, *results: dict[str, Any]) -> None:
         self.results = list(results)
         self.prompts: list[str] = []
+        self.contexts: list[Ctx] = []
 
-    async def __call__(self, system_prompt: str, _task: str) -> dict[str, Any]:
+    async def __call__(self, system_prompt: str, _task: str, context: Ctx) -> dict[str, Any]:
         self.prompts.append(system_prompt)
+        self.contexts.append(context)
         return self.results.pop(0)
+
+
+def runtime_for(user_id: str) -> ToolRuntime:
+    """The runtime a ToolNode injects into a tool run for `user_id`."""
+    return ToolRuntime(
+        state={}, context=Ctx(user_id=user_id), config={}, stream_writer=lambda _chunk: None,
+        tool_call_id="call-1", store=None,
+    )  # fmt: skip
+
+
+async def run_as(user_id: str, tool: BaseTool, args: dict[str, Any]) -> Any:
+    """Calls `tool` directly, as a run for `user_id` would."""
+    return await tool.ainvoke({**args, "runtime": runtime_for(user_id)})
 
 
 def scripted(*replies: AIMessage) -> ScriptedModel:
@@ -75,7 +95,7 @@ def settings(**overrides: Any) -> Any:
 
     values: dict[str, Any] = {
         "LOG_LEVEL": "INFO",
-        "USER_ID": "friend",
+        "ALLOWED_USERS": "mat,max",
         "DATABASE_URL": "postgresql://unused",
         "DB_POOL_MIN": 1,
         "DB_POOL_MAX": 2,

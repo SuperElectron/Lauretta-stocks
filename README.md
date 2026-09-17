@@ -85,9 +85,12 @@ No new app to learn: any chat app with a Generic OpenAI provider can reach the d
 | Setting | Value |
 |---|---|
 | Base URL | `https://lauretta.tailae2b1.ts.net/v1` (or `http://127.0.0.1:8000/v1` locally) |
-| API key | `GATEWAY_API_KEY` (anything, when calling the API directly) |
-| Model | `lauretta` |
+| API key | `GATEWAY_API_KEY`, the owner's key (acts as `mat`) |
+| Model | `lauretta-<user>`, the caller's own: `lauretta-mat` with the owner's key |
 | Streaming | on |
+
+Calling the API directly (locally, no gateway) needs the header the gateway would set,
+`X-Lauretta-User: mat`, instead of a key. See [Users and isolation](#users-and-isolation).
 
 - **Conversations:** the app sends no conversation id, so the desk recognises a conversation
   by the history it resends: each prompt and answer it has seen points back to its thread, so
@@ -125,16 +128,17 @@ web app with threads, where the desk answers.
   multi-user mode and create the admin account, and in Settings > Users (under Admin) create
   the investor's with the role **Default** (not Admin or Manager). From then on everyone signs
   in with their own account and the password is no longer used. Until this is done, whoever
-  holds the password holds the app, so do it at once.
+  holds the password holds the app, so do it at once. Then give each person their own
+  workspace (see [Users and isolation](#users-and-isolation)).
 - **The Android app:** install AnythingLLM from Google Play. In AnythingLLM (opened at the tailnet
   address, not `localhost`), go to Settings > AnythingLLM Mobile and scan its QR code with the
   app. The phone must be on the tailnet too. There is no iPhone app; the browser serves.
 - **Documents:** AnythingLLM accepts uploads (up to 100 MiB each), but **the desk does not read
   them yet**: the desk's endpoint ignores the context AnythingLLM retrieves from them.
 - **How it connects:** AnythingLLM comes preset as the [chat app](#chat-apps-anythingllm-and-kin)
-  described above: it asks the gateway's `/v1` for the model `lauretta`, with
-  `GATEWAY_API_KEY`, like any other client, and takes the plain streaming chat path (no agent
-  tools). It sits on its own `web` network with the gateway alone and can reach nothing else in
+  described above, with its own key, `ANYTHINGLLM_API_KEY`: each person's workspace asks the
+  gateway's `/v1` for their own model (`lauretta-mat`, `lauretta-max`), which is how the desk
+  knows who is chatting. It takes the plain streaming chat path (no agent tools). It sits on its own `web` network with the gateway alone and can reach nothing else in
   the stack. It keeps its chats, accounts and documents in the `anythingllm` volume.
 - **What it fetches from the internet:** at boot, LiteLLM's model map (GitHub) and model prices
   (models.dev); on the first document, its embedding model, once. None of it carries user data.
@@ -162,12 +166,14 @@ just backup             # a database dump now, into backups/ on the Spark
 ```
 
 - **The gateway:** AgentGateway (`services/gateway/config.yaml`). `/v1` and everything under it need
-  `Authorization: Bearer $GATEWAY_API_KEY`; `/healthz` is open; every other path goes to
-  AnythingLLM, which keeps its own login. It strips the key (for the api) and any claimed identity
-  (including Tailscale's and forwarding headers), rate limits, and never buffers, so streams and
-  WebSockets arrive as they are written. On `/` (AnythingLLM) only, bodies over 100 MiB are
+  `Authorization: Bearer` with `GATEWAY_API_KEY` (the owner) or `ANYTHINGLLM_API_KEY`; `/healthz`
+  is open; every other path goes to AnythingLLM, which keeps its own login. It names the user in
+  `X-Lauretta-User` (see [Users and isolation](#users-and-isolation)), strips the key and any
+  claimed identity (including Tailscale's and forwarding headers), rate limits per user, and
+  never buffers a response, so streams and WebSockets arrive as they are written (it reads
+  request bodies on `/v1` to find the model). On `/` (AnythingLLM) only, bodies over 100 MiB are
   refused. It alone holds the provider keys, and its internal `llm` listener needs
-  `LLM_INTERNAL_KEY`, which only api and worker hold.
+  `LLM_INTERNAL_KEY`, which the worker holds.
 - **The tailnet:** the desk lives at `https://lauretta.tailae2b1.ts.net`. The `tailscale`
   container joins the tailnet as `lauretta-host` (`tag:lauretta`) and hosts the Tailscale Service
   `svc:lauretta`, with a real certificate, straight to the gateway. There is nothing to expose by
@@ -202,10 +208,45 @@ just backup             # a database dump now, into backups/ on the Spark
 | Port | Bound to | Serves |
 |---|---|---|
 | 443 on `lauretta.tailae2b1.ts.net` | tailnet only (`svc:lauretta`) | HTTPS to the gateway |
-| 18400, 3000 | compose networks `court`, `web` and `llm` | gateway ingress and `llm` |
+| 18400, 3000 | compose networks `edge`, `app`, `models`, `web` and `llm` | gateway ingress and `llm` |
 | 3001 | compose network `web` only | anythingllm |
-| 8000, 5432, 6379 | compose network `court` only | api, db, broker |
+| 8000 | compose network `app` only (the gateway) | api |
+| 5432, 6379 | `api-data` (api), `worker-data` (worker); 5432 also `dump` (backup) | db, broker |
 | 8000 | compose network `llm` only | vllm |
+
+## Users and isolation
+
+The owner (`mat`) and Max (`max`) chat with the same Director, and neither can reach the other's
+memories, holdings, theses, conversations, jobs or events. Who is asking is decided by the
+infrastructure, never by the model or by anything in a request body, and every layer enforces it
+on its own:
+
+| Layer | What holds |
+|---|---|
+| gateway | Names the user in `X-Lauretta-User` and removes any client copy. The owner's key is always `mat`. AnythingLLM's key names the user from the model its workspace chats with (`lauretta-mat`, `lauretta-max`) and may only list models and chat; any other model names nobody. |
+| networks | Only the gateway shares a network with api, so nothing else can send it that header. |
+| api | Acts only for a user in `ALLOWED_USERS` (else 401). Another user's job, status or events is 404. A chat model must be the caller's own (`lauretta-<user>`, else 404). Threads are keyed `{user}:{thread}` on the server. |
+| queue, worker | A job carries its user; locks, checkpoints and signals are keyed by it. |
+| graphs | The user is LangGraph runtime context (`graph/ctx.py`). Tools read it through `ToolRuntime`, which is not in any schema the model sees, so the model can neither read nor set it. |
+| Postgres | api and worker connect as `lauretta_app` (no superuser, no BYPASSRLS). Forced row-level security on `facts`, `holdings`, `theses`, `threads` and `thread_aliases` shows each transaction only the rows of its `app.user_id`; a query outside a user's scope sees nothing. |
+
+Tests: `just test` covers the api, queue, worker and graphs (including prompt injection as Max);
+`just test-db` runs the row-level security tests against a throwaway database (on the Spark).
+
+**Setting up the people in AnythingLLM** (once per person, by an admin): create a workspace
+(e.g. "Mat", "Max"), set its chat model to `lauretta-<user>` (workspace settings, or the
+developer API `POST /api/v1/workspace/{slug}/update` with `{"chatProvider": "generic-openai",
+"chatModel": "lauretta-max"}`), and give only that person access to it (the workspace's members,
+or `POST /api/v1/admin/workspaces/{slug}/manage-users` with `{"userIds": [<id>], "reset": true}`). A chat anywhere else uses the
+default model `lauretta`, which the desk refuses.
+
+**Adding a user:** their id in `ALLOWED_USERS`, a model for them in the gateway's `ingress-api`
+route (`lauretta-<id>` in the user map, and a rate-limit bucket), and an AnythingLLM workspace.
+
+**What this does not cover:** AnythingLLM itself. Its admins can open any workspace, including
+another person's, and read those chats there. Both accounts are admins today; once each phone is
+paired, demote both to **Default** (a paired device stays linked to its user). Whoever holds
+`ANYTHINGLLM_API_KEY` or AnythingLLM's own storage can act as either person.
 
 The stack publishes no host ports at all, vLLM included, so the Spark's firewall needs no rule
 for it. For local development, `just up` still starts only the database, on loopback `DB_PORT`.

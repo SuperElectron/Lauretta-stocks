@@ -3,18 +3,26 @@
 from typing import Any
 
 from langchain_core.tools import BaseTool, tool
+from langgraph.prebuilt import ToolRuntime
 from psycopg_pool import AsyncConnectionPool
 
 from src.db.queries import facts, soul
+from src.graph.ctx import Ctx, user_of
 from src.memory.embedder import Embedder
 from src.memory.keys import SETUP_SKIPS, SKIPPED, SkippableStep
 from src.persona.approval import SHORT_ID_CHARS
-from src.tools.models import ProposeSoulArgs, SetIdentityArgs, SetUserDetailsArgs, SkipSetupStepArgs
+from src.tools.scoped import (
+    ScopedProposeSoulArgs,
+    ScopedSetIdentityArgs,
+    ScopedSetUserDetailsArgs,
+    ScopedSkipSetupStepArgs,
+)
 
 
-def build_set_identity(pool: AsyncConnectionPool, embedder: Embedder, user_id: str) -> BaseTool:
-    @tool(args_schema=SetIdentityArgs)
+def build_set_identity(pool: AsyncConnectionPool, embedder: Embedder) -> BaseTool:
+    @tool(args_schema=ScopedSetIdentityArgs)
     async def set_identity(
+        runtime: ToolRuntime[Ctx],
         name: str | None = None,
         emoji: str | None = None,
         vibe: str | None = None,
@@ -35,15 +43,18 @@ def build_set_identity(pool: AsyncConnectionPool, embedder: Embedder, user_id: s
             "checker_name": checker_name,
             "strategist_name": strategist_name,
         }
-        saved = await facts.set_many(pool, embedder, user_id, "identity", values, "chat")
+        saved = await facts.set_many(
+            pool, embedder, user_of(runtime.context), "identity", values, "chat"
+        )
         return {"saved": True, **saved}
 
     return set_identity
 
 
-def build_set_user_details(pool: AsyncConnectionPool, embedder: Embedder, user_id: str) -> BaseTool:
-    @tool(args_schema=SetUserDetailsArgs)
+def build_set_user_details(pool: AsyncConnectionPool, embedder: Embedder) -> BaseTool:
+    @tool(args_schema=ScopedSetUserDetailsArgs)
     async def set_user_details(
+        runtime: ToolRuntime[Ctx],
         name: str | None = None,
         preferred_name: str | None = None,
         city: str | None = None,
@@ -62,33 +73,37 @@ def build_set_user_details(pool: AsyncConnectionPool, embedder: Embedder, user_i
             "currency": currency.upper() if currency else None,
             "timezone": timezone,
         }
-        saved = await facts.set_many(pool, embedder, user_id, "profile", values, "chat")
+        saved = await facts.set_many(
+            pool, embedder, user_of(runtime.context), "profile", values, "chat"
+        )
         return {"saved": True, **saved}
 
     return set_user_details
 
 
-def build_skip_setup_step(pool: AsyncConnectionPool, embedder: Embedder, user_id: str) -> BaseTool:
-    @tool(args_schema=SkipSetupStepArgs)
-    async def skip_setup_step(step: SkippableStep) -> dict[str, Any]:
+def build_skip_setup_step(pool: AsyncConnectionPool, embedder: Embedder) -> BaseTool:
+    @tool(args_schema=ScopedSkipSetupStepArgs)
+    async def skip_setup_step(step: SkippableStep, runtime: ToolRuntime[Ctx]) -> dict[str, Any]:
         """Mark an optional setup step skipped so it is never asked again. Only when the
         investor said so: they keep the team's names, or have no holdings to record.
         """
+        user_id = user_of(runtime.context)
         await facts.set_keyed(pool, embedder, user_id, SETUP_SKIPS[step], SKIPPED, "chat")
         return {"skipped": step}
 
     return skip_setup_step
 
 
-def build_propose_soul_change(
-    pool: AsyncConnectionPool, embedder: Embedder, user_id: str
-) -> BaseTool:
-    @tool(args_schema=ProposeSoulArgs)
-    async def propose_soul_change(content: str, reason: str) -> dict[str, Any]:
+def build_propose_soul_change(pool: AsyncConnectionPool, embedder: Embedder) -> BaseTool:
+    @tool(args_schema=ScopedProposeSoulArgs)
+    async def propose_soul_change(
+        content: str, reason: str, runtime: ToolRuntime[Ctx]
+    ) -> dict[str, Any]:
         """Propose a new soul: your persona, voice and boundaries. Write the full new text.
         This changes nothing yet: the investor sees the proposal and the phrase to approve it
         under your reply, and only their reply applies it. Never say it has been applied.
         """
+        user_id = user_of(runtime.context)
         proposal_id = await soul.propose(pool, embedder, user_id, content, reason)
         return {
             "proposed": True,

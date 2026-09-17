@@ -14,6 +14,9 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
+      # The app role's password (services/db/init/01-app-role.sh). Locally the CLI may keep
+      # connecting as the owner, a superuser that row-level security does not apply to.
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:?set DB_APP_PASSWORD}
     ports:
       - "127.0.0.1:${DB_PORT}:5432"
     volumes:

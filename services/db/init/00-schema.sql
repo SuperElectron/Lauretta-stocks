@@ -65,13 +65,14 @@ CREATE TABLE theses (
 );
 CREATE INDEX theses_user_ticker_idx ON theses (user_id, ticker, created_at DESC);
 
--- Conversations started through the OpenAI-compatible API, keyed by a hash the API derives.
--- A thread belongs to the user who started it; nobody else may continue it.
+-- Conversations, keyed by their owner and an id: the API's thread names and the OpenAI adapter's
+-- hashed ids alike. The checkpoint key is `{user_id}:{thread_id}`, built by the server.
 CREATE TABLE threads (
-    thread_id text PRIMARY KEY,
     user_id text NOT NULL,
+    thread_id text NOT NULL,
     client text NOT NULL,
-    created_at timestamptz NOT NULL DEFAULT now()
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, thread_id)
 );
 CREATE INDEX threads_user_created_idx ON threads (user_id, created_at DESC);
 
@@ -79,8 +80,32 @@ CREATE INDEX threads_user_created_idx ON threads (user_id, created_at DESC);
 -- Chat apps resend a sliding window of past turns and no conversation id; any pair still in
 -- the window finds the thread. The first thread to register an alias keeps it.
 CREATE TABLE thread_aliases (
-    alias_hash text PRIMARY KEY,
-    thread_id text NOT NULL REFERENCES threads (thread_id) ON DELETE CASCADE,
     user_id text NOT NULL,
-    created_at timestamptz NOT NULL DEFAULT now()
+    alias_hash text NOT NULL,
+    thread_id text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, alias_hash),
+    FOREIGN KEY (user_id, thread_id) REFERENCES threads (user_id, thread_id) ON DELETE CASCADE
 );
+
+-- Row-level security: one user's rows are invisible and unwritable to another. The app connects
+-- as `lauretta_app` (01-app-role.sh), a role without BYPASSRLS, and sets `app.user_id` inside each
+-- transaction. Unset, `current_setting(..., true)` is NULL, or '' on a connection that was scoped
+-- before (NULLIF makes that NULL too), and no row matches or may be written. FORCE applies the
+-- policies to the tables' owner too; only a superuser (backups, this script) bypasses them.
+DO $$
+DECLARE
+    t text;
+BEGIN
+    FOREACH t IN ARRAY ARRAY['facts', 'holdings', 'theses', 'threads', 'thread_aliases'] LOOP
+        EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+        EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);
+        EXECUTE format(
+            'CREATE POLICY %I ON %I'
+            ' USING (user_id = NULLIF(current_setting(''app.user_id'', true), ''''))'
+            ' WITH CHECK (user_id = NULLIF(current_setting(''app.user_id'', true), ''''))',
+            t || '_own', t
+        );
+    END LOOP;
+END
+$$;

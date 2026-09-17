@@ -1,25 +1,21 @@
-"""Conversations started through the OpenAI-compatible API: who owns each, and the aliases
-(hashes of a prompt and its answer) that find one again."""
+"""Conversations: who owns each, and the aliases (hashes of a prompt and its answer) that find
+one again. A thread is keyed by its owner and its id, so two users' threads never collide."""
 
 from psycopg_pool import AsyncConnectionPool
 
 from src.db.pool import rows
 
 
-async def create(pool: AsyncConnectionPool, thread_id: str, user_id: str, client: str) -> bool:
-    """Records the thread as `user_id`'s; False when it already exists."""
+async def create(pool: AsyncConnectionPool, user_id: str, thread_id: str, client: str) -> bool:
+    """Records the thread as `user_id`'s; False when they already have it."""
     created = await rows(
         pool,
-        """INSERT INTO threads (thread_id, user_id, client) VALUES (%s, %s, %s)
-           ON CONFLICT (thread_id) DO NOTHING RETURNING thread_id""",
-        (thread_id, user_id, client),
+        user_id,
+        """INSERT INTO threads (user_id, thread_id, client) VALUES (%s, %s, %s)
+           ON CONFLICT (user_id, thread_id) DO NOTHING RETURNING thread_id""",
+        (user_id, thread_id, client),
     )
     return bool(created)
-
-
-async def owner(pool: AsyncConnectionPool, thread_id: str) -> str | None:
-    found = await rows(pool, "SELECT user_id FROM threads WHERE thread_id = %s", (thread_id,))
-    return found[0]["user_id"] if found else None
 
 
 async def find_aliases(
@@ -28,6 +24,7 @@ async def find_aliases(
     """The thread of each alias found among `alias_hashes`, by alias."""
     found = await rows(
         pool,
+        user_id,
         """SELECT alias_hash, thread_id FROM thread_aliases
            WHERE alias_hash = ANY(%s) AND user_id = %s""",
         (alias_hashes, user_id),
@@ -43,8 +40,9 @@ async def add_aliases(
         return
     await rows(
         pool,
-        """INSERT INTO thread_aliases (alias_hash, thread_id, user_id)
-           SELECT unnest(%s::text[]), %s, %s
-           ON CONFLICT (alias_hash) DO NOTHING""",
-        (alias_hashes, thread_id, user_id),
+        user_id,
+        """INSERT INTO thread_aliases (user_id, alias_hash, thread_id)
+           SELECT %s, unnest(%s::text[]), %s
+           ON CONFLICT (user_id, alias_hash) DO NOTHING""",
+        (user_id, alias_hashes, thread_id),
     )

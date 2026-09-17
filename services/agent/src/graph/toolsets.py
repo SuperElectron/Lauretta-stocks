@@ -38,30 +38,32 @@ def checker_tools(sec: SecClient) -> list[BaseTool]:
     return [*research_tools(sec), build_submit_review()]
 
 
-def advisor_tools(pool: AsyncConnectionPool, embedder: Embedder, user_id: str) -> list[BaseTool]:
+def advisor_tools(pool: AsyncConnectionPool, embedder: Embedder) -> list[BaseTool]:
+    """Scoped to the run's user through its context, like the assistant's."""
     return [
-        build_get_portfolio(pool, user_id),
+        build_get_portfolio(pool),
         build_get_market_snapshot(),
-        build_recall(pool, embedder, user_id),
+        build_recall(pool, embedder),
         build_submit_advice(),
     ]
 
 
 def assistant_tools(
-    pool: AsyncConnectionPool, embedder: Embedder, user_id: str, run_research: RunResearch
+    pool: AsyncConnectionPool, embedder: Embedder, run_research: RunResearch
 ) -> list[BaseTool]:
+    """No tool takes a user: each reads it from the run's context (`graph/ctx.py`)."""
     return [
-        build_remember(pool, embedder, user_id),
-        build_recall(pool, embedder, user_id),
-        build_forget(pool, user_id),
-        build_set_holding(pool, user_id),
-        build_remove_holding(pool, user_id),
-        build_get_portfolio(pool, user_id),
+        build_remember(pool, embedder),
+        build_recall(pool, embedder),
+        build_forget(pool),
+        build_set_holding(pool),
+        build_remove_holding(pool),
+        build_get_portfolio(pool),
         build_get_market_snapshot(),
         build_research_stock(run_research),
-        build_get_thesis(pool, user_id),
-        build_set_identity(pool, embedder, user_id),
-        build_set_user_details(pool, embedder, user_id),
-        build_skip_setup_step(pool, embedder, user_id),
-        build_propose_soul_change(pool, embedder, user_id),
+        build_get_thesis(pool),
+        build_set_identity(pool, embedder),
+        build_set_user_details(pool, embedder),
+        build_skip_setup_step(pool, embedder),
+        build_propose_soul_change(pool, embedder),
     ]

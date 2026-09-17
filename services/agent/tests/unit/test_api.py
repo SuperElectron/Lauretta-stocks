@@ -7,6 +7,7 @@ import httpx
 import pytest
 from fakeredis import FakeAsyncRedis
 
+from src.api import jobs
 from src.api.app import create_app
 from src.queue import events, keys
 from src.queue.models import Done, Error, Job, Progress, Reasoning, Token
@@ -18,13 +19,31 @@ def broker():
     return FakeAsyncRedis(decode_responses=True)
 
 
+@pytest.fixture(autouse=True)
+def threads_table(monkeypatch):
+    """`threads.create`, in memory: the (user, thread) rows a chat job records."""
+    rows: set[tuple[str, str]] = set()
+
+    async def create(_pool, user_id, thread_id, _client):
+        created = (user_id, thread_id) not in rows
+        rows.add((user_id, thread_id))
+        return created
+
+    monkeypatch.setattr(jobs.threads, "create", create)
+    return rows
+
+
 @contextlib.asynccontextmanager
-async def client_for(broker, **overrides):
+async def client_for(broker, user="mat", **overrides):
+    """A client whose requests carry the gateway's user header (none when `user` is None)."""
     app = create_app(with_lifespan=False)
     app.state.settings = settings(API_MAX_WAIT_S=5, **overrides)
     app.state.broker, app.state.pool = broker, None
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://api") as http:
+    headers = {} if user is None else {"X-Lauretta-User": user}
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://api", headers=headers
+    ) as http:
         yield http
 
 
@@ -206,11 +225,11 @@ async def submitted(client) -> str:
 async def test_healthz_names_what_is_down(client, monkeypatch):
     from src.api import reads
 
-    async def db_up(_pool, _sql):
-        return [{"?column?": 1}]
+    async def db_up(_pool):
+        return None
 
     assert (await client.get("/healthz")).status_code == 503  # no pool in this app
-    monkeypatch.setattr(reads, "rows", db_up)
+    monkeypatch.setattr(reads, "ping", db_up)
     response = await client.get("/healthz")
     assert (response.status_code, response.json()) == (200, {"db": "ok", "broker": "ok"})
 
@@ -226,7 +245,7 @@ async def test_reads_return_saved_theses_and_holdings(client, monkeypatch):
 
     monkeypatch.setattr(reads.theses, "latest", latest)
     monkeypatch.setattr(reads.holdings, "all_of", all_of)
-    assert (await client.get("/v1/theses/msft")).json() == {"ticker": "MSFT", "user": "friend"}
+    assert (await client.get("/v1/theses/msft")).json() == {"ticker": "MSFT", "user": "mat"}
     assert (await client.get("/v1/theses/zzz")).status_code == 404
     assert (await client.get("/v1/holdings")).json() == {
         "holdings": [{"ticker": "MSFT", "shares": 10.0}]

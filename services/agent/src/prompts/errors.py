@@ -23,16 +23,17 @@ THREAD_BUSY = "another message on this thread is still being answered; send it a
 LOCK_LOST = "the thread lock was lost while the job ran"
 JOB_INTERRUPTED = "the job was interrupted before it finished; send it again if still needed"
 ROLE_STOPPED = "the {role} stopped without submitting its work"
+NO_USER = "the run has no user to act for"
 SOUL_EMPTY = "the soul is empty"
 SOUL_TOO_LONG = "the soul is {chars} chars; the cap is {cap}"
 
 # API errors (`HTTPException` details and OpenAI-style errors).
 NO_SUCH_JOB = "no such job"
+UNKNOWN_USER = "this request names no user of the desk"
 NOT_AN_EVENT_ID = "not an event id"
 STREAM_TIMEOUT = "this stream reached its time limit; the job carries on, reconnect to follow it"
 NO_RESEARCH = "no research on {ticker}"
 NO_SUCH_MODEL = "no such model; use {model!r}"
-NO_SUCH_CONVERSATION = "no such conversation"
 BAD_THREAD_HEADER = "X-Thread-Id must be 1-64 letters, digits or _.:-"
 MESSAGE_TOO_LONG = "the last message is too long"
 LAST_MESSAGE_NOT_USER = "the last message must be the user's, with text"

@@ -9,6 +9,7 @@ from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from src.graph import llm
+from src.graph.ctx import Ctx
 from src.graph.reasoning import REASONING
 from src.graph.role import build_role
 from src.prompts import progress
@@ -69,7 +70,7 @@ async def test_a_research_role_run_inside_a_tool_never_leaks_its_reasoning():
     @tool
     async def consult() -> str:
         """Runs the analyst."""
-        await role("You are the analyst.", "Research MSFT.")
+        await role("You are the analyst.", "Research MSFT.", Ctx(user_id="mat"))
         return "story ready"
 
     chat_model = model(
@@ -90,7 +91,7 @@ async def test_a_research_role_run_inside_a_tool_never_leaks_its_reasoning():
     events = Events()
 
     result = await run_chat(
-        graph.compile(checkpointer=InMemorySaver()), "t", "a" * 32, "hi", events
+        graph.compile(checkpointer=InMemorySaver()), "mat", "t", "a" * 32, "hi", events
     )
 
     assert result["reply"] == "Done"

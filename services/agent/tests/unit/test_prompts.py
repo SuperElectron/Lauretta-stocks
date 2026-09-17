@@ -29,6 +29,7 @@ SRC = Path(__file__).resolve().parents[2] / "src"
 ALLOWED = {
     "api/app.py:create_app": "the FastAPI app title, a product name",
     "api/openai/stream.py:DONE_FRAME": "the SSE end-of-stream frame, protocol",
+    "db/pool.py:_SCOPE": "SQL: the transaction's user scope for row-level security",
     "graph/render.py:_today": "a strftime pattern",
     "memory/embedder.py:Embedder": "the startup probe text, embedded and never shown",
     "persona/approval.py:_DECISION": "the approval phrase regex; the phrase is shown from notes",

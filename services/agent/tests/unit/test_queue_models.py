@@ -32,7 +32,7 @@ def test_valid_requests_default_the_thread():
 
 
 def test_a_job_round_trips_through_its_json():
-    job = Job(kind="chat", message="hi", client={"client": "ios"})
+    job = Job(user="mat", kind="chat", message="hi", client={"client": "ios"})
     assert Job.model_validate_json(job.model_dump_json()) == job
 
 

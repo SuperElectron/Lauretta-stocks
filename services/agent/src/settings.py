@@ -1,9 +1,13 @@
 """Agent process configuration, read from the environment (`just` loads `.env`)."""
 
+import re
 from typing import Literal
 
 from pydantic import PositiveInt, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# A user id: it prefixes thread keys as `{user}:{thread}`, so it never holds a colon.
+USER_ID = re.compile(r"[a-z][a-z0-9_-]{0,31}")
 
 
 class Settings(BaseSettings):
@@ -11,8 +15,14 @@ class Settings(BaseSettings):
     # model clients read themselves.
     model_config = SettingsConfigDict(extra="ignore")
     LOG_LEVEL: str
-    USER_ID: str
+    # Everyone who may use the desk, comma-separated user ids; the first is the owner. The API
+    # acts only for a user named here, as the gateway's `X-Lauretta-User` header.
+    ALLOWED_USERS: str
+    # The app role (`lauretta_app`), which row-level security applies to.
     DATABASE_URL: str
+    # The owner role, used once at startup to create the checkpoint tables; None uses
+    # DATABASE_URL (local development, where both are the owner).
+    DATABASE_OWNER_URL: str | None = None
     DB_POOL_MIN: int
     DB_POOL_MAX: int
     AGENT_PROVIDER: Literal["anthropic", "openai"]
@@ -67,6 +77,20 @@ class Settings(BaseSettings):
         if self.AGENT_LOCK_WAIT_MS >= self.BROKER_MIN_IDLE_MS:
             raise ValueError("AGENT_LOCK_WAIT_MS must be less than BROKER_MIN_IDLE_MS")
         return self
+
+    @model_validator(mode="after")
+    def _allowed_users_are_ids(self) -> "Settings":
+        users = self.allowed_users()
+        if not users or any(USER_ID.fullmatch(user) is None for user in users):
+            raise ValueError("ALLOWED_USERS must list user ids like mat,max (a-z, 0-9, _ or -)")
+        return self
+
+    def allowed_users(self) -> tuple[str, ...]:
+        """The user ids in ALLOWED_USERS, owner first."""
+        return tuple(user.strip() for user in self.ALLOWED_USERS.split(",") if user.strip())
+
+    def owner(self) -> str:
+        return self.allowed_users()[0]
 
     def broker_url(self) -> str:
         """BROKER_URL, required by the API and the worker."""

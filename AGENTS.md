@@ -43,6 +43,11 @@ research pipeline (LangGraph)                                                   
 - **Persona** (chat assistant only): `<rules>` (code, `prompts/rules.py`) then `<soul>`,
   `<identity>`, `<user>`, `<signals>`. The soul changes only when the investor replies
   `approve soul <id>`, which code applies in the context step; the advisor sees `<user>` only.
+- **Users**: the owner (`mat`) and Max (`max`) share the desk with isolated data. The gateway
+  names the user (`X-Lauretta-User`); graphs are built once and get the user as LangGraph
+  runtime context (`graph/ctx.py`: nodes `Runtime[Ctx]`, tools `ToolRuntime[Ctx]`, hidden from
+  the model); Postgres enforces row-level security per transaction. See README "Users and
+  isolation". Never give a tool or node a user any other way.
 - **Names**: every agent's name (Director, Analyst, Checker, Strategist) is an identity fact
   (`bot_name`, `analyst_name`, `checker_name`, `strategist_name`) with its default in
   `prompts/identity.py`; `set_identity` renames them. The pipeline loads the names once per run,
@@ -65,19 +70,23 @@ Paths below are relative to `services/`.
 - `agent/src/graph/render.py`: stitches each system prompt from that wording: a head, then data
   blocks (`<investor>`, `<holdings>`, `<setup>`, `<unknown>`, `<draft>`, `<review>`), then the
   stage.
-- `agent/src/tools/`: one `build_*` factory per tool; argument schemas in `tools/models.py`.
+- `agent/src/tools/`: one `build_*` factory per tool; argument schemas in `tools/models.py`, and
+  for tools over a user's data `tools/scoped.py` (adds the injected `runtime`).
 - `agent/src/data/`: `sec.py` + `xbrl.py` (SEC EDGAR, free, needs `SEC_USER_AGENT`),
   `market.py` (yfinance, free, unofficial).
 - `agent/src/persona/`: persona prompt blocks, the soul cap check, and soul approval.
 - `agent/src/db/`: pool, checkpointer, and `queries/` for facts (memories, profile, identity,
-  signals, soul), holdings and theses. Signals are written by code (`facts.record_signals`).
-  Schema is `db/init/00-schema.sql` (applied when the volume is first created).
+  signals, soul), holdings, theses and threads. Signals are written by code
+  (`facts.record_signals`). Every query runs in `db/pool.scoped(pool, user)` (row-level security
+  as `lauretta_app`). Schema is `db/init/00-schema.sql` and the app role `db/init/01-app-role.sh`
+  (applied when the volume is first created).
 - `agent/src/api/`: FastAPI (`src.api.app:app`). Queues jobs and reads results; never runs a
   graph. `POST /v1/jobs` (`?wait=`), `GET /v1/jobs/{id}`, `GET /v1/jobs/{id}/events` (SSE),
   `/v1/theses/{ticker}`, `/v1/holdings`, `/healthz`. `api/openai/`: `/v1/models` and
-  `/v1/chat/completions` (OpenAI-compatible, streamed), a thin adapter over the same jobs; the
-  user comes from `deps.current_user`; threads are owned in `threads` and found again through
-  `thread_aliases` (hashes of prompt and answer pairs the client resends).
+  `/v1/chat/completions` (OpenAI-compatible, streamed, model `lauretta-<user>`), a thin adapter
+  over the same jobs. The user comes from `deps.current_user` (the gateway's header, checked
+  against `ALLOWED_USERS`); another user's job is 404; threads are keyed by user in `threads`
+  and found again through `thread_aliases` (hashes of prompt and answer pairs the client resends).
 - `agent/src/queue/`: Valkey Streams: `jobs` (group `workers`, reclaim, `jobs:dead`), per-job
   status hash and `job:{id}:events` stream, per-thread lock. Event models in `queue/models.py`.
 - `agent/src/worker/`: `python -m src.worker` runs jobs through `open_app`; `stream.py` maps
@@ -87,7 +96,7 @@ Paths below are relative to `services/`.
 - `agent/Dockerfile`, `db/`, `gateway/`, `tailscale/`, `backup/` and the root `docker-compose.yaml`:
   the Spark stack (gateway, api, worker, broker, db, anythingllm, vllm, backup, tailscale). The
   gateway sends `/v1/*` and `/healthz` to api and every other path to AnythingLLM, the web and
-  Android client (`gateway/config.yaml`). Its internal `llm` listener, which api and worker call,
+  Android client (`gateway/config.yaml`). Its internal `llm` listener, which the worker calls,
   forwards to the `vllm` service (gpt-oss-120b on the Spark's GPU) on the private `llm` network.
   The tailscale container hosts the Service `svc:lauretta` (`tailscale/`). AnythingLLM is an
   image with settings in compose; it has no folder.
@@ -126,7 +135,8 @@ Paths below are relative to `services/`.
 - **Review:** every pull request gets a full code review, by a separate reviewer from the author,
   before it merges. Merging `staging` into `main` needs a full review of the phase.
 - **Testing:** write unit tests that match the issue's outcomes. `just test` must pass before
-  committing and before merging.
+  committing and before merging. `just test-db` (on the Spark) runs the database integration
+  tests (`tests/integration`, marked `integration`) in a throwaway compose project.
 - **Issue board:** [Lauretta-stocks project](https://github.com/users/SuperElectron/projects/6),
   linked to this repo. Move each issue through `Todo` (planning), `Ready` (approved, an agent
   can take it), `In progress` (an agent is on it and opens a PR into `staging` when done), `In review`

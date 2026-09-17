@@ -1,4 +1,4 @@
-"""Runs one job: its thread lock, its events and its status.
+"""Runs one job, for the user it carries: its thread lock, its events and its status.
 
 - A job's own failure ends in an `error` event with an `AgentError`'s code and message, or
   `INTERNAL` for anything else, whose details go to the worker log only. Either way the job is
@@ -103,15 +103,19 @@ class JobHandler:
         await submit.mark(self._broker, job_id, self._ttl_s, **fields, finished_at=submit.now())
 
     async def _execute(self, job: Job) -> dict[str, Any]:
-        await self._app.record_signals({"client": job.client.client, "channel": "api"}, "gateway")
+        user = job.user
+        await self._app.record_signals(
+            user, {"client": job.client.client, "channel": "api"}, "gateway"
+        )
 
         async def publish(event: Event) -> None:
             await self.publish(job.job_id, event)
 
         if job.kind == "research":
-            return await run_research(self._app.pipeline, job.ticker, publish)
+            return await run_research(self._app.pipeline, user, job.ticker, publish)
         lock = ThreadLock(
             self._broker,
+            user,
             job.thread_id,
             self._settings.AGENT_LOCK_TTL_MS,
             self._settings.AGENT_LOCK_WAIT_MS,
@@ -119,11 +123,12 @@ class JobHandler:
         async with lock.held():
             chat = run_chat(
                 self._app.chat,
+                user,
                 job.thread_id,
                 job.job_id,
                 job.message,
                 publish,
-                secrets=await self._app.signal_values(),
+                secrets=await self._app.signal_values(user),
                 stream_reasoning=self._settings.AGENT_STREAM_REASONING,
             )
             return await lock.guard(chat)

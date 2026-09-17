@@ -19,6 +19,7 @@ async def upsert(
     """Sets the share count; cost and note are kept unless new ones are given."""
     await rows(
         pool,
+        user_id,
         """INSERT INTO holdings (user_id, ticker, shares, avg_cost, note)
            VALUES (%s, %s, %s, %s, %s)
            ON CONFLICT (user_id, ticker) DO UPDATE
@@ -32,6 +33,7 @@ async def upsert(
 async def remove(pool: AsyncConnectionPool, user_id: str, ticker: str) -> bool:
     deleted = await rows(
         pool,
+        user_id,
         "DELETE FROM holdings WHERE user_id = %s AND ticker = %s RETURNING ticker",
         (user_id, ticker.upper()),
     )
@@ -41,6 +43,7 @@ async def remove(pool: AsyncConnectionPool, user_id: str, ticker: str) -> bool:
 async def all_of(pool: AsyncConnectionPool, user_id: str) -> list[dict[str, Any]]:
     found = await rows(
         pool,
+        user_id,
         """SELECT ticker, shares, avg_cost, note, updated_at::date::text AS updated
            FROM holdings WHERE user_id = %s ORDER BY ticker""",
         (user_id,),

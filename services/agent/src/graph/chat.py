@@ -3,6 +3,9 @@
 A new investor message that is exactly `approve soul <id>` or `reject soul <id>` is applied by
 code in the context step, before the model runs. A turn that proposed a soul change ends with
 the proposal and its approval phrase appended to the reply, also by code.
+
+The graph is built once for everyone. Each run's user comes from its context (`Ctx`): the context
+step loads that user's data, and the tools read the same context.
 """
 
 from langchain_core.language_models import BaseChatModel
@@ -12,10 +15,12 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.runtime import Runtime
 from psycopg_pool import AsyncConnectionPool
 
 from src.graph import emit
 from src.graph.context import investor_blocks, load_known, theses_block
+from src.graph.ctx import Ctx, user_of
 from src.graph.history import answered, recent
 from src.graph.llm import complete, with_backoff
 from src.graph.render import render_assistant_prompt
@@ -31,7 +36,6 @@ HISTORY_MESSAGES = 40
 
 def build_chat(
     pool: AsyncConnectionPool,
-    user_id: str,
     checkpointer: BaseCheckpointSaver,
     tools: list[BaseTool],
     model: BaseChatModel,
@@ -39,7 +43,8 @@ def build_chat(
 ) -> CompiledStateGraph:
     bound = with_backoff(model.bind_tools(tools))
 
-    async def context(state: ChatState) -> dict[str, object]:
+    async def context(state: ChatState, runtime: Runtime[Ctx]) -> dict[str, object]:
+        user_id = user_of(runtime.context)
         update: dict[str, object] = {}
         latest = state["messages"][-1]
         # Only on the investor's own message: after a tool step the decision is already made.
@@ -83,7 +88,7 @@ def build_chat(
         text = "\n\n".join([reply.text, *notices])
         return {"messages": [reply.model_copy(update={"content": text})]}
 
-    graph = StateGraph(ChatState)
+    graph = StateGraph(ChatState, context_schema=Ctx)
     graph.add_node("context", context)
     graph.add_node("agent", agent)
     # Not retried: a retry re-runs every call in the message, a whole research run included.

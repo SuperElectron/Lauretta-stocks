@@ -1,8 +1,10 @@
 import pytest
 
+from src.graph.ctx import Ctx
 from src.graph.pipeline import Team, build_pipeline, needs_revision
 from tests.utils import ADVICE, REVIEW, STORY, Recorder
 
+FRIEND = Ctx(user_id="friend")
 REVISE = {**REVIEW, "verdict": "revise", "required_changes": ["Fix FY2026 revenue"]}
 
 
@@ -19,9 +21,9 @@ async def test_checker_sends_the_story_back_once_then_advisor_decides(no_databas
     analyst = Recorder(STORY, STORY)
     checker = Recorder(REVISE, REVISE)
     advisor = Recorder(ADVICE)
-    graph = build_pipeline(None, "friend", Team(analyst, checker, advisor), max_revisions=1)
+    graph = build_pipeline(None, Team(analyst, checker, advisor), max_revisions=1)
 
-    final = await graph.ainvoke({"ticker": "MSFT"})
+    final = await graph.ainvoke({"ticker": "MSFT"}, context=FRIEND)
 
     assert final["revisions"] == 1
     assert final["thesis_id"] == "thesis-1"
@@ -38,7 +40,8 @@ async def test_checker_sends_the_story_back_once_then_advisor_decides(no_databas
 
 async def test_approved_story_goes_straight_to_the_advisor(no_database):
     team = Team(Recorder(STORY), Recorder(REVIEW), Recorder(ADVICE))
-    final = await build_pipeline(None, "friend", team, max_revisions=1).ainvoke({"ticker": "MSFT"})
+    graph = build_pipeline(None, team, max_revisions=1)
+    final = await graph.ainvoke({"ticker": "MSFT"}, context=FRIEND)
 
     assert final["revisions"] == 0
     assert no_database["review"]["verdict"] == "approve"

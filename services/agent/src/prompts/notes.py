@@ -31,3 +31,5 @@ CLI_RESEARCHING = "researching {ticker}: Analyst, Checker, Strategist (a minute 
 CLI_SAVED = "saved to {path}"
 CLI_REPLY = "\nassistant> {reply}\n"
 CLI_THREAD_HELP = "conversation to continue"
+CLI_USER_HELP = "the user to act for (default: the owner, first in ALLOWED_USERS)"
+CLI_UNKNOWN_USER = "{user!r} is not in ALLOWED_USERS"

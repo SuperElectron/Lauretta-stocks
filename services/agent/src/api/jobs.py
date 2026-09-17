@@ -1,6 +1,7 @@
 """`POST /v1/jobs` queues a chat turn or research run; `GET /v1/jobs/{id}` reads its status.
 
-The API never runs a graph. With `?wait=N` the POST also follows the job's events for up to N
+Every job belongs to the user the gateway named, and only they can read it. The API never runs a
+graph. With `?wait=N` the POST also follows the job's events for up to N
 seconds: the outcome (200) if it finished, else 202 as without `wait`.
 """
 
@@ -12,7 +13,8 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
-from src.api.deps import BrokerDep, ClientDep, JobId, JobStatusDep, SettingsDep
+from src.api.deps import BrokerDep, ClientDep, JobId, JobStatusDep, PoolDep, SettingsDep, UserDep
+from src.db.queries import threads
 from src.queue import events, submit
 from src.queue.models import Job, JobRequest
 
@@ -37,13 +39,17 @@ async def outcome(broker: Redis, job_id: str, wait_s: int) -> dict[str, Any] | N
 
 @router.post("/v1/jobs", status_code=202)
 async def create_job(
+    user: UserDep,
     request: JobRequest,
     broker: BrokerDep,
+    pool: PoolDep,
     settings: SettingsDep,
     client: ClientDep,
     wait: Annotated[int | None, Query(ge=1)] = None,
 ) -> JSONResponse:
-    job = Job(**request.model_dump(), client=client)
+    job = Job(**request.model_dump(), user=user, client=client)
+    if job.kind == "chat":
+        await threads.create(pool, user, job.thread_id, client.client)
     await submit.submit(broker, job, settings.EVENTS_TTL_S)
     if wait is None:
         return accepted(job.job_id)
@@ -53,4 +59,4 @@ async def create_job(
 
 @router.get("/v1/jobs/{job_id}")
 async def job_status(job_id: JobId, status: JobStatusDep) -> dict[str, str]:
-    return {"job_id": job_id, **status}
+    return {"job_id": job_id, **{k: v for k, v in status.items() if k != "user"}}

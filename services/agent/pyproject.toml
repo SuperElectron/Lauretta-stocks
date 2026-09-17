@@ -47,4 +47,5 @@ select = ["E", "F", "I", "UP", "B", "ARG"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = ["integration: needs a real database (just test-db); skipped otherwise"]
 pythonpath = ["."]

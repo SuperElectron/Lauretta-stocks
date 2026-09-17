@@ -155,7 +155,7 @@ async def test_a_mid_stream_failure_after_tokens_streams_reset_then_the_new_repl
     model = FlakyModel(messages=iter([AIMessage(content="Hello there")]), error=error)
     events = Events()
 
-    result = await run_chat(one_node_chat(model), "t1", "a" * 32, "hi", events)
+    result = await run_chat(one_node_chat(model), "mat", "t1", "a" * 32, "hi", events)
 
     assert events[:3] == [("token", {"text": "Hal"}), ("token", {"text": "f"}), ("reset", {})]
     assert "".join(data["text"] for kind, data in events[3:]) == "Hello there"
@@ -172,15 +172,15 @@ async def test_a_client_error_mid_stream_is_not_retried():
     model = FlakyModel(messages=iter([AIMessage(content="never")]), error=bad_request)
     events = Events()
     with pytest.raises(anthropic.APIStatusError):
-        await run_chat(one_node_chat(model), "t1", "a" * 32, "hi", events)
+        await run_chat(one_node_chat(model), "mat", "t1", "a" * 32, "hi", events)
     assert [kind for kind, _ in events] == ["token", "token"]
 
 
 async def test_the_same_job_run_twice_leaves_one_investor_message():
     graph = one_node_chat(GenericFakeChatModel(messages=iter([AIMessage("one"), AIMessage("two")])))
     for _ in range(2):
-        await run_chat(graph, "t1", "b" * 32, "hi", Events())
-    state = await graph.aget_state({"configurable": {"thread_id": "t1"}})
+        await run_chat(graph, "mat", "t1", "b" * 32, "hi", Events())
+    state = await graph.aget_state({"configurable": {"thread_id": "mat:t1"}})
     assert [m.type for m in state.values["messages"]] == ["human", "ai", "ai"]
 
 
@@ -202,7 +202,7 @@ async def test_research_streams_each_stage_then_returns_the_saved_thesis():
     team = Team(Recorder(STORY, STORY), Recorder(revise, REVIEW), Recorder(ADVICE))
     events = Events()
 
-    result = await run_research(build_pipeline(None, "friend", team, 1), "msft", events)
+    result = await run_research(build_pipeline(None, team, 1), "mat", "msft", events)
 
     assert [data for _, data in events] == [
         {"stage": "analyst", "detail": "drafting the story", "name": "Sarah"},

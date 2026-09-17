@@ -10,12 +10,14 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
 from src.errors import RoleDidNotSubmit
+from src.graph.ctx import Ctx, user_of
 from src.graph.llm import complete, with_backoff
 from src.graph.state import RoleState
 from src.prompts import errors
 
-# Runs the role with a system prompt and a task, and returns what it submitted.
-Role = Callable[[str, str], Awaitable[dict[str, Any]]]
+# Runs the role with a system prompt and a task, for the run's user (its tools read the
+# context), and returns what it submitted.
+Role = Callable[[str, str, Ctx], Awaitable[dict[str, Any]]]
 
 
 def build_role(
@@ -35,7 +37,7 @@ def build_role(
     def after_tools(state: RoleState) -> str:
         return END if state.get("result") is not None else "agent"
 
-    graph = StateGraph(RoleState)
+    graph = StateGraph(RoleState, context_schema=Ctx)
     graph.add_node("agent", agent)
     graph.add_node("tools", ToolNode(tools))
     graph.add_edge(START, "agent")
@@ -46,9 +48,10 @@ def build_role(
         recursion_limit=recursion_limit, run_name=name
     )
 
-    async def run(system_prompt: str, task: str) -> dict[str, Any]:
+    async def run(system_prompt: str, task: str, context: Ctx) -> dict[str, Any]:
         final = await compiled.ainvoke(
-            {"system_prompt": system_prompt, "messages": [HumanMessage(task)], "result": None}
+            {"system_prompt": system_prompt, "messages": [HumanMessage(task)], "result": None},
+            context=Ctx(user_id=user_of(context)),
         )
         if final.get("result") is None:
             raise RoleDidNotSubmit(errors.ROLE_STOPPED.format(role=name))

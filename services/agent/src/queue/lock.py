@@ -1,6 +1,7 @@
 """The per-thread lock: at most one chat job runs on a conversation at a time, across workers.
 
-- `SET lock:thread:{id} <token> NX PX <ttl>` takes it; a job waits up to `AGENT_LOCK_WAIT_MS`,
+- `SET lock:thread:{user}:{id} <token> NX PX <ttl>` takes it, so one user never waits on
+  another's thread; a job waits up to `AGENT_LOCK_WAIT_MS`,
   polling with backoff, then fails `ThreadBusy`.
 - While held it is refreshed every third of its TTL by compare-and-pexpire. A refresh that
   finds another holder or no key marks it lost, and `guard` cancels the job with `LockLost`.
@@ -37,9 +38,9 @@ return 0
 
 
 class ThreadLock:
-    def __init__(self, broker: Redis, thread_id: str, ttl_ms: int, wait_ms: int) -> None:
+    def __init__(self, broker: Redis, user: str, thread_id: str, ttl_ms: int, wait_ms: int) -> None:
         self._broker = broker
-        self.key = keys.thread_lock(thread_id)
+        self.key = keys.thread_lock(user, thread_id)
         self._token = uuid4().hex
         self._ttl_ms = ttl_ms
         self._wait_ms = wait_ms
