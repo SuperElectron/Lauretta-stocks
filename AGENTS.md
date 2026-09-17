@@ -114,7 +114,7 @@ one-shot checkpoint `migrate`.
   `market.py` (yfinance, free, unofficial).
 - `agent/src/persona/`: persona prompt blocks, the soul cap check, and soul approval.
 - `agent/src/db/`: pool, checkpointer, and `queries/` for facts (memories, profile, identity,
-  signals, soul), holdings, theses and threads. Signals are written by code
+  signals, soul), holdings and theses. Signals are written by code
   (`facts.record_signals`). Every query runs in `db/pool.scoped(pool, user)` (row-level security
   as `lauretta_app`). Schema is `db/init/00-schema.sql` and the roles (`lauretta_app`,
   `lauretta_migrator` for the checkpoint tables) `db/init/01-app-role.sh`, applied when the volume
@@ -155,7 +155,8 @@ one-shot checkpoint `migrate`.
 - Prefer free data sources; a paid one needs the owner's approval first.
 - Keep Python files under 150 lines where it is logical.
 - Changing the schema means `just down clean=true` then `just up` (POC, no migrations).
-- Never read or commit `.env`; add new settings to `.env.example` and `services/agent/src/settings.py`.
+- Never read or commit `.env`; add new settings to `.env.example` and the service's own
+  `settings.py` (`services/api/src/settings.py` or `services/agent/src/settings.py`).
 
 ## Software development lifecycle
 
