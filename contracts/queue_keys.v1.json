@@ -1,0 +1,30 @@
+{
+  "streams": {"jobs": "jobs", "dead": "jobs:dead"},
+  "group": "workers",
+  "payload_field": "payload",
+  "scan_start": "0-0",
+  "status_hash_fields": ["status", "kind", "user", "created_at", "started_at", "finished_at", "error_code"],
+  "statuses": ["queued", "running", "done", "failed"],
+  "finished": ["done", "failed"],
+  "event_entry_fields": ["type", "data"],
+  "vectors": [
+    {
+      "user": "mat", "thread_id": "main", "job_id": "0123456789abcdef0123456789abcdef", "digest": "d1g3st",
+      "job": "job:0123456789abcdef0123456789abcdef",
+      "events": "job:0123456789abcdef0123456789abcdef:events",
+      "thread": "mat:main",
+      "thread_lock": "lock:thread:mat:main",
+      "thread_job": "thread:mat:main:job",
+      "request": "oa:req:d1g3st"
+    },
+    {
+      "user": "max", "thread_id": "oa-7f3a:x", "job_id": "fedcba9876543210fedcba9876543210", "digest": "abc",
+      "job": "job:fedcba9876543210fedcba9876543210",
+      "events": "job:fedcba9876543210fedcba9876543210:events",
+      "thread": "max:oa-7f3a:x",
+      "thread_lock": "lock:thread:max:oa-7f3a:x",
+      "thread_job": "thread:max:oa-7f3a:x:job",
+      "request": "oa:req:abc"
+    }
+  ]
+}
