@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from loguru import logger
 
 from src.api import events, jobs, reads
+from src.api.mcpserver import server as mcp_server
 from src.api.openai import routes as openai_routes
 from src.api.openai.models import OpenAIError, error_response
 from src.api.voice import routes as voice_routes
@@ -32,7 +33,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             settings.DATABASE_URL, min_size=settings.DB_POOL_MIN, max_size=settings.DB_POOL_MAX
         ) as pool:
             app.state.settings, app.state.broker, app.state.pool = settings, broker, pool
-            yield
+            mcp_server.bound.settings, mcp_server.bound.broker = settings, broker
+            mcp_server.bound.pool = pool
+            async with mcp_server.mcp.session_manager.run():
+                yield
     finally:
         await broker.aclose()
 
@@ -43,6 +47,8 @@ def create_app(with_lifespan: bool = True) -> FastAPI:
     for module in (jobs, events, reads, openai_routes, voice_routes):
         api.include_router(module.router)
     api.add_exception_handler(OpenAIError, error_response)
+    # The MCP server (Goose and other MCP clients); its session manager runs in `lifespan`.
+    api.mount("/mcp", mcp_server.mcp.streamable_http_app())
     return api
 
 

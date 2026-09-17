@@ -68,3 +68,6 @@ DEAD_UNFINISHED = "not finished in {deliveries} deliveries"
 SPEECH_UNAVAILABLE = "speech is not available right now; try again shortly"
 AUDIO_TOO_LARGE = "the recording is too large; the limit is {limit} MB"
 AUDIO_EMPTY = "no speech was heard in the recording"
+
+# MCP tools (`src/api/mcpserver`): anything unexpected, without its details.
+MCP_TOOL_FAILED = "the desk could not do that; the api log has the details"
