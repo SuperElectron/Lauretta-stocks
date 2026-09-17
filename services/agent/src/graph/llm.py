@@ -56,7 +56,7 @@ def build_model(settings: Settings) -> BaseChatModel:
             timeout=settings.AGENT_TIMEOUT,
             max_retries=0,
         )
-    # Keeps the reasoning OpenRouter and vLLM stream, which plain ChatOpenAI drops.
+    # Keeps the reasoning vLLM streams, which plain ChatOpenAI drops.
     return ReasoningChatOpenAI(
         base_url=settings.AGENT_BASE_URL,
         model=settings.AGENT_MODEL,

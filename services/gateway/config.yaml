@@ -1,11 +1,11 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/agentgateway/agentgateway/v1.5.0/schema/config.json
 #
-# agentgateway v1.5.0: the one door into the stack, and the only holder of provider keys.
+# agentgateway v1.5.0: the one door into the stack, and the only holder of the model key.
 #
 #   18400  ingress  -> api:8000 (/v1/*, /healthz) and anythingllm:3001 (everything else).
 #                      Not published to the host; the tailscale container terminates TLS for
 #                      svc:lauretta and proxies here.
-#   3000   llm      -> vLLM on the Spark, or OpenRouter. Compose networks only, never published;
+#   3000   llm      -> vllm:8000 on the llm network. Compose networks only, never published;
 #                      needs the internal key that only api and worker hold.
 #
 # Route choice is by match, not list order: an exact path beats a prefix, and a longer prefix
@@ -157,12 +157,9 @@ routes:
       - host: anythingllm:3001
 
 # Model egress. api and worker call http://gateway:3000/v1 with the internal key, which apiKey
-# checks and removes; the gateway then attaches the provider's own key. The listener is reachable
+# checks and removes; the gateway then attaches vLLM's own key. The listener is reachable
 # from every network the gateway joins (including AnythingLLM's `web`), so it is never open.
-# Clients pick the provider by model name:
-#   gpt-oss-120b          -> vLLM on the Spark (host port 8000)
-#   openai/gpt-oss-120b   -> OpenRouter
-# Failover from vLLM to OpenRouter is issue #4; this only makes both addressable.
+# The only model is gpt-oss-120b, served by the vllm service on the Spark.
 llm:
   gateways: [llm]
   policies:
@@ -174,31 +171,23 @@ llm:
           prefix: "Bearer "
       keys:
         - key: ${LLM_INTERNAL_KEY}
-    # Guards OpenRouter spend only (vLLM on the Spark costs nothing per call); a research run
-    # makes many calls, so it is set well above normal use.
+    # Stops a runaway loop from monopolising the one engine; a research run makes many calls, so
+    # it is set well above normal use.
     localRateLimit:
       - maxTokens: 600
         tokensPerFill: 600
         fillInterval: 60s
         type: requests
   providers:
-    # vLLM speaks the OpenAI API. host.docker.internal is the Spark itself (compose extra_hosts).
+    # vLLM speaks the OpenAI API. `vllm` is the compose service, reached on the llm network.
     - name: vllm
       provider: openai
       params:
-        baseUrl: http://host.docker.internal:8000/v1
+        baseUrl: http://vllm:8000/v1
         apiKey:
           file: /run/secrets/spark_vllm_api_key
-    - name: openrouter
-      provider: openrouter
-      params:
-        apiKey:
-          file: /run/secrets/openrouter_api_key
   models:
     # Must match vLLM's served model name.
     - name: gpt-oss-120b
       provider:
         reference: vllm
-    - name: openai/gpt-oss-120b
-      provider:
-        reference: openrouter

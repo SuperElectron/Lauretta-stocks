@@ -1,7 +1,6 @@
 """A real `ReasoningChatOpenAI` over the real OpenAI SDK, with only the HTTP transport scripted.
 
-Chunks are shaped as OpenRouter (`reasoning`, `reasoning_details`) and vLLM
-(`reasoning_content`) send them.
+Chunks are shaped as vLLM sends them: `reasoning` in newer releases, `reasoning_content` in older.
 """
 
 import json
@@ -17,14 +16,8 @@ from src.graph.reasoning import ReasoningChatOpenAI
 Turn = tuple[list[dict[str, Any]], str]
 
 
-def openrouter(reasoning: str) -> dict[str, Any]:
-    details = [{"type": "reasoning.text", "text": reasoning, "format": "unknown", "index": 0}]
-    return {
-        "role": "assistant",
-        "content": "",
-        "reasoning": reasoning,
-        "reasoning_details": details,
-    }
+def reasoning_delta(reasoning: str) -> dict[str, Any]:
+    return {"role": "assistant", "content": "", "reasoning": reasoning}
 
 
 def tool_call(name: str, args: dict[str, Any], call_id: str = "c1") -> dict[str, Any]:
@@ -41,7 +34,7 @@ def sse(deltas: list[dict[str, Any]], finish: str = "stop") -> bytes:
             "id": "gen-1",
             "object": "chat.completion.chunk",
             "created": 1,
-            "model": "openai/gpt-oss-120b",
+            "model": "gpt-oss-120b",
             "choices": [choice],
         }
         frames.append(f"data: {json.dumps(body)}\n\n")
@@ -60,7 +53,7 @@ def model(*turns: Turn) -> ReasoningChatOpenAI:
     return ReasoningChatOpenAI(
         base_url="http://gateway:3000/v1",
         api_key="internal",
-        model="openai/gpt-oss-120b",
+        model="gpt-oss-120b",
         max_retries=0,
         http_async_client=httpx2.AsyncClient(transport=httpx2.MockTransport(reply)),
     )
