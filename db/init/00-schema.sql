@@ -64,3 +64,13 @@ CREATE TABLE theses (
     created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX theses_user_ticker_idx ON theses (user_id, ticker, created_at DESC);
+
+-- Conversations started through the OpenAI-compatible API, keyed by a hash the API derives.
+-- A thread belongs to the user who started it; nobody else may continue it.
+CREATE TABLE threads (
+    thread_id text PRIMARY KEY,
+    user_id text NOT NULL,
+    client text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX threads_user_created_idx ON threads (user_id, created_at DESC);

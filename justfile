@@ -28,8 +28,8 @@ broker:
     docker run --rm -p 127.0.0.1:18479:6379 valkey/valkey:9.0.6-alpine
 
 # Check streaming through the API: time to first token and gaps between tokens.
-stream-check:
-    cd agent && uv run python scripts/stream_check.py
+stream-check *args:
+    cd agent && uv run python scripts/stream_check.py {{ args }}
 
 # docker: start the local database (loopback DB_PORT) for chat and research on this machine.
 up:

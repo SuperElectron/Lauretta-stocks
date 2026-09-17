@@ -45,12 +45,40 @@ just research MSFT      # summon the full research team on one stock
   "MSFT"}`) and answers `202` with an `events_url`, which streams the reply token by token as
   server-sent events (`curl -N`). Add `?wait=25` to simply wait for the answer instead.
   A chat without a `thread_id` joins the thread `main`, and one thread answers one message at
-  a time, so each device or conversation should send its own `thread_id`.
+  a time, so each device or conversation should send its own `thread_id`. A stream that runs
+  past `API_MAX_STREAM_S` ends with a `timeout` event; the job carries on, so reconnect to follow it.
 - **Stream check:** `STREAM_CHECK_URL=http://127.0.0.1:8000 just stream-check` sends one
   message and reports how soon the first token arrived and how the rest trickled in. It fails
   if the first token takes more than 2s after the model starts, or if the tokens come in one
   lump. Set `STREAM_CHECK_API_KEY` when going through the gateway.
+- **Chat apps:** the court also speaks the OpenAI Chat Completions dialect, so any chat app
+  with an "OpenAI-compatible" provider may be admitted. See the next section.
 - **How it works:** see `AGENTS.md`. For the original plan and open questions, see `.cache/PLAN.md` (local only, not committed).
+
+## Chat apps (AnythingLLM and kin)
+
+His Excellency need not learn a new instrument: any chat app with a Generic OpenAI provider
+may petition the Director directly.
+
+| Setting | Value |
+|---|---|
+| Base URL | `https://lauretta.tailae2b1.ts.net/v1` (or `http://127.0.0.1:8000/v1` locally) |
+| API key | `GATEWAY_API_KEY` (anything, when calling the API directly) |
+| Model | `lauretta` |
+| Streaming | on |
+
+- **Conversations:** the app sends no conversation id, so the court recognises a conversation
+  by its first message. Apps that can send `X-Thread-Id` may name their own.
+- **What is heard:** only the latest message. The app's own system prompt, attached documents
+  and resent history are politely ignored; the court keeps its own minutes.
+- **What is shown:** the team's comings and goings ("The Royal Analyst drafting…") arrive as
+  reasoning, which most apps fold into a thought block; the answer arrives token by token.
+- **Patience:** an app that retries a request, as the OpenAI SDKs do, rejoins the answer already
+  under way; no research is run twice. Without streaming the court waits up to
+  `API_MAX_WAIT_S`, then says it is still at work and to ask again.
+- **Check it:** `just stream-check --openai` (see above) times the first reasoning and the first
+  word through this door.
+- **Not yet:** the app's own tools (agent skills) are not passed through; disable them.
 
 ## Running on the Spark
 
