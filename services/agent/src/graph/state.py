@@ -50,7 +50,7 @@ class ChatState(MessagesState):
     opening: Opening
     # What the desk is researching or has just finished (`graph/research.py`), for this turn.
     research: str
-    # The tickers that block reported as over; forgotten when the next message is answered.
+    # The tickers this turn's block reported as over; forgotten once the turn has a reply.
     reported_runs: list[str]
     # The running summary of the messages before `summarized` (`graph/compaction.py`).
     summary: str

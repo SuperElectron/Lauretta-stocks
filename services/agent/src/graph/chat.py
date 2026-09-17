@@ -72,9 +72,7 @@ def build_chat(
             # Asked once per message: a finished run is reported for the whole turn, tool
             # steps included, and only then forgotten.
             update["research"], update["reported_runs"] = (
-                await research_block(runs, user_id, state.get("reported_runs", []))
-                if runs
-                else ("", [])
+                await research_block(runs, user_id) if runs else ("", [])
             )
         known = await load_known(pool, user_id)
         setup = setup_of(known)
@@ -108,10 +106,13 @@ def build_chat(
         reply = await bound.ainvoke([SystemMessage(content=prompt), *history])
         return {"messages": [complete(reply)]}
 
-    def notice(state: ChatState) -> dict[str, object]:
+    async def notice(state: ChatState, runtime: Runtime[Ctx]) -> dict[str, object]:
         """Appends what this turn's soul decision did, then each soul proposal made this turn, to
         the final reply (same id, so replaced), and sends each to a streaming caller as its own
-        notice."""
+        notice. The runs this turn reported are forgotten here, where the reply exists: a turn
+        that died before one never reported them, and says so again next time."""
+        if runs and state.get("reported_runs"):
+            await runs.clear(user_of(runtime.context), state["reported_runs"])
         decision = state.get("soul_decision")
         notices = [decision_notice(decision)] if decision else []
         notices.extend(proposal_notice(p) for p in proposals_in_turn(state["messages"]))
