@@ -1,7 +1,7 @@
 # The agent service: the worker (compose `worker`) and the checkpoint migrate (`migrate`). Builds
 # natively on linux/arm64 (the Spark) and linux/amd64.
 
-FROM python:3.13.15-slim AS build
+FROM python:3.14.7-slim AS build
 
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_PYTHON_DOWNLOADS=never \
@@ -19,7 +19,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
 RUN uv sync --frozen --no-dev --no-editable
 
-FROM python:3.13.15-slim AS runtime
+FROM python:3.14.7-slim AS runtime
 
 ENV VIRTUAL_ENV=/opt/venv \
     PATH=/opt/venv/bin:$PATH \
