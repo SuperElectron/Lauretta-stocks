@@ -2,7 +2,7 @@
 
 A proof of concept for a friend: a research assistant for private investors (the owner and Max). It learns how
 they invest, keeps their holdings, and runs a three-agent research team on a stock. It never
-trades; it suggests. The background and open requirements questions are in `.cache/PLAN.md` (local only, not committed).
+trades; it suggests.
 
 Run `just --list` for every command.
 
@@ -58,8 +58,11 @@ research pipeline (LangGraph)                                                   
 - **Users**: the owner (`mat`) and Max (`max`) share the desk with isolated data. The gateway
   names the user (`X-Lauretta-User`); graphs are built once and get the user as LangGraph
   runtime context (`graph/ctx.py`: nodes `Runtime[Ctx]`, tools `ToolRuntime[Ctx]`, hidden from
-  the model); Postgres enforces row-level security per transaction. See README "Users and
-  isolation". Never give a tool or node a user any other way.
+  the model); Postgres enforces row-level security per transaction; api refuses any request
+  without the gateway's `X-Lauretta-Gateway` secret. To add a user: `ALLOWED_USERS`, the
+  gateway's user map, model list and rate-limit bucket (`gateway/config.yaml`), and an
+  AnythingLLM workspace with chat model `lauretta-<user>` shared with that person only. Rotating
+  `DB_APP_PASSWORD` or `DB_MIGRATOR_PASSWORD` also needs `ALTER ROLE ... PASSWORD` as the owner.
 - **Names**: every agent's name (Director, Analyst, Checker, Strategist) is an identity fact
   (`bot_name`, `analyst_name`, `checker_name`, `strategist_name`) with its default in
   `prompts/identity.py`; `set_identity` renames them. The pipeline loads the names once per run,

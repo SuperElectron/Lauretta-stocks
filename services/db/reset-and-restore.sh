@@ -1,7 +1,7 @@
 #!/bin/sh
 # One-off, for the deploy of per-user isolation (#25): the schema changed, so the database is
 # recreated, and the owner's rows are carried over. Run on the Spark from the repo root, with the
-# new code checked out and the new .env settings in place (README, Users and isolation):
+# new code checked out and the new .env settings in place (AGENTS.md, Users):
 #
 #   sh services/db/reset-and-restore.sh
 #
