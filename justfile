@@ -17,7 +17,7 @@ research ticker user="":
 
 # Run the HTTP API on :8000 (needs a broker: `just broker`, and BROKER_URL in .env).
 api:
-    cd services/agent && uv run uvicorn src.api.app:app --host 127.0.0.1 --port 8000
+    cd services/api && uv run uvicorn src.api.app:app --host 127.0.0.1 --port 8000
 
 # Run the job worker that the API queues chat turns and research runs for.
 worker:
@@ -29,7 +29,7 @@ broker:
 
 # Check streaming through the API: time to first token and gaps between tokens.
 stream-check *args:
-    cd services/agent && uv run python scripts/stream_check.py {{ args }}
+    cd services/api && uv run python scripts/stream_check.py {{ args }}
 
 # Create or migrate the checkpoint tables in the local database (as DATABASE_SETUP_URL, else
 # DATABASE_URL). The Spark uses the compose `migrate` service instead.
@@ -48,6 +48,7 @@ down clean="false": _local-only
 
 # test: unit tests and lint.
 test:
+    cd services/api && uv run pytest -q && uv run ruff check . && uv run ruff format --check .
     cd services/agent && uv run pytest -q && uv run ruff check . && uv run ruff format --check .
 
 # test: the database isolation tests (row-level security as the app role) in a throwaway
