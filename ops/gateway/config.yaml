@@ -2,8 +2,13 @@
 #
 # agentgateway v1.5.0: the one door into the stack, and the only holder of provider keys.
 #
-#   18400  ingress  -> api:8000 (/v1/*, /healthz). Not published to the host; the tailscale
-#                      container terminates TLS for svc:lauretta and proxies here.
+#   18400  ingress  -> api:8000 (/v1/*, /healthz) and anythingllm:3001 (everything else).
+#                      Not published to the host; the tailscale container terminates TLS for
+#                      svc:lauretta and proxies here.
+#
+# Route choice is by match, not list order: an exact path beats a prefix, and a longer prefix
+# beats a shorter one, so /healthz and /v1/ always reach api and `/` takes only the rest.
+# AnythingLLM serves its APIs under /api/ and has no /v1 or /healthz of its own.
 #   3000   llm      -> vLLM on the Spark, or OpenRouter. Compose network only, never published.
 #
 # Environment variables in dollar-brace form are expanded when the config loads, comments
@@ -98,6 +103,51 @@ routes:
         requestTimeout: 30s
     backends:
       - host: api:8000
+
+  # AnythingLLM: the web app, its /api/ and the agent WebSocket (/api/agent-invocation/*).
+  # No apiKey: AnythingLLM has its own login (a password from the first boot, then accounts).
+  # Authorization and Cookie pass through, since they carry that login; claimed identity and
+  # forwarding headers are stripped as for the API.
+  # No `buffer` policy: chats stream as server-sent events and WebSocket upgrades pass as is.
+  # The body cap is a CEL check of Content-Length (100 MiB), which never holds the body in the
+  # gateway. The gateway strips Transfer-Encoding before policies run, so a chunked body cannot be
+  # seen; POST, PUT and PATCH must therefore carry a Content-Length (browsers always send one).
+  - name: ingress-anythingllm
+    gateways: [ingress]
+    matches:
+      - path:
+          pathPrefix: /
+    policies:
+      requestHeaderModifier:
+        remove:
+          - X-Forwarded-User
+          - X-User-Id
+          - X-Principal
+          - Tailscale-User-Login
+          - Tailscale-User-Name
+          - Tailscale-User-Profile-Pic
+          - Tailscale-Headers-Info
+          - X-Forwarded-For
+          - X-Real-IP
+          - Forwarded
+      authorization:
+        rules:
+          - require: >-
+              "content-length" in request.headers
+              ? int(request.headers["content-length"]) <= 104857600
+              : !(request.method in ["POST", "PUT", "PATCH"])
+      # A page load fetches many scripts, so the bucket is larger than the API's.
+      localRateLimit:
+        - maxTokens: 600
+          tokensPerFill: 600
+          fillInterval: 60s
+          type: requests
+      # requestTimeout bounds only the time to the response headers in v1.5.0, not the body or an
+      # upgraded WebSocket, so long chats stream on. It must cover an upload being parsed.
+      timeout:
+        requestTimeout: 600s
+    backends:
+      - host: anythingllm:3001
 
 # Model egress. api and worker call http://gateway:3000/v1 with a placeholder key; the gateway
 # attaches the real one. Clients pick the provider by model name:

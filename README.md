@@ -87,6 +87,26 @@ may petition the Director directly.
   word through this door.
 - **Not yet:** the app's own tools (agent skills) are not passed through; disable them.
 
+## Talking to the court
+
+His Excellency need not learn `curl`. The court receives visitors through
+[AnythingLLM](https://anythingllm.com), a proper reception hall with chat threads and document
+uploads, whose every question is carried to the Director.
+
+- **The hall:** open https://lauretta.tailae2b1.ts.net on any device on the tailnet. Any browser
+  will do, the iPhone's included.
+- **The first visit** (the owner, straight after the first deploy): the hall asks for a password,
+  which is `ANYTHINGLLM_AUTH_TOKEN` from the Spark's `.env`. Then, in Settings > Security, turn on
+  multi-user mode and create the admin account, and in Settings > Users (under Admin) create
+  His Excellency's. From then on everyone signs in with their own account and the password is no
+  longer used. Until this is done, whoever holds the password holds the hall, so do it at once.
+- **The Android app:** install AnythingLLM from Google Play. In the hall (opened at the tailnet
+  address, not `localhost`), go to Settings > AnythingLLM Mobile and scan its QR code with the
+  app. The phone must be on the tailnet too. There is no iPhone app; the browser serves.
+- **Behind the curtain:** AnythingLLM asks the gateway's `/v1` for the model `lauretta`, with
+  `GATEWAY_API_KEY`, like any other client. It embeds documents on the Spark with its built-in
+  model (fetched once on first use) and keeps them, and its chats, in the `anythingllm` volume.
+
 ## Running on the Spark
 
 On the Mac the court sits at the kitchen table. On the DGX Spark it keeps residence full time:
@@ -110,10 +130,11 @@ just backup             # a database dump now, into backups/ on the Spark
 ```
 
 - **The door:** AgentGateway (`ops/gateway/config.yaml`). `/v1` and everything under it need
-  `Authorization: Bearer $GATEWAY_API_KEY`; `/healthz` is open; any other path is 404. It strips
-  the key and any claimed identity (including Tailscale's and forwarding headers) before the api
-  sees the request, rate limits, and never buffers, so streams arrive as they are written. It
-  alone holds the provider keys.
+  `Authorization: Bearer $GATEWAY_API_KEY`; `/healthz` is open; every other path goes to
+  AnythingLLM, which keeps its own login. It strips the key (for the api) and any claimed identity
+  (including Tailscale's and forwarding headers), rate limits, and never buffers, so streams and
+  WebSockets arrive as they are written. Bodies over 100 MiB are refused. It alone holds the
+  provider keys.
 - **The tailnet:** the court lives at `https://lauretta.tailae2b1.ts.net`. The `tailscale`
   container joins the tailnet as `lauretta-host` (`tag:lauretta`) and hosts the Tailscale Service
   `svc:lauretta`, with a real certificate, straight to the gateway. There is nothing to expose by
@@ -124,16 +145,17 @@ just backup             # a database dump now, into backups/ on the Spark
   offline `lauretta-host` device in the admin console.
 - **Models:** api and worker ask the gateway's internal `llm` port for `gpt-oss-120b` (vLLM on the
   Spark) or `openai/gpt-oss-120b` (OpenRouter). Failover between them is issue #4.
-- **Backups:** the `backup` service dumps the database when it starts and at 03:00 UTC into
-  `backups/`, keeps the newest `BACKUP_KEEP`, and turns unhealthy after 26 hours without a dump.
-  Restore with `pg_restore`.
+- **Backups:** the `backup` service dumps the database and tars AnythingLLM's storage when it
+  starts and at 03:00 UTC into `backups/`, keeps the newest `BACKUP_KEEP` of each, and turns
+  unhealthy after 26 hours without either. Restore with `pg_restore`, and untar the storage into
+  an empty `anythingllm` volume while AnythingLLM is stopped.
 - **Gotchas:** the gateway's `requestTimeout` bounds only the time to response headers, not a
   stream; `csrf` is not authentication; and the gateway expands `${...}` even in config comments.
 
 | Port | Bound to | Serves |
 |---|---|---|
 | 443 on `lauretta.tailae2b1.ts.net` | tailnet only (`svc:lauretta`) | HTTPS to the gateway |
-| 18400, 3000, 8000, 5432, 6379 | compose network only | gateway ingress and `llm`, api, db, broker |
+| 18400, 3000, 8000, 3001, 5432, 6379 | compose network only | gateway ingress and `llm`, api, anythingllm, db, broker |
 
 The stack publishes no host ports at all. The Spark's own ports (8000-8004 and friends) are left alone; vLLM
 is reached from inside at `host.docker.internal:8000`. For local development, `just up` still
