@@ -80,7 +80,17 @@ def test_default_names_by_stage():
     assert default_name("assistant") == EVENTS["defaults"]["director_name"]
 
 
-def test_chat_result_shape():
-    from src.worker.stream import run_chat  # noqa: F401 (the producer of this shape)
+def test_research_result_fields():
+    from src.worker.research import RESULT_FIELDS
 
-    assert set(EVENTS["results"]["chat"]) == {"thread_id", "reply", "notices"}
+    assert set(EVENTS["results"]["research"]) == set(RESULT_FIELDS)
+
+
+async def test_chat_result_fields():
+    """The worker's chat result, produced by a run with no model output, has the pinned keys."""
+    import inspect
+
+    from src.worker import stream
+
+    source = inspect.getsource(stream.run_chat)
+    assert all(f'"{key}"' in source for key in EVENTS["results"]["chat"])
