@@ -77,7 +77,7 @@ async def open_app(settings: Settings, runs: Runs | None = None) -> AsyncGenerat
             await facts.record_signals(pool, embedder, user_id, signals, source)
 
         started = runs or LocalRuns(run_research)
-        tools = toolsets.assistant_tools(pool, embedder, started)
+        tools = toolsets.assistant_tools(pool, embedder, started, settings.RESEARCH_FOLLOW_S)
 
         async def remember(user_id: str, topic: str, content: str) -> None:
             await memories.add(pool, embedder, user_id, topic, content)

@@ -55,7 +55,9 @@ def advisor_tools(pool: AsyncConnectionPool, embedder: Embedder) -> list[BaseToo
     ]
 
 
-def assistant_tools(pool: AsyncConnectionPool, embedder: Embedder, runs: "Runs") -> list[BaseTool]:
+def assistant_tools(
+    pool: AsyncConnectionPool, embedder: Embedder, runs: "Runs", follow_s: float = 0
+) -> list[BaseTool]:
     """No tool takes a user: each reads it from the run's context (`graph/ctx.py`)."""
     return [
         build_remember(pool, embedder),
@@ -65,7 +67,7 @@ def assistant_tools(pool: AsyncConnectionPool, embedder: Embedder, runs: "Runs")
         build_remove_holding(pool),
         build_get_portfolio(pool),
         build_get_market_snapshot(),
-        build_start_research(runs),
+        build_start_research(runs, follow_s),
         build_check_research(runs),
         build_get_thesis(pool),
         build_set_identity(pool, embedder),

@@ -1,7 +1,9 @@
 """Tools the chat assistant uses to put the desk to work and read what it saved.
 
-Research takes minutes, so `start_research` only starts it: the run goes on after the turn ends,
-and the desk reports it in the `<research>` block of a later turn (`graph/research.py`).
+Research takes minutes. `start_research` starts the run and waits with the investor while the
+team works, relaying its progress; if it is still going after `RESEARCH_FOLLOW_S` the turn ends
+and the run carries on, to be reported in the `<research>` block of a later turn
+(`graph/research.py`). The run never belongs to the turn: nothing is lost by letting go of it.
 """
 
 from collections.abc import Awaitable, Callable
@@ -12,8 +14,11 @@ from langgraph.prebuilt import ToolRuntime
 from psycopg_pool import AsyncConnectionPool
 
 from src.db.queries import theses
+from src.graph import emit
 from src.graph.ctx import Ctx, user_of
+from src.queue import keys
 from src.tools.scoped import Scoped, ScopedTickerArgs
+from src.worker.research import RESULT_FIELDS
 
 if TYPE_CHECKING:
     from src.runs import Runs
@@ -22,19 +27,33 @@ if TYPE_CHECKING:
 RunResearch = Callable[[str, Ctx], Awaitable[dict[str, Any]]]
 
 
-def build_start_research(runs: "Runs") -> BaseTool:
+def build_start_research(runs: "Runs", follow_s: float) -> BaseTool:
     @tool(args_schema=ScopedTickerArgs)
-    async def start_research(ticker: str, runtime: ToolRuntime[Ctx]) -> dict[str, str]:
+    async def start_research(ticker: str, runtime: ToolRuntime[Ctx]) -> dict[str, Any]:
         """Put the desk on one company: the Analyst writes a stock story, the Checker re-checks
         every figure, and the Strategist sizes it against the investor's book and rules. It takes
-        a few minutes and runs in the background, so this returns as soon as the team starts. Tell
-        the investor it is running; you get the result in <research> on a later message, and read
-        it with get_thesis. Starting a ticker the desk is already on returns that run. Use it when
-        they ask what to do about a stock and there is no recent thesis, or they want a fresh read.
+        a few minutes, which the investor watches; the result comes back here with each agent's
+        current name in `names`. A team still working when the wait is up answers `"status":
+        "running"` instead: say so, and you get the result in <research> on a later message.
+        Starting a ticker the desk is already on joins that run. Use it when they ask what to do
+        about a stock and there is no recent thesis, or they want a fresh read.
         """
-        return await runs.start(user_of(runtime.context), ticker.upper())
+        user = user_of(runtime.context)
+        ticker = ticker.upper()
+        await runs.start(user, ticker)
+        result = await runs.follow(user, ticker, follow_s, _relay)
+        if result is None:
+            return {"ticker": ticker, "status": keys.RUNNING}
+        if "error" in result:
+            return {"ticker": ticker, "status": keys.FAILED, **result}
+        return {field: result[field] for field in RESULT_FIELDS if field in result}
 
     return start_research
+
+
+def _relay(stage: str, detail: str, name: str | None) -> None:
+    """The run's progress, sent on as this turn's own, so the investor watches the team work."""
+    emit.progress(stage, detail, name or "")
 
 
 def build_check_research(runs: "Runs") -> BaseTool:
