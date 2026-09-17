@@ -29,8 +29,7 @@ Proposed text:
 Reply `approve soul {short_id}` to apply it, or `reject soul {short_id}` to discard it."""
 
 # Under the reply to a message that approved or rejected a proposal, keyed by outcome;
-# any other outcome uses "other". Fields: verb, short_id, outcome,
-# reason, days.
+# any other outcome uses "other". Fields: verb, short_id, outcome, reason, days.
 SOUL_DECISION = {
     "approved": "---\nSoul change {short_id} applied: {reason}.",
     "rejected": "---\nSoul change {short_id} rejected: {reason}. The soul is unchanged.",

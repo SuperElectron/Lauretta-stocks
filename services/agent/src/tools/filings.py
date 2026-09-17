@@ -9,11 +9,13 @@ from src.errors import UpstreamUnavailable
 from src.tools.market import unavailable
 from src.tools.models import FilingsArgs, FinancialsArgs
 
-NOT_REGISTERED = "no SEC registrant has this ticker; EDGAR covers US-listed shares and ADRs only"
+NOT_REGISTERED_REASON = (
+    "no SEC registrant has this ticker; EDGAR covers US-listed shares and ADRs only"
+)
 
 NOT_REGISTERED = {
     "found": False,
-    "reason": NOT_REGISTERED,
+    "reason": NOT_REGISTERED_REASON,
 }
 
 

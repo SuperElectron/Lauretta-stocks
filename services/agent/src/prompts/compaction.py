@@ -32,12 +32,5 @@ what is settled and no longer matters.
 {transcript}
 </messages>"""
 
-NO_PREVIOUS = "none"
-NOTHING_REMEMBERED = "nothing yet"
 # In the assistant prompt, before the recent messages it summarises.
 BLOCK = "<conversation_summary>\n{summary}\n</conversation_summary>"
-# Transcript lines.
-INVESTOR = "Investor: {text}"
-DESK = "Desk: {text}"
-CALLED = "Desk called {name}."
-RESULT = "{name} returned: {text}"
