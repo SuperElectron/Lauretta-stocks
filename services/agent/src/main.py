@@ -14,7 +14,7 @@ from src.errors import AgentError
 from src.report import render_report
 from src.settings import Settings
 
-REPORTS_DIR = Path(__file__).resolve().parents[2] / "reports"
+REPORTS_DIR = Path(__file__).resolve().parents[3] / "reports"
 
 
 async def chat(app: App, thread: str) -> None:

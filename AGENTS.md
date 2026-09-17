@@ -18,8 +18,8 @@ research pipeline (LangGraph)                                                   
                                \--approve / out of redrafts--> advisor -> save (theses table)
 ```
 
-- **Roles** (`agent/src/graph/role.py`): each is a model node + ToolNode loop that ends when
-  its submit tool writes a validated result (`graph/outputs.py`). No submit is a hard error.
+- **Roles** (`services/agent/src/graph/role.py`): each is a model node + ToolNode loop that ends
+  when its submit tool writes a validated result (`graph/outputs.py`). No submit is a hard error.
 - **Analyst** writes the stock story: business, driver, market gap, catalyst (dated), falsifier,
   risks, a sourced data snapshot, data gaps.
 - **Checker** re-pulls the figures with the same tools and approves or sends it back with
@@ -35,6 +35,10 @@ research pipeline (LangGraph)                                                   
   `approve soul <id>`, which code applies in the context step; the advisor sees `<user>` only.
 
 ## Layout
+
+Every service has its own folder under `services/` (`agent`, `db`, `gateway`, `tailscale`,
+`backup`); the repo root keeps the compose files, `justfile`, docs, `reports/` and `backups/`.
+Paths below are relative to `services/`.
 
 - `agent/src/graph/prompts/`: one system prompt per agent: a `_HEAD`, then data blocks
   (`<investor>`, `<holdings>`, `<unknown>`, `<draft>`, `<review>`), then the stage instruction.
@@ -57,10 +61,11 @@ research pipeline (LangGraph)                                                   
   LangGraph stream parts to events. Nodes report progress, notices and retries through
   `graph/emit.py` (a no-op under `ainvoke`, so the CLI is unchanged).
 - `agent/src/memory/`: fastembed embeddings (local CPU, 384 dims) for pgvector search.
-- `agent/Dockerfile`, `docker-compose.yaml`, `ops/`: the Spark stack (gateway, api, worker, broker,
-  db, anythingllm, backup, tailscale). The gateway sends `/v1/*` and `/healthz` to api and every
-  other path to AnythingLLM, the web and Android client (`ops/gateway/config.yaml`). The
-  tailscale container hosts the Service `svc:lauretta` (`ops/tailscale/`).
+- `agent/Dockerfile`, `db/`, `gateway/`, `tailscale/`, `backup/` and the root `docker-compose.yaml`:
+  the Spark stack (gateway, api, worker, broker, db, anythingllm, backup, tailscale). The gateway
+  sends `/v1/*` and `/healthz` to api and every other path to AnythingLLM, the web and Android
+  client (`gateway/config.yaml`). The tailscale container hosts the Service `svc:lauretta`
+  (`tailscale/`). AnythingLLM is an image with settings in compose; it has no folder.
   `docker-compose.dev.yaml` is the local db only, used by `just up`.
 
 ## MCP servers (`.mcp.json`)
