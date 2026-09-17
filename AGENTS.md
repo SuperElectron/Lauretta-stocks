@@ -45,6 +45,14 @@ research pipeline (LangGraph)                                                   
 - `agent/src/db/`: pool, checkpointer, and `queries/` for facts (memories, profile, identity,
   signals, soul), holdings and theses. Signals are written by code (`facts.record_signals`).
   Schema is `db/init/00-schema.sql` (applied when the volume is first created).
+- `agent/src/api/`: FastAPI (`src.api.app:app`). Queues jobs and reads results; never runs a
+  graph. `POST /v1/jobs` (`?wait=`), `GET /v1/jobs/{id}`, `GET /v1/jobs/{id}/events` (SSE),
+  `/v1/theses/{ticker}`, `/v1/holdings`, `/healthz`.
+- `agent/src/queue/`: Valkey Streams: `jobs` (group `workers`, reclaim, `jobs:dead`), per-job
+  status hash and `job:{id}:events` stream, per-thread lock. Event models in `queue/models.py`.
+- `agent/src/worker/`: `python -m src.worker` runs jobs through `open_app`; `stream.py` maps
+  LangGraph stream parts to events. Nodes report progress, notices and retries through
+  `graph/emit.py` (a no-op under `ainvoke`, so the CLI is unchanged).
 - `agent/src/memory/`: fastembed embeddings (local CPU, 384 dims) for pgvector search.
 
 ## MCP servers (`.mcp.json`)

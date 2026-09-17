@@ -1,14 +1,20 @@
 """The chat model: Claude through the Anthropic API, or any OpenAI-compatible server."""
 
+import asyncio
+import random
+
 import anthropic
+import httpx
+import httpx2
 import openai
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.runnables import Runnable
 from langchain_openai import ChatOpenAI
 
 from src.errors import ReplyTruncated
+from src.graph import emit
 from src.settings import Settings
 
 # Retried with exponential backoff and jitter. Anything else (bad request, auth) fails at once.
@@ -19,8 +25,25 @@ RETRYABLE_ERRORS = (
     openai.RateLimitError,
     openai.APIConnectionError,
     openai.InternalServerError,
+    # A connection dropped mid-stream. The SDKs use httpx2; httpx is kept for other clients.
+    httpx.TransportError,
+    httpx2.TransportError,
 )
+
+
+def retryable(exc: BaseException) -> bool:
+    """Transient: the errors above, a status error on a stream that had already answered 200
+    (the provider failed mid-reply) or a 5xx, and OpenAI's mid-stream `error` event."""
+    if isinstance(exc, RETRYABLE_ERRORS):
+        return True
+    if isinstance(exc, (anthropic.APIStatusError, openai.APIStatusError)):
+        return exc.status_code == 200 or exc.status_code >= 500
+    # Plain `openai.APIError` (no status) is what its stream raises for an `error` event.
+    return type(exc) is openai.APIError
+
+
 RETRY_ATTEMPTS = 3
+RETRY_BASE_SECONDS = 1.0
 
 
 def build_model(settings: Settings) -> BaseChatModel:
@@ -43,13 +66,32 @@ def build_model(settings: Settings) -> BaseChatModel:
     )
 
 
-def with_backoff(model: Runnable) -> Runnable:
-    """Retries the provider's transient failures; every other error surfaces at once."""
-    return model.with_retry(
-        retry_if_exception_type=RETRYABLE_ERRORS,
-        stop_after_attempt=RETRY_ATTEMPTS,
-        wait_exponential_jitter=True,
-    )
+class Backoff:
+    """Retries the provider's transient failures; every other error surfaces at once.
+
+    Each retry is announced on the custom stream first (`emit.retry`), so a streaming caller
+    can void the tokens the failed attempt already sent.
+    """
+
+    def __init__(self, model: Runnable) -> None:
+        self._model = model
+
+    async def ainvoke(self, messages: list[BaseMessage]) -> AIMessage:
+        attempt = 1
+        while True:
+            try:
+                return await self._model.ainvoke(messages)
+            except Exception as exc:
+                if not retryable(exc) or attempt == RETRY_ATTEMPTS:
+                    raise
+            attempt += 1
+            emit.retry(attempt)
+            # Exponential with up to a second of jitter: about 1s, then 2s.
+            await asyncio.sleep(RETRY_BASE_SECONDS * 2 ** (attempt - 2) + random.random())
+
+
+def with_backoff(model: Runnable) -> Backoff:
+    return Backoff(model)
 
 
 # How each provider says the reply was cut off by the output limit.

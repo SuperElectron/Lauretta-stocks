@@ -13,6 +13,18 @@ class ScriptedModel(GenericFakeChatModel):
         return self
 
 
+class Recorder:
+    """A role double that returns scripted results and keeps the prompts it was given."""
+
+    def __init__(self, *results: dict[str, Any]) -> None:
+        self.results = list(results)
+        self.prompts: list[str] = []
+
+    async def __call__(self, system_prompt: str, _task: str) -> dict[str, Any]:
+        self.prompts.append(system_prompt)
+        return self.results.pop(0)
+
+
 def scripted(*replies: AIMessage) -> ScriptedModel:
     return ScriptedModel(messages=iter(replies))
 
@@ -55,3 +67,29 @@ ADVICE: dict[str, Any] = {
     "change_my_mind": ["Q1 cloud growth above 25%"],
     "questions_for_investor": ["What is your maximum position size?"],
 }
+
+
+def settings(**overrides: Any) -> Any:
+    """A valid `Settings` without the environment; overrides replace any field."""
+    from src.settings import Settings
+
+    values: dict[str, Any] = {
+        "LOG_LEVEL": "INFO",
+        "USER_ID": "friend",
+        "DATABASE_URL": "postgresql://unused",
+        "DB_POOL_MIN": 1,
+        "DB_POOL_MAX": 2,
+        "AGENT_PROVIDER": "anthropic",
+        "AGENT_MODEL": "claude-test",
+        "AGENT_TEMPERATURE": 0.0,
+        "AGENT_MAX_TOKENS": 1000,
+        "AGENT_TIMEOUT": 30.0,
+        "AGENT_RECURSION_LIMIT": 10,
+        "PIPELINE_MAX_REVISIONS": 1,
+        "EMBED_MODEL": "unused",
+        "EMBED_DIMS": 384,
+        "SEC_USER_AGENT": "Jo Bloggs jo@example.com",
+        "BROKER_URL": "redis://unused",
+        **overrides,
+    }
+    return Settings(**values)

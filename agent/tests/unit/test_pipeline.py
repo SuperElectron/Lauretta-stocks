@@ -1,10 +1,7 @@
-from typing import Any
-
 import pytest
 
-from src.graph import pipeline as pipeline_module
 from src.graph.pipeline import Team, build_pipeline, needs_revision
-from tests.utils import ADVICE, REVIEW, STORY
+from tests.utils import ADVICE, REVIEW, STORY, Recorder
 
 REVISE = {**REVIEW, "verdict": "revise", "required_changes": ["Fix FY2026 revenue"]}
 
@@ -16,38 +13,6 @@ REVISE = {**REVIEW, "verdict": "revise", "required_changes": ["Fix FY2026 revenu
 def test_needs_revision(verdict, revisions, expected):
     state = {"review": {"verdict": verdict}, "revisions": revisions}
     assert needs_revision(state, max_revisions=1) is expected
-
-
-class Recorder:
-    """A role double that returns scripted results and keeps the prompts it was given."""
-
-    def __init__(self, *results: dict[str, Any]) -> None:
-        self.results = list(results)
-        self.prompts: list[str] = []
-
-    async def __call__(self, system_prompt: str, _task: str) -> dict[str, Any]:
-        self.prompts.append(system_prompt)
-        return self.results.pop(0)
-
-
-@pytest.fixture
-def no_database(monkeypatch):
-    saved: dict[str, Any] = {}
-
-    async def investor_blocks(_pool, _user_id):
-        return "<investor>\nnothing yet\n</investor>", ["risk_tolerance"]
-
-    async def advisor_user_block(_pool, _user_id):
-        return "<user>\ncurrency: GBP\n</user>"
-
-    async def save(_pool, _user_id, ticker, story, review, advice, revisions):
-        saved.update(ticker=ticker, story=story, review=review, advice=advice, revisions=revisions)
-        return "thesis-1"
-
-    monkeypatch.setattr(pipeline_module, "investor_blocks", investor_blocks)
-    monkeypatch.setattr(pipeline_module, "advisor_user_block", advisor_user_block)
-    monkeypatch.setattr(pipeline_module.theses, "save", save)
-    return saved
 
 
 async def test_checker_sends_the_story_back_once_then_advisor_decides(no_database):

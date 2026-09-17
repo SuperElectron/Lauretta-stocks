@@ -14,6 +14,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 from psycopg_pool import AsyncConnectionPool
 
+from src.graph import emit
 from src.graph.context import investor_blocks, persona_blocks, theses_block
 from src.graph.history import answered, recent
 from src.graph.llm import complete, with_backoff
@@ -63,16 +64,21 @@ def build_chat(
             state["soul_change"],
         )
         history = recent(answered(state["messages"]), HISTORY_MESSAGES)
+        emit.progress("assistant", "replying")
         reply = await bound.ainvoke([SystemMessage(content=prompt), *history])
         return {"messages": [complete(reply)]}
 
     def notice(state: ChatState) -> dict[str, object]:
-        """Appends each soul proposal made this turn to the final reply (same id, so replaced)."""
+        """Appends each soul proposal made this turn to the final reply (same id, so replaced),
+        and sends each to a streaming caller as its own notice."""
         proposals = proposals_in_turn(state["messages"])
         if not proposals:
             return {}
         reply = state["messages"][-1]
-        text = "\n\n".join([reply.text, *(proposal_notice(p) for p in proposals)])
+        notices = [proposal_notice(p) for p in proposals]
+        for text in notices:
+            emit.notice(text)
+        text = "\n\n".join([reply.text, *notices])
         return {"messages": [reply.model_copy(update={"content": text})]}
 
     graph = StateGraph(ChatState)
