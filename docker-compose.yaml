@@ -221,9 +221,9 @@ services:
   # change them together, never one alone. The image is pinned by digest for sm_121a / arm64.
   vllm:
     image: ghcr.io/timothystewart6/vllm-gb10@sha256:fa87aea586e02719aba804f76e0895d1f096e8c387573e7981e2681589b3b712
-    # Not unless-stopped: a load that keeps failing (say, out of memory) stops after three tries
-    # instead of reloading 65 GiB forever next to the Spark's other workloads.
-    restart: on-failure:3
+    # Comes back after a reboot. A load that keeps failing (say, out of memory) reloads 65 GiB on
+    # every restart next to the Spark's other workloads: stop it with `docker compose stop vllm`.
+    restart: unless-stopped
     # The key comes from the secret file, not the environment, so `docker inspect` never shows it.
     entrypoint:
       - sh

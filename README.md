@@ -182,9 +182,10 @@ just backup             # a database dump now, into backups/ on the Spark
   the Spark's `~/.cache/huggingface` (it never downloads them). It takes about 9 minutes to load,
   so a `just deploy` that creates or recreates `vllm` (the first one, or a change to its image or
   flags) waits that long before it returns, and gives up after 20 minutes; the rest of the stack
-  is up meanwhile, and model calls fail until `vllm` is healthy. A load that keeps failing stops
-  after three tries rather than looping. Its flags are a measured memory budget shared with the
-  Spark's other workloads (see the comments in `docker-compose.yaml`), so two engines never fit:
+  is up meanwhile, and model calls fail until `vllm` is healthy. It restarts unless stopped, so a
+  load that keeps failing reloads the weights each time: stop it with `docker compose stop vllm`.
+  Its flags are a measured memory budget shared with the Spark's other workloads (see the
+  comments in `docker-compose.yaml`), so two engines never fit:
   `just deploy` refuses while the hand-started `vllm-gpt-oss-120b` container still runs.
 - **Backups:** the `backup` service dumps the database and tars AnythingLLM's storage when it
   starts and at 03:00 UTC into `backups/`, keeps the newest `BACKUP_KEEP` of each, and turns

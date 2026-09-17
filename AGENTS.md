@@ -88,8 +88,9 @@ Paths below are relative to `services/`.
   the Spark stack (gateway, api, worker, broker, db, anythingllm, vllm, backup, tailscale). The
   gateway sends `/v1/*` and `/healthz` to api and every other path to AnythingLLM, the web and
   Android client (`gateway/config.yaml`). Its internal `llm` listener, which api and worker call,
-  forwards to the `vllm` service (gpt-oss-120b on the Spark's GPU) on the private `llm` network. The tailscale container hosts the Service `svc:lauretta`
-  (`tailscale/`). AnythingLLM is an image with settings in compose; it has no folder.
+  forwards to the `vllm` service (gpt-oss-120b on the Spark's GPU) on the private `llm` network.
+  The tailscale container hosts the Service `svc:lauretta` (`tailscale/`). AnythingLLM is an
+  image with settings in compose; it has no folder.
   `docker-compose.dev.yaml` is the local db only, used by `just up`.
 
 ## MCP servers (`.mcp.json`)
