@@ -2,6 +2,7 @@
   "streams": {"jobs": "jobs", "dead": "jobs:dead"},
   "group": "workers",
   "payload_field": "payload",
+  "jobs_maxlen": 10000,
   "scan_start": "0-0",
   "status_hash_fields": ["status", "kind", "user", "created_at", "started_at", "finished_at", "error_code"],
   "statuses": ["queued", "running", "done", "failed"],

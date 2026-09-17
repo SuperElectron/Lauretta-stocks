@@ -38,6 +38,7 @@ def test_names():
         KEYS["group"],
     )
     assert (keys.PAYLOAD, keys.SCAN_START) == (KEYS["payload_field"], KEYS["scan_start"])
+    assert submit.JOBS_MAXLEN == KEYS["jobs_maxlen"]
     assert sorted(submit.FINISHED) == sorted(KEYS["finished"])
 
 

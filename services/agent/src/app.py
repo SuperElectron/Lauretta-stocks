@@ -41,6 +41,8 @@ class App:
     pipeline: CompiledStateGraph
     # Records how a user reached us (channel, client, ip...); only changes are stored.
     record_signals: Callable[[str, dict[str, str | None], facts.Source], Awaitable[None]]
+    # Where research the desk starts is run (`src/runs.py`); the CLI waits for it on the way out.
+    runs: Runs | None = None
     # A user's identifying signal values (ip, place), kept out of streamed reasoning.
     signal_values: Callable[[str], Awaitable[list[str]]] = _no_signals
 
@@ -90,6 +92,7 @@ async def open_app(settings: Settings, runs: Runs | None = None) -> AsyncGenerat
             chat=chat,
             research=run_research,
             pipeline=pipeline,
+            runs=started,
             record_signals=record_signals,
             signal_values=signal_values,
         )

@@ -64,15 +64,15 @@ async def test_a_forked_conversation_keeps_its_thread_after_a_tool_call_mid_answ
         Progress(stage="assistant", detail="working it"),
         Token(text="Let me check."),
         MessageEnd(),
-        Tool(name="research_stock", status="started"),
-        Tool(name="research_stock", status="done"),
+        Tool(name="start_research", status="started"),
+        Tool(name="start_research", status="done"),
         Token(text=f"Answer {n}."),
         Done(result={}),
     ]
     older, forked = ChatApp(client), ChatApp(client)
     await older.say("Research MSFT")
     await forked.say("Research MSFT")
-    assert "Consulting research stock" in forked.records[0][1].split("</think>")[1]
+    assert "Consulting start research" in forked.records[0][1].split("</think>")[1]
     await forked.say("And the risks?")
     await forked.say("Thanks")
 

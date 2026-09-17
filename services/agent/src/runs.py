@@ -131,3 +131,8 @@ class LocalRuns:
     async def clear(self, user: str, tickers: list[str]) -> None:
         for ticker in tickers:
             self._tasks.pop((user, ticker), None)
+
+    async def drain(self) -> None:
+        """Waits for every run still going, so leaving does not abandon one mid-flight."""
+        tasks = [task for _job_id, task in self._tasks.values() if not task.done()]
+        await asyncio.gather(*tasks, return_exceptions=True)

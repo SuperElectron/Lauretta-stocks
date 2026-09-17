@@ -16,6 +16,7 @@ from src.errors import AgentError
 from src.graph.ctx import Ctx
 from src.queue import keys
 from src.report import render_report
+from src.runs import LocalRuns
 from src.settings import Settings
 
 CLI_CHATTING = "chatting on thread {thread!r}; ctrl-d to quit"
@@ -25,6 +26,7 @@ CLI_REPLY = "\nassistant> {reply}\n"
 CLI_THREAD_HELP = "conversation to continue"
 CLI_USER_HELP = "the user to act for (default: the owner, first in ALLOWED_USERS)"
 CLI_UNKNOWN_USER = "{user!r} is not in ALLOWED_USERS"
+CLI_WAITING = "waiting for the research still running; ctrl-c to give up on it..."
 
 
 async def chat(app: App, user: str, thread: str) -> None:
@@ -78,10 +80,18 @@ async def main() -> None:
         sys.exit(CLI_UNKNOWN_USER.format(user=user))
     try:
         async with open_app(settings) as app:
-            if args.command == "chat":
-                await chat(app, user, args.thread)
-            else:
-                await research(app, user, args.ticker)
+            try:
+                if args.command == "chat":
+                    await chat(app, user, args.thread)
+                else:
+                    await research(app, user, args.ticker)
+            finally:
+                # Research the desk started here runs in this process, so leaving waits for it
+                # rather than abandoning the team mid-run.
+                if isinstance(app.runs, LocalRuns):
+                    if [r for r in await app.runs.active(user) if r["status"] == keys.RUNNING]:
+                        print(CLI_WAITING)
+                    await app.runs.drain()
     except AgentError as exc:
         sys.exit(f"{exc.code}: {exc.message}")
 

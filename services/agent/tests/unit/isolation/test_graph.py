@@ -3,7 +3,6 @@
 Max's own data. The chat, its tools and the research team are the real ones; the model is
 scripted and the database is `TwoUsers`."""
 
-import asyncio
 import copy
 import json
 
@@ -29,7 +28,7 @@ USER_FIELDS = {"user", "user_id", "runtime", "context", "owner", "login"}
 
 async def finished(runs: LocalRuns) -> None:
     """Waits for the research the desk started in this test."""
-    await asyncio.gather(*(task for _job_id, task in runs._tasks.values()))
+    await runs.drain()
 
 
 def desk(model):
