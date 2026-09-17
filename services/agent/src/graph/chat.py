@@ -9,6 +9,8 @@ The graph is built once for everyone. Each run's user comes from its context (`C
 step loads that user's data, and the tools read the same context.
 """
 
+from collections.abc import Callable
+
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
@@ -19,7 +21,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.runtime import Runtime
 from psycopg_pool import AsyncConnectionPool
 
-from src.graph import emit
+from src.graph import compaction, emit
 from src.graph.context import investor_blocks, load_known, theses_block
 from src.graph.ctx import Ctx, user_of
 from src.graph.history import answered, recent
@@ -48,7 +50,10 @@ def build_chat(
     tools: list[BaseTool],
     model: BaseChatModel,
     recursion_limit: int,
+    compact: Callable | None = None,
 ) -> CompiledStateGraph:
+    """`compact`: the node that summarises a long thread (`compaction.build_compact`); without
+    it the model sees the last `HISTORY_MESSAGES` and nothing older."""
     bound = with_backoff(model.bind_tools(tools))
 
     async def context(state: ChatState, runtime: Runtime[Ctx]) -> dict[str, object]:
@@ -82,8 +87,12 @@ def build_chat(
             state["names"],
             state["soul_change"],
             state["opening"],
+            state.get("summary", ""),
         )
-        history = recent(answered(state["messages"]), HISTORY_MESSAGES)
+        # Everything after the summary, which covers the messages before `summarized`.
+        start = state.get("summarized", 0)
+        limit = HISTORY_MESSAGES + (compaction.BATCH if compact else 0)
+        history = recent(answered(state["messages"][start:]), limit)
         emit.progress("assistant", progress.ASSISTANT_WORKING, state["names"]["bot_name"])
         reply = await bound.ainvoke([SystemMessage(content=prompt), *history])
         return {"messages": [complete(reply)]}
@@ -113,5 +122,10 @@ def build_chat(
     graph.add_edge("context", "agent")
     graph.add_conditional_edges("agent", tools_condition, {"tools": "tools", END: "notice"})
     graph.add_edge("tools", "context")
-    graph.add_edge("notice", END)
+    if compact is None:
+        graph.add_edge("notice", END)
+    else:
+        graph.add_node("compact", compact)
+        graph.add_edge("notice", "compact")
+        graph.add_edge("compact", END)
     return graph.compile(checkpointer=checkpointer).with_config(recursion_limit=recursion_limit)
