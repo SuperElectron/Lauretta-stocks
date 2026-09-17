@@ -1,0 +1,29 @@
+# --- Agent / tooling state (never commit) ---
+.omc/
+.cache/
+.claude/settings.local.json
+.claude/worktrees/
+CLAUDE.local.md
+
+# --- Secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+
+# --- Generated reports (the folder is kept) ---
+reports/*
+!reports/.gitkeep
+
+# --- OS / editor ---
+.DS_Store
+.idea/
+.vscode/
