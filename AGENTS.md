@@ -35,14 +35,20 @@ research pipeline (LangGraph)                                                   
   `memory/topics.py`, `holdings` optional) into `setup` in `ChatState`, and renders a `<setup>`
   checklist with the one next step. `skip_setup_step` stores a `setup_team_names` or
   `setup_holdings` fact (value `skipped`, never returned by memory search) when the investor
-  declines an optional step, so it is never asked again. Persona facts, memories and holdings
-  are read once per turn or run (`context.load_known`); the pipeline builds the same setup from
-  them for the Strategist's unknown core topics.
+  declines an optional step, so it is never asked again; `set_identity` saving any name stores
+  `setup_team_names` as `answered`, so the team step closes whoever was renamed. Whether a turn
+  opens with the first-contact intro is code too (`setup.opening`): only while `investor_name`
+  is todo and the thread has no earlier reply; with the name known a new thread greets by name.
+  Persona facts, memories and holdings are read once per turn or run (`context.load_known`); the
+  pipeline builds the same setup from them for the Strategist's unknown core topics.
 - **Stage** (`setup`/`ready`) is decided in code from `setup`, never by the model: `setup` while
   any step is still to do.
 - **Persona** (chat assistant only): `<rules>` (code, `prompts/rules.py`) then `<soul>`,
   `<identity>`, `<user>`, `<signals>`. The soul changes only when the investor replies
-  `approve soul <id>`, which code applies in the context step; the advisor sees `<user>` only.
+  `approve soul <id>`, which code applies in the context step (refused as `stale` when the
+  active soul changed since the proposal), and the notice node appends what it did; the advisor
+  sees `<user>` only and recalls memories only. The `ip` signal is stored but never rendered.
+  Persona writes take a per-user advisory lock (`facts.lock_persona`).
 - **Users**: the owner (`mat`) and Max (`max`) share the desk with isolated data. The gateway
   names the user (`X-Lauretta-User`); graphs are built once and get the user as LangGraph
   runtime context (`graph/ctx.py`: nodes `Runtime[Ctx]`, tools `ToolRuntime[Ctx]`, hidden from
@@ -70,8 +76,9 @@ Paths below are relative to `services/`.
 - `agent/src/graph/render.py`: stitches each system prompt from that wording: a head, then data
   blocks (`<investor>`, `<holdings>`, `<setup>`, `<unknown>`, `<draft>`, `<review>`), then the
   stage.
-- `agent/src/tools/`: one `build_*` factory per tool; argument schemas in `tools/models.py`, and
-  for tools over a user's data `tools/scoped.py` (adds the injected `runtime`).
+- `agent/src/tools/`: one `build_*` factory per tool; argument schemas in `tools/models.py` and
+  `tools/persona_args.py` (persona values: stripped, capped, no `<`/`>`), and for tools over a
+  user's data `tools/scoped.py` (adds the injected `runtime`).
 - `agent/src/data/`: `sec.py` + `xbrl.py` (SEC EDGAR, free, needs `SEC_USER_AGENT`),
   `market.py` (yfinance, free, unofficial).
 - `agent/src/persona/`: persona prompt blocks, the soul cap check, and soul approval.

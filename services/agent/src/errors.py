@@ -59,7 +59,8 @@ class UpstreamUnavailable(Exception):
 
 
 class PersonaInvalid(AgentError):
-    """A soul, identity or user file or proposal that cannot be stored as given."""
+    """A soul, identity, profile or signal value, or a soul decision, that cannot be stored as
+    given."""
 
     code = "PERSONA_INVALID"
     message = wording.PERSONA_INVALID

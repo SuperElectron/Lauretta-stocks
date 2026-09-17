@@ -2,13 +2,16 @@
 
 Decided in code from memory on every turn, never by the model. A step is `done` when memory
 shows it, `skipped` when the investor declined an optional one (a `setup_*` fact), else `todo`.
+How a thread opens (`opening`) is decided in code too.
 """
 
 from typing import Any, Literal
 
+from langchain_core.messages import AIMessage, AnyMessage, HumanMessage
+
 from src.graph.context import Known, unknown_topics
-from src.graph.state import Stage
-from src.memory.keys import SETUP_SKIPS
+from src.graph.state import Opening, Stage
+from src.memory.keys import ANSWERED, SETUP_SKIPS
 from src.persona.layers import Persona
 from src.prompts import setup as wording
 from src.prompts.identity import IDENTITY_DEFAULTS
@@ -30,9 +33,11 @@ def compute_setup(persona: Persona, unknown: list[str], holding_count: int) -> l
     # Only the research team counts: a name for the Director alone, as the old onboarding
     # stored, does not mean the team was offered.
     renamed = any(persona.identity.get(key) != IDENTITY_DEFAULTS[key] for key in TEAM_NAME_KEYS)
+    # Any rename through set_identity answers the step, the Director's alone included.
+    answered = persona.user.get(SETUP_SKIPS["team_names"]) == ANSWERED
     done = {
         "investor_name": bool(persona.user.get("preferred_name")),
-        "team_names": renamed,
+        "team_names": renamed or answered,
         "core_profile": not unknown,
         "holdings": holding_count > 0,
     }
@@ -49,6 +54,16 @@ def compute_setup(persona: Persona, unknown: list[str], holding_count: int) -> l
 def setup_of(known: Known) -> list[dict[str, Any]]:
     """The setup, from what was already read this turn or run."""
     return compute_setup(known.persona, unknown_topics(known.remembered), len(known.positions))
+
+
+def opening(setup: list[dict[str, Any]], messages: list[AnyMessage]) -> Opening:
+    """How this turn opens the thread: "" once the thread has an earlier reply; else "intro"
+    while their name is unknown (first contact), or "welcome" (greet them by name, no intro)."""
+    last_human = max((i for i, m in enumerate(messages) if isinstance(m, HumanMessage)), default=0)
+    if any(isinstance(m, AIMessage) for m in messages[:last_human]):
+        return ""
+    name = next(s["status"] for s in setup if s["step"] == "investor_name")
+    return "intro" if name == "todo" else "welcome"
 
 
 def next_step(setup: list[dict[str, Any]]) -> str | None:

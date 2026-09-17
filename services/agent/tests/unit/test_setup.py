@@ -9,8 +9,8 @@ from src.graph.setup import compute_setup, missing_core, next_step, render_setup
 from src.memory.keys import KEYS
 from src.memory.topics import CORE_TOPICS
 from src.persona.layers import build_persona, desk_names, render_persona
-from src.tools.models import SetIdentityArgs
-from src.tools.persona import build_skip_setup_step
+from src.tools.persona import build_set_identity, build_skip_setup_step
+from src.tools.persona_args import SetIdentityArgs
 from tests.unit.test_desk_names import Embedder, FactsTable
 from tests.utils import run_as
 
@@ -115,7 +115,9 @@ def test_intro_introduces_the_team_as_the_directors_own_and_starts_setup():
     persona = build_persona([fact("identity", "checker_name", "Chuck")])
     names = desk_names(persona)
     setup = render_setup(compute_setup(persona, CORE, 0), names)
-    prompt = render_assistant_prompt(render_persona(persona), "", setup, "setup", names)
+    prompt = render_assistant_prompt(
+        render_persona(persona), "", setup, "setup", names, opening="intro"
+    )
     for part in ("Here's my team", "**Andy, my analyst**", "**Chuck, my checker**",
                  "**Sammy, my strategist**", "sends Andy's work back", "I'm the Director",
                  "YOUR team", "rather than repeating it word for word", "current names",
@@ -124,3 +126,16 @@ def test_intro_introduces_the_team_as_the_directors_own_and_starts_setup():
                  "'call the Checker Max'", "not financial advice"):  # fmt: skip
         assert part in prompt, part
     assert "Charlie" not in prompt
+
+
+async def test_renaming_only_the_director_closes_the_team_step():
+    table = FactsTable()
+    await run_as("friend", build_set_identity(table, Embedder()), {"name": "Ace"})
+    assert statuses([NAME, *table.active()], CORE, 0)["team_names"] == "done"
+    assert table.locks and set(table.scopes) == {"friend"}
+
+
+async def test_an_emoji_alone_leaves_the_team_step_open():
+    table = FactsTable()
+    await run_as("friend", build_set_identity(table, Embedder()), {"emoji": "🦊"})
+    assert statuses([NAME, *table.active()], CORE, 0)["team_names"] == "todo"

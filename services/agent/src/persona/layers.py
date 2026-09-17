@@ -27,6 +27,8 @@ STAGE_NAME_KEYS = {
 # Shown to the assistant; tts_voice is reserved for the voice channel.
 IDENTITY_SHOWN = (*NAME_KEYS, "bot_emoji", "bot_vibe")
 USER_KEYS = keys_of("profile")
+# Signals shown to the assistant. The IP address stays in the database and never reaches a prompt.
+SIGNALS_SHOWN = tuple(key for key in keys_of("signal") if key != "ip")
 # The advisor sizes in the investor's currency and home market; it needs no nickname.
 ADVISOR_USER_KEYS = ("name", "country", "currency")
 
@@ -67,6 +69,7 @@ def render_signals(signals: dict[str, tuple[str, str]]) -> str:
     lines = [
         blocks.SIGNAL_LINE.format(key=key, value=value, since=since)
         for key, (value, since) in sorted(signals.items())
+        if key in SIGNALS_SHOWN
     ]
     return "<signals>\n" + ("\n".join(lines) or blocks.NO_SIGNALS) + "\n</signals>"
 
