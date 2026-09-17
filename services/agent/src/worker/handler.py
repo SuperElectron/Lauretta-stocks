@@ -25,15 +25,17 @@ from redis.asyncio import Redis
 
 from src.app import App
 from src.errors import AgentError, JobInterrupted
-from src.prompts import errors as wording
-from src.queue import events, submit
+from src.queue import events, keys, submit
 from src.queue.lock import ThreadLock
-from src.queue.models import Done, Error, Event, Job
+from src.queue.models import DESK, Done, Error, Event, Job
 from src.settings import Settings
 from src.worker.research import run_research
 from src.worker.stream import run_chat
 
-INTERNAL = Error(code="INTERNAL", message=wording.JOB_FAILED)
+JOB_FAILED = "the job failed; the worker log has the details"
+JOB_ABANDONED = "the job did not finish"
+
+INTERNAL = Error(code="INTERNAL", message=JOB_FAILED)
 
 
 def error_event(exc: Exception) -> Error:
@@ -55,15 +57,18 @@ class JobHandler:
     async def run(self, job: Job) -> None:
         log = logger.bind(job_id=job.job_id, kind=job.kind)
         status = await submit.status_of(self._broker, job.job_id)
-        state = (status or {}).get("status")
+        state = (status or {}).get(keys.STATUS)
         if state in submit.FINISHED:
             log.warning("job.already_finished")
             return
-        if state == "running":
+        if state == keys.RUNNING:
             await self._redelivered(job)
             return
         await submit.mark(
-            self._broker, job.job_id, self._ttl_s, status="running", started_at=submit.now()
+            self._broker,
+            job.job_id,
+            self._ttl_s,
+            **{keys.STATUS: keys.RUNNING, keys.STARTED_AT: submit.now()},
         )
         try:
             result = await self._execute(job)
@@ -80,7 +85,7 @@ class JobHandler:
     async def dead(self, job: Job, reason: str) -> None:
         """The job was delivered too often without finishing; the reason stays in the log."""
         logger.bind(job_id=job.job_id, reason=reason).error("job.dead")
-        await self.finish(job, Error(code="JOB_ABANDONED", message=wording.JOB_ABANDONED))
+        await self.finish(job, Error(code="JOB_ABANDONED", message=JOB_ABANDONED))
 
     async def finish(self, job: Job, outcome: Done | Error) -> None:
         await self.publish(job.job_id, outcome)
@@ -98,16 +103,20 @@ class JobHandler:
         await self.finish(job, error_event(JobInterrupted()))
 
     async def _mark_finished(self, job_id: str, outcome: str, code: str | None) -> None:
-        fields = {"status": "done" if outcome == "done" else "failed"}
+        fields = {keys.STATUS: keys.DONE if outcome == "done" else keys.FAILED}
         if code is not None:
-            fields["error_code"] = code
-        await submit.mark(self._broker, job_id, self._ttl_s, **fields, finished_at=submit.now())
+            fields[keys.ERROR_CODE] = code
+        fields[keys.FINISHED_AT] = submit.now()
+        await submit.mark(self._broker, job_id, self._ttl_s, **fields)
 
     async def _execute(self, job: Job) -> dict[str, Any]:
         user = job.user
-        await self._app.record_signals(
-            user, {"client": job.client.client, "channel": job.channel}, "gateway"
-        )
+        # Only a job a client sent says how the investor reached us; the desk queues its own
+        # research, and that is not the investor arriving.
+        if job.client.client != DESK:
+            await self._app.record_signals(
+                user, {"client": job.client.client, "channel": job.channel}, "gateway"
+            )
 
         async def publish(event: Event) -> None:
             await self.publish(job.job_id, event)

@@ -1,7 +1,7 @@
 """Turns LangGraph stream parts (`version="v2"`) into job events.
 
 Chat runs with `subgraphs=True`, so the research team's progress reaches the client from
-inside the `research_stock` tool. Only the assistant's own tokens, reasoning and tool steps are
+inside a nested graph, if one runs. Only the assistant's own tokens, reasoning and tool steps are
 sent: a nested graph's tokens, reasoning and updates (the research roles talking to their tools)
 are not. Reasoning is never part of the reply and passes `ReasoningFilter` first (off with
 `AGENT_STREAM_REASONING=false`). A retry after reasoning alone needs no `reset`, since nothing
@@ -14,9 +14,9 @@ from typing import Any
 from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
 from langgraph.graph.state import CompiledStateGraph
 
+from src.graph import progress
 from src.graph.ctx import Ctx
 from src.graph.reasoning import reasoning_text
-from src.prompts import progress
 from src.queue import keys
 from src.queue.models import Event, MessageEnd, Notice, Progress, Reasoning, Reset, Token, Tool
 from src.worker.redact import ReasoningFilter

@@ -14,7 +14,7 @@ from psycopg_pool import AsyncConnectionPool
 from redis.asyncio import Redis
 
 from src.prompts import errors as wording
-from src.queue import submit
+from src.queue import keys, submit
 from src.queue.models import ClientInfo
 from src.settings import Settings
 
@@ -76,7 +76,7 @@ async def existing_job(job_id: JobId, broker: BrokerDep, user: UserDep) -> dict[
     """The caller's job's status hash. A job never submitted, expired or someone else's is the
     same 404, so a job id tells nobody else anything."""
     status = await submit.status_of(broker, job_id)
-    if status is None or status.get("user") != user:
+    if status is None or status.get(keys.USER) != user:
         raise HTTPException(404, detail={"code": "JOB_NOT_FOUND", "message": wording.NO_SUCH_JOB})
     return status
 

@@ -48,6 +48,11 @@ class ChatState(MessagesState):
     # What that decision did (`persona/approval.decide`), for the notice; empty otherwise.
     soul_decision: dict[str, Any]
     opening: Opening
+    # What the desk is researching or has just finished (`graph/research.py`), for this turn.
+    research: str
+    # The runs this turn's block reported as over, as `[ticker, job_id]`; forgotten once the
+    # turn has a reply, and only while the ticker still holds that job.
+    reported_runs: list[list[str]]
     # The running summary of the messages before `summarized` (`graph/compaction.py`).
     summary: str
     summarized: int

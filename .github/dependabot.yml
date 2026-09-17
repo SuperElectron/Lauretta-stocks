@@ -1,8 +1,8 @@
 version: 2
 updates:
-  # services/agent's Python dependencies (uv.lock).
+  # Each service's Python dependencies (uv.lock).
   - package-ecosystem: "uv"
-    directory: "/services/agent"
+    directories: ["/services/agent", "/services/api"]
     target-branch: "staging"
     schedule:
       interval: "weekly"
@@ -18,18 +18,25 @@ updates:
     target-branch: "staging"
     schedule:
       interval: "weekly"
+    ignore:
+      # vLLM stays on the digest measured on the Spark (flags, memory budget); bumped by hand only.
+      - dependency-name: "timothystewart6/vllm-gb10"
     groups:
       minor-and-patch:
         update-types:
           - "minor"
           - "patch"
 
-  # The agent's own Dockerfile base image.
+  # Each service's Dockerfile base image.
   - package-ecosystem: "docker"
-    directory: "/services/agent"
+    directories: ["/services/agent", "/services/api"]
     target-branch: "staging"
     schedule:
       interval: "weekly"
+    ignore:
+      # Both services require Python >=3.13,<3.14 (pyproject); a new minor Python is a deliberate change.
+      - dependency-name: "python"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
     groups:
       minor-and-patch:
         update-types:

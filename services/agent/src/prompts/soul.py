@@ -1,10 +1,7 @@
-"""The default soul (persona, voice, boundaries), its desk lines and its size cap.
+"""The default soul (persona, voice, boundaries), and its desk lines.
 
 The soul in use is this default until the investor approves a proposed one (`persona/soul.py`).
 """
-
-# The soul is prompt text on every turn; this keeps a proposal from crowding out the rest.
-SOUL_MAX_CHARS = 4000
 
 # Said now and then, at most one per reply, never inside figures or advice.
 DESK_LINES = (

@@ -11,7 +11,7 @@ help:
 chat thread="main" user="":
     cd services/agent && uv run python -m src.main {{ if user == "" { "" } else { "--user " + quote(user) } }} chat --thread {{ thread }}
 
-# Run the research team on one ticker for user (default: the owner) and save a report in reports/.
+# Run the research team on one ticker for user (default: the owner) and print its report.
 research ticker user="":
     cd services/agent && uv run python -m src.main {{ if user == "" { "" } else { "--user " + quote(user) } }} research {{ ticker }}
 
@@ -51,10 +51,10 @@ test:
     cd services/api && uv run pytest -q && uv run ruff check . && uv run ruff format --check .
     cd services/agent && uv run pytest -q && uv run ruff check . && uv run ruff format --check .
 
-# test: the database isolation tests (row-level security as the app role) in a throwaway
+# test: both services' database isolation tests (row-level security as the app role) in a throwaway
 # compose project; needs docker, removes the project after. Run it on the Spark.
 test-db:
-    docker compose -f docker-compose.test.yaml run --rm --build tests; status=$?; docker compose -f docker-compose.test.yaml down -v --remove-orphans; exit $status
+    docker compose -f docker-compose.test.yaml build tests && docker compose -f docker-compose.test.yaml run --rm tests && docker compose -f docker-compose.test.yaml run --rm api-tests; status=$?; docker compose -f docker-compose.test.yaml down -v --remove-orphans; exit $status
 
 # spark: pull ref (pushed first) on the Spark, then build natively, migrate the checkpoint tables
 # (the one-shot `migrate` service) and start the stack.

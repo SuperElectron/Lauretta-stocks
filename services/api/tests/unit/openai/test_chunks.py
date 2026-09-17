@@ -59,8 +59,8 @@ THINKING = State(mid_thought=True)
         (
             FRESH,
             "tool",
-            {"name": "research_stock", "status": "started"},
-            [Part({"reasoning_content": "Consulting research stock…\n"})],
+            {"name": "start_research", "status": "started"},
+            [Part({"reasoning_content": "Consulting start research…\n"})],
             FRESH,
         ),
         (

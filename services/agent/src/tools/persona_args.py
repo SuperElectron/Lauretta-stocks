@@ -6,9 +6,13 @@ from typing import Annotated
 from pydantic import AfterValidator, Field, StringConstraints, model_validator
 
 from src.memory.keys import SkippableStep
-from src.prompts import tools as wording
-from src.prompts.soul import SOUL_MAX_CHARS
+from src.persona.soul import SOUL_MAX_CHARS
 from src.tools.models import ToolArgs
+
+NOTHING_TO_SET = "pass at least one field to set"
+ANGLE_BRACKETS = (
+    "must not contain < or >, which would break the prompt's blocks; name a block without them"
+)
 
 # Names go into every system prompt, progress line and report.
 NAME_MAX_CHARS = 40
@@ -18,7 +22,7 @@ DETAIL_MAX_CHARS = 80
 
 def _no_angle_brackets(value: str) -> str:
     if "<" in value or ">" in value:
-        raise ValueError(wording.ANGLE_BRACKETS)
+        raise ValueError(ANGLE_BRACKETS)
     return value
 
 
@@ -33,7 +37,7 @@ class FieldUpdateArgs(ToolArgs):
     def _sets_something(self) -> "FieldUpdateArgs":
         given = (getattr(self, name) for name in type(self).model_fields if name != "runtime")
         if all(value is None for value in given):
-            raise ValueError(wording.NOTHING_TO_SET)
+            raise ValueError(NOTHING_TO_SET)
         return self
 
 

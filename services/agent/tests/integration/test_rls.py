@@ -6,7 +6,7 @@ import pytest
 
 from src.db.checkpointer import build_checkpointer
 from src.db.pool import rows, scoped
-from src.db.queries import holdings, memories, theses, threads
+from src.db.queries import holdings, memories, theses
 from src.errors import DatabaseUnavailable
 from tests.integration.conftest import OWNER_URL, SETUP_URL, TABLES, VECTOR
 
@@ -94,7 +94,6 @@ async def test_a_reused_connection_carries_no_user(pool):
 async def test_a_query_naming_mat_in_max_scope_returns_nothing(pool):
     assert await rows(pool, "max", "SELECT * FROM holdings WHERE user_id = %s", ("mat",)) == []
     assert await theses.latest(pool, "max", "NVDA") is None
-    assert await threads.find_aliases(pool, "max", ["alias-1"]) == {}
 
 
 async def test_memory_search_as_max_never_returns_mats_identical_memory(pool):
@@ -104,11 +103,6 @@ async def test_memory_search_as_max_never_returns_mats_identical_memory(pool):
     # The same memory added by Max is his own row, not a duplicate of Mat's.
     added = await memories.add(pool, embedder, "max", "risk_tolerance", "I hate risk")
     assert added["deduped"] is False
-
-
-async def test_a_thread_id_mat_uses_is_a_separate_thread_for_max(pool):
-    assert await threads.create(pool, "max", "main", "test") is True
-    assert await threads.create(pool, "mat", "main", "test") is False
 
 
 async def test_checkpoint_tables_are_created_by_the_migrator_and_used_by_the_app(pool):

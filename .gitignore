@@ -19,10 +19,6 @@ __pycache__/
 .ruff_cache/
 .coverage
 
-# --- Generated reports (the folder is kept) ---
-reports/*
-!reports/.gitkeep
-
 # --- Database dumps (the folder is kept) ---
 backups/*
 !backups/.gitkeep

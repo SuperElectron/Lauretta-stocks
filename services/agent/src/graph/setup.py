@@ -12,9 +12,8 @@ from langchain_core.messages import AIMessage, AnyMessage, HumanMessage
 from src.graph.context import Known, unknown_topics
 from src.graph.state import Opening, Stage
 from src.memory.keys import ANSWERED, SETUP_SKIPS
-from src.persona.layers import Persona
+from src.persona.layers import IDENTITY_DEFAULTS, Persona
 from src.prompts import setup as wording
-from src.prompts.identity import IDENTITY_DEFAULTS
 
 SetupStep = Literal["investor_name", "team_names", "core_profile", "holdings"]
 

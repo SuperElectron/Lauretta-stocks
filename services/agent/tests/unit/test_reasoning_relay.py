@@ -8,11 +8,10 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
-from src.graph import llm
+from src.graph import llm, progress
 from src.graph.ctx import Ctx
 from src.graph.reasoning import REASONING
 from src.graph.role import build_role
-from src.prompts import progress
 from src.tools.submit import build_submit_stock_story
 from src.worker.stream import ChatRelay, run_chat
 from tests.unit.openai_sse import model, reasoning_delta, tool_call

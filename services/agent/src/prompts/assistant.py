@@ -22,7 +22,8 @@ STAGE_INSTRUCTION: dict[str, str] = {
     ),
     "ready": (
         "You know their core profile. Help with what they ask. If a stock comes up with no "
-        "thesis or one older than 30 days, offer to put the desk on it."
+        "thesis or one older than 30 days, offer to put the desk on it; starting it takes a "
+        "few minutes of their patience, not of yours."
     ),
 }
 
@@ -65,6 +66,3 @@ SOUL_CHANGE: dict[str, str] = {
     "Offer to propose it again.",
     "other": "could not {verb} {short_id}: proposal {outcome}; nothing changed. Tell the investor.",
 }
-
-# The result given to a tool call that never finished, so the provider accepts the history.
-UNFINISHED_TOOL_CALL = "failed: this tool call did not complete; tell the investor if it mattered"

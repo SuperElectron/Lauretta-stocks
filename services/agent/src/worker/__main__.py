@@ -12,6 +12,7 @@ from src.app import open_app
 from src.errors import AgentError
 from src.queue.broker import connect
 from src.queue.consumer import Consumer
+from src.runs import QueuedRuns
 from src.settings import Settings
 from src.worker.handler import JobHandler
 
@@ -29,7 +30,8 @@ async def main() -> None:
     name = f"{socket.gethostname()}-{os.getpid()}"
     try:
         await broker.ping()
-        async with open_app(settings) as app:
+        # Research the desk starts for itself goes on the same queue, for any worker to run.
+        async with open_app(settings, QueuedRuns(broker, settings.EVENTS_TTL_S)) as app:
             consumer = Consumer(
                 broker,
                 JobHandler(app, broker, settings),

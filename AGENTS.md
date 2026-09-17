@@ -2,7 +2,7 @@
 
 A proof of concept for a friend: a research assistant for private investors (the owner and Max). It learns how
 they invest, keeps their holdings, and runs a three-agent research team on a stock. It never
-trades; it suggests. The background and open requirements questions are in `.cache/PLAN.md` (local only, not committed).
+trades; it suggests.
 
 Run `just --list` for every command.
 
@@ -10,9 +10,9 @@ Run `just --list` for every command.
 
 ```
 chat (LangGraph, checkpointed in Postgres)
-  context -> agent <-> tools -> notice  memory, holdings, snapshot, get_thesis, research_stock,
-                                        set_identity, set_user_details, skip_setup_step,
-                                        propose_soul_change
+  context -> agent <-> tools -> notice  memory, holdings, snapshot, get_thesis, start_research,
+                                        check_research, set_identity, set_user_details,
+                                        skip_setup_step, propose_soul_change
                                                                                   |
 research pipeline (LangGraph)                                                     v
   load_context -> analyst -> checker --revise (max PIPELINE_MAX_REVISIONS)--> analyst
@@ -30,6 +30,16 @@ research pipeline (LangGraph)                                                   
   profile is unknown.
 - **The Director** (the chat assistant) guides the investor through setup, then relays the
   team's results.
+- **Research from chat** (`src/runs.py`, `graph/research.py`): a run takes minutes, so
+  `start_research` only queues it (as an ordinary research job, `contracts/job.v1.json`, client
+  `desk`, which writes no signals) and the turn ends. `research:{user}` on the broker maps ticker
+  to job id for what the desk started and has not reported; the ticker's field is claimed before
+  the job is queued, so one ticker never runs twice at once. Every investor message renders a
+  `<research>` block from the job statuses: runs still going are named, a finished or failed one
+  is reported, and a run whose record is gone is reported as lost, never as finished. What the
+  block reported is forgotten when the next message is answered, so a turn that dies says it
+  again. The CLI has no queue, so there a run is a background task in its own process
+  (`runs.LocalRuns`).
 - **Setup** (`graph/setup.py`, wording in `prompts/setup.py`): the context node computes the
   steps from memory every turn (`investor_name`, `team_names` optional, `core_profile` from
   `memory/topics.py`, `holdings` optional) into `setup` in `ChatState`, and renders a `<setup>`
@@ -58,12 +68,16 @@ research pipeline (LangGraph)                                                   
 - **Users**: the owner (`mat`) and Max (`max`) share the desk with isolated data. The gateway
   names the user (`X-Lauretta-User`); graphs are built once and get the user as LangGraph
   runtime context (`graph/ctx.py`: nodes `Runtime[Ctx]`, tools `ToolRuntime[Ctx]`, hidden from
-  the model); Postgres enforces row-level security per transaction. See README "Users and
-  isolation". Never give a tool or node a user any other way.
+  the model); Postgres enforces row-level security per transaction; api refuses any request
+  without the gateway's `X-Lauretta-Gateway` secret. To add a user: `ALLOWED_USERS`, the
+  gateway's user map, model list and rate-limit bucket (`gateway/config.yaml`), and an
+  AnythingLLM workspace with chat model `lauretta-<user>` shared with that person only. Rotating
+  `DB_APP_PASSWORD` or `DB_MIGRATOR_PASSWORD` also needs `ALTER ROLE ... PASSWORD` as the owner.
 - **Names**: every agent's name (Director, Analyst, Checker, Strategist) is an identity fact
   (`bot_name`, `analyst_name`, `checker_name`, `strategist_name`) with its default in
-  `prompts/identity.py`; `set_identity` renames them. The pipeline loads the names once per run,
-  tells each role its name, and sends it on every progress event (`name`, optional).
+  `IDENTITY_DEFAULTS` (`persona/layers.py`); `set_identity` renames them. The pipeline loads the
+  names once per run, tells each role its name, and sends it on every progress event (`name`,
+  optional).
 
 ## Layout
 
@@ -73,7 +87,7 @@ Microservices: every service has its own folder under `services/` (`api`, `agent
 (the job payload, job events, queue and key names, default agent names) is pinned in
 `contracts/` at the repo root; each service mirrors it in its own code and its tests load those
 fixtures. Change a contract and both mirrors in the same PR. The repo root keeps `contracts/`,
-the compose files, `justfile`, docs, `reports/` and `backups/`. Paths below are relative to
+the compose files, `justfile`, docs and `backups/`. Paths below are relative to
 `services/`.
 
 **`api/`** (FastAPI, `src.api.app:app`; no LangGraph): queues jobs and reads results, never runs
@@ -96,15 +110,17 @@ a graph.
 **`agent/`** (LangGraph; no FastAPI): the worker (`python -m src.worker`), the CLI and the
 one-shot checkpoint `migrate`.
 
-- `agent/src/prompts/`: all of the agent's prompts and wording live here, and nowhere else: rules,
-  default soul and desk lines, identity defaults, each agent's system prompt (`assistant`,
-  `analyst`, `checker`, `strategist`), block empty states, progress labels, client notes, error
-  text (`errors`), tool notes (`tools`), fact sentences (`facts`), the setup checklist (`setup`)
-  and the report. It imports nothing. (The API's wording lives in `api/src/prompts/`.)
-  Templates use `str.format` fields; `tests/unit/test_prompts.py` checks their fields and fails
-  on wording found elsewhere (explicit `file:symbol` allowlist, each with a reason). Tool
-  descriptions stay as docstrings and `Field` descriptions on the tools.
-- `agent/src/graph/render.py`: stitches each system prompt from that wording: a head, then data
+- `agent/src/prompts/`: only prompts, the text the model is given as instructions: the rules,
+  the default soul and desk lines, each agent's system prompt and task (`assistant`, `analyst`,
+  `checker`, `strategist`), the setup checklist (`setup`), the compaction prompts (`compaction`)
+  and mid-run reminders (`reminders`). It imports nothing. Any other text lives as a constant
+  beside the code that uses it: tool results in `tools/`, error messages in `errors.py` and at
+  their raise site, progress labels in `graph/progress.py`, block empty states in
+  `graph/context.py` and `persona/layers.py` (with `IDENTITY_DEFAULTS`), fact sentences in
+  `memory/keys.py`, soul notices in `persona/approval.py`, the CLI in `main.py` and the report in
+  `report.py`. Templates use `str.format` fields; `tests/unit/test_prompts.py` checks their
+  fields. Tool descriptions stay as docstrings and `Field` descriptions on the tools.
+- `agent/src/graph/render.py`: stitches each system prompt from those prompts: a head, then data
   blocks (`<investor>`, `<holdings>`, `<setup>`, `<unknown>`, `<draft>`, `<review>`), then the
   stage.
 - `agent/src/tools/`: one `build_*` factory per tool; argument schemas in `tools/models.py` and
@@ -114,7 +130,7 @@ one-shot checkpoint `migrate`.
   `market.py` (yfinance, free, unofficial).
 - `agent/src/persona/`: persona prompt blocks, the soul cap check, and soul approval.
 - `agent/src/db/`: pool, checkpointer, and `queries/` for facts (memories, profile, identity,
-  signals, soul), holdings, theses and threads. Signals are written by code
+  signals, soul), holdings and theses. Signals are written by code
   (`facts.record_signals`). Every query runs in `db/pool.scoped(pool, user)` (row-level security
   as `lauretta_app`). Schema is `db/init/00-schema.sql` and the roles (`lauretta_app`,
   `lauretta_migrator` for the checkpoint tables) `db/init/01-app-role.sh`, applied when the volume
@@ -155,7 +171,8 @@ one-shot checkpoint `migrate`.
 - Prefer free data sources; a paid one needs the owner's approval first.
 - Keep Python files under 150 lines where it is logical.
 - Changing the schema means `just down clean=true` then `just up` (POC, no migrations).
-- Never read or commit `.env`; add new settings to `.env.example` and `services/agent/src/settings.py`.
+- Never read or commit `.env`; add new settings to `.env.example` and the service's own
+  `settings.py` (`services/api/src/settings.py` or `services/agent/src/settings.py`).
 
 ## Software development lifecycle
 

@@ -23,6 +23,7 @@ from src.graph.llm import build_model
 from src.graph.pipeline import Team, build_pipeline
 from src.graph.role import build_role
 from src.memory.embedder import Embedder
+from src.runs import LocalRuns, Runs
 from src.settings import Settings
 from src.tools.research import RunResearch
 from src.worker.redact import identifying_values
@@ -40,12 +41,16 @@ class App:
     pipeline: CompiledStateGraph
     # Records how a user reached us (channel, client, ip...); only changes are stored.
     record_signals: Callable[[str, dict[str, str | None], facts.Source], Awaitable[None]]
+    # Where research the desk starts is run (`src/runs.py`); the CLI waits for it on the way out.
+    runs: Runs | None = None
     # A user's identifying signal values (ip, place), kept out of streamed reasoning.
     signal_values: Callable[[str], Awaitable[list[str]]] = _no_signals
 
 
 @asynccontextmanager
-async def open_app(settings: Settings) -> AsyncGenerator[App]:
+async def open_app(settings: Settings, runs: Runs | None = None) -> AsyncGenerator[App]:
+    """`runs`: where research the desk starts is run. The worker queues it as a job
+    (`runs.QueuedRuns`); without one, as the CLI, it runs in this process."""
     async with open_pool(
         settings.DATABASE_URL, min_size=settings.DB_POOL_MIN, max_size=settings.DB_POOL_MAX
     ) as pool:
@@ -71,13 +76,14 @@ async def open_app(settings: Settings) -> AsyncGenerator[App]:
         ) -> None:
             await facts.record_signals(pool, embedder, user_id, signals, source)
 
-        tools = toolsets.assistant_tools(pool, embedder, run_research)
+        started = runs or LocalRuns(run_research)
+        tools = toolsets.assistant_tools(pool, embedder, started)
 
         async def remember(user_id: str, topic: str, content: str) -> None:
             await memories.add(pool, embedder, user_id, topic, content)
 
         compact = build_compact(model, HISTORY_MESSAGES, remember)
-        chat = build_chat(pool, checkpointer, tools, model, limit, compact)
+        chat = build_chat(pool, checkpointer, tools, model, limit, started, compact)
 
         async def signal_values(user_id: str) -> list[str]:
             return identifying_values(await facts.persona_rows(pool, user_id))
@@ -86,6 +92,7 @@ async def open_app(settings: Settings) -> AsyncGenerator[App]:
             chat=chat,
             research=run_research,
             pipeline=pipeline,
+            runs=started,
             record_signals=record_signals,
             signal_values=signal_values,
         )

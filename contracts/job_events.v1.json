@@ -23,7 +23,7 @@
     {
       "type": "tool",
       "data": {
-        "name": "research_stock",
+        "name": "start_research",
         "status": "started"
       }
     },
@@ -108,5 +108,10 @@
         "strategist_name": "Sammy"
       }
     }
+  },
+  "roles": {
+    "analyst": "Analyst",
+    "checker": "Checker",
+    "advisor": "Strategist"
   }
 }
