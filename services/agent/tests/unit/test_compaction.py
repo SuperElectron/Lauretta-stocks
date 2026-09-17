@@ -132,3 +132,9 @@ async def test_a_model_that_gives_no_answer_changes_nothing():
         state(thread(BATCH // 4 + 2)), SimpleNamespace(context=Ctx("max"))
     )
     assert update == {}
+
+
+def test_the_flush_transcript_leaves_out_tool_results():
+    text = transcript(thread(1), with_results=False)
+    assert "returned" not in text
+    assert "Investor: message 0" in text

@@ -61,7 +61,9 @@ def span(messages: list[AnyMessage], summarized: int, window: int) -> tuple[int,
     return (summarized, end) if end - summarized >= BATCH else None
 
 
-def transcript(messages: list[AnyMessage]) -> str:
+def transcript(messages: list[AnyMessage], with_results: bool = True) -> str:
+    """The span as lines. Without results for the flush: tool output (web pages, filings) is
+    not the investor speaking and must not be able to plant facts in their memory."""
     lines = []
     for message in messages:
         if isinstance(message, HumanMessage):
@@ -70,7 +72,7 @@ def transcript(messages: list[AnyMessage]) -> str:
             if message.text:
                 lines.append(wording.DESK.format(text=message.text))
             lines.extend(wording.CALLED.format(name=call["name"]) for call in message.tool_calls)
-        elif isinstance(message, ToolMessage):
+        elif isinstance(message, ToolMessage) and with_results:
             text = str(message.content)[:RESULT_CHARS]
             lines.append(wording.RESULT.format(name=message.name or "tool", text=text))
     return "\n".join(lines)
@@ -100,13 +102,14 @@ def build_compact(
         user_id: str = user_of(runtime.context)
         start, end = found
         text = transcript(messages[start:end])
+        said = transcript(messages[start:end], with_results=False)
         log = logger.bind(user=user_id, start=start, end=end)
         emit.progress("compact", progress.COMPACTING, state["names"]["bot_name"])
         try:
             # The `<investor>` block of this turn: what memory already holds, newest per topic.
             known = state.get("context") or wording.NOTHING_REMEMBERED
             flush = await _required(
-                flush_model, wording.FLUSH.format(remembered=known, transcript=text)
+                flush_model, wording.FLUSH.format(remembered=known, transcript=said)
             )
             for fact in flush.facts:
                 await remember(user_id, fact.topic, fact.content)
