@@ -447,7 +447,7 @@ services:
   # networking needs no capabilities or tun device: netstack accepts connections to Service IPs.
   # The Service withdraws when this container stops and returns about 20 s after it starts.
   tailscale:
-    image: tailscale/tailscale:v1.102.3
+    image: tailscale/tailscale:v1.102.4
     restart: unless-stopped
     hostname: lauretta-host
     environment:
