@@ -122,3 +122,59 @@ async def test_run_consumes_until_stopped(broker):
     await asyncio.wait_for(running, 5)
     assert sorted(handler.ran) == sorted(job.job_id for job in jobs)
     assert await pending(broker) == 0
+
+
+async def test_after_stop_no_new_job_starts_and_running_ones_finish(broker):
+    first, second = Job(kind="chat", message="1"), Job(kind="chat", message="2")
+    await submit(broker, first, ttl_s=60)
+    await submit(broker, second, ttl_s=60)
+    release, started = asyncio.Event(), asyncio.Event()
+
+    class Slow(RecordingHandler):
+        async def run(self, job: Job) -> None:
+            await super().run(job)
+            started.set()
+            await release.wait()
+
+    handler = Slow()
+    stop = asyncio.Event()
+    worker = Consumer(broker, handler, "w1", concurrency=1, min_idle_ms=60_000, max_deliveries=2)
+    running = asyncio.create_task(worker.run(stop))
+    await started.wait()
+    stop.set()  # SIGTERM while the first job runs and the loop waits for its slot
+    release.set()
+    await asyncio.wait_for(running, 5)
+
+    assert handler.ran == [first.job_id]
+    assert await pending(broker) == 0
+    later = await reclaim.next_new(broker, "w2", 10)
+    assert Job.model_validate_json(later.raw).job_id == second.job_id
+
+
+async def test_a_job_read_as_stop_is_set_is_left_pending_for_redelivery(broker, monkeypatch):
+    job = Job(kind="chat", message="hi")
+    await submit(broker, job, ttl_s=60)
+    handler = RecordingHandler()
+    worker = consumer(broker, handler)
+    stop = asyncio.Event()
+    read = worker.next_delivery
+
+    async def read_then_stop():
+        delivery = await read()
+        stop.set()
+        return delivery
+
+    monkeypatch.setattr(worker, "next_delivery", read_then_stop)
+    await asyncio.wait_for(worker.run(stop), 5)
+
+    assert handler.ran == []
+    assert await pending(broker) == 1
+
+
+def test_the_broker_socket_timeout_outlasts_every_blocking_read():
+    from src.queue import broker, events
+    from src.queue.consumer import BLOCK_MS
+
+    client = broker.connect("redis://127.0.0.1:1/0")
+    timeout = client.connection_pool.connection_kwargs["socket_timeout"]
+    assert timeout > events.READ_BLOCK_MS / 1000 and timeout > BLOCK_MS / 1000

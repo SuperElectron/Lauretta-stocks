@@ -4,6 +4,8 @@ import asyncio
 import random
 
 import anthropic
+import httpx
+import httpx2
 import openai
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
@@ -23,7 +25,23 @@ RETRYABLE_ERRORS = (
     openai.RateLimitError,
     openai.APIConnectionError,
     openai.InternalServerError,
+    # A connection dropped mid-stream. The SDKs use httpx2; httpx is kept for other clients.
+    httpx.TransportError,
+    httpx2.TransportError,
 )
+
+
+def retryable(exc: BaseException) -> bool:
+    """Transient: the errors above, a status error on a stream that had already answered 200
+    (the provider failed mid-reply) or a 5xx, and OpenAI's mid-stream `error` event."""
+    if isinstance(exc, RETRYABLE_ERRORS):
+        return True
+    if isinstance(exc, (anthropic.APIStatusError, openai.APIStatusError)):
+        return exc.status_code == 200 or exc.status_code >= 500
+    # Plain `openai.APIError` (no status) is what its stream raises for an `error` event.
+    return type(exc) is openai.APIError
+
+
 RETRY_ATTEMPTS = 3
 RETRY_BASE_SECONDS = 1.0
 
@@ -63,8 +81,8 @@ class Backoff:
         while True:
             try:
                 return await self._model.ainvoke(messages)
-            except RETRYABLE_ERRORS:
-                if attempt == RETRY_ATTEMPTS:
+            except Exception as exc:
+                if not retryable(exc) or attempt == RETRY_ATTEMPTS:
                     raise
             attempt += 1
             emit.retry(attempt)

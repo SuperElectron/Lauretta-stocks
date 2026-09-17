@@ -7,6 +7,8 @@
 - A job is acked once its handler returns. A handler reports the job's own failures as
   events; if it raises (the broker failed mid-job), the job stays pending for reclaim.
 - A broker error while reading is logged and the loop retries after a pause.
+- Once `stop` is set no job starts: one read during shutdown is left pending, unacked, for
+  another worker to reclaim; running jobs finish.
 """
 
 import asyncio
@@ -62,6 +64,9 @@ class Consumer:
             async with asyncio.TaskGroup() as jobs:
                 while not stop.is_set():
                     await self._slots.acquire()
+                    if stop.is_set():
+                        self._slots.release()
+                        break
                     try:
                         delivery = await self.next_delivery()
                     except RedisError as exc:
@@ -74,6 +79,11 @@ class Consumer:
                         # Yields even when the read did not block (a fake broker returns at once).
                         await asyncio.sleep(0)
                         continue
+                    if stop.is_set():
+                        # Read as shutdown began: not started, not acked, so redelivered.
+                        self._slots.release()
+                        logger.bind(entry_id=delivery.entry_id).warning("job.left_for_redelivery")
+                        break
                     self._in_flight.add(delivery.entry_id)
                     jobs.create_task(self._dispatch(delivery))
         finally:

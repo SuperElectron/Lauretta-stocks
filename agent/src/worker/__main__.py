@@ -7,10 +7,10 @@ import socket
 import sys
 
 from loguru import logger
-from redis.asyncio import Redis
 
 from src.app import open_app
 from src.errors import AgentError
+from src.queue.broker import connect
 from src.queue.consumer import Consumer
 from src.settings import Settings
 from src.worker.handler import JobHandler
@@ -25,8 +25,7 @@ async def main() -> None:
     for signum in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(signum, stop.set)
 
-    # No socket timeout: blocking reads are bounded by their own `block` argument.
-    broker = Redis.from_url(settings.broker_url(), decode_responses=True)
+    broker = connect(settings.broker_url())
     name = f"{socket.gethostname()}-{os.getpid()}"
     try:
         await broker.ping()

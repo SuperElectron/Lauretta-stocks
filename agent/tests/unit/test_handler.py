@@ -1,6 +1,6 @@
+import asyncio
 import json
 
-import httpx
 import pytest
 from fakeredis import FakeAsyncRedis
 from langchain_core.messages import AIMessage
@@ -8,11 +8,10 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, MessagesState, StateGraph
 
 from src.app import App
-from src.errors import ReplyTruncated
-from src.queue import keys
+from src.errors import JobInterrupted, ReplyTruncated
+from src.queue import events, keys
 from src.queue.lock import ThreadLock
-from src.queue.models import ClientInfo, Job
-from src.worker import callback
+from src.queue.models import ClientInfo, Done, Job, Token
 from src.worker.handler import INTERNAL, JobHandler
 from tests.utils import settings
 
@@ -51,14 +50,14 @@ async def events_of(broker, job_id):
 
 async def test_a_chat_job_publishes_done_records_signals_and_status(broker):
     signals = []
-    job = Job(kind="chat", message="hi", client=ClientInfo(ip="100.64.0.7", client="phone"))
+    job = Job(kind="chat", message="hi", client=ClientInfo(client="phone"))
     await handler_for(broker, signals=signals).run(job)
 
     assert (await events_of(broker, job.job_id))[-1] == (
         "done",
         {"result": {"thread_id": "main", "reply": "Hello", "notices": []}},
     )
-    assert signals == [({"ip": "100.64.0.7", "client": "phone", "channel": "api"}, "gateway")]
+    assert signals == [({"client": "phone", "channel": "api"}, "gateway")]
     status = await broker.hgetall(keys.job(job.job_id))
     assert status["status"] == "done" and "finished_at" in status
     assert await broker.ttl(keys.events(job.job_id)) > 0
@@ -99,12 +98,46 @@ async def test_a_finished_job_delivered_again_is_not_run_again(broker):
     assert [kind for kind, _ in await events_of(broker, job.job_id)] == ["done"]
 
 
-async def test_a_redelivered_unfinished_job_resets_what_it_streamed(broker):
+async def test_a_redelivered_partly_run_chat_job_fails_interrupted_and_is_not_rerun(broker):
+    started = asyncio.Event()
+    runs = []
+
+    async def hangs(state):
+        runs.append(len(state["messages"]))
+        started.set()
+        await asyncio.Event().wait()
+
+    handler = handler_for(broker, hangs)
+    job = Job(kind="chat", message="hi")
+    running = asyncio.create_task(handler.run(job))
+    await started.wait()
+    await events.publish(broker, job.job_id, Token(text="Hal"), 60)
+    running.cancel()  # the worker died mid-turn
+    await asyncio.wait({running})
+    assert await broker.hget(keys.job(job.job_id), "status") == "running"
+
+    await handler.run(job)
+
+    assert runs == [1]
+    assert await events_of(broker, job.job_id) == [
+        ("token", {"text": "Hal"}),
+        ("error", {"code": "JOB_INTERRUPTED", "message": JobInterrupted.message}),
+    ]
+    status = await broker.hgetall(keys.job(job.job_id))
+    assert (status["status"], status["error_code"]) == ("failed", "JOB_INTERRUPTED")
+    assert await broker.get("lock:thread:main") is None
+
+
+async def test_a_job_that_published_its_outcome_before_dying_is_only_marked(broker):
     job = Job(kind="chat", message="hi")
     handler = handler_for(broker)
-    await broker.xadd(keys.events(job.job_id), {"type": "token", "data": '{"text":"Hal"}'})
+    await broker.hset(keys.job(job.job_id), mapping={"status": "running"})
+    await events.publish(broker, job.job_id, Done(result={"reply": "Hello"}), 60)
+
     await handler.run(job)
-    assert [kind for kind, _ in await events_of(broker, job.job_id)] == ["token", "reset", "done"]
+
+    assert [kind for kind, _ in await events_of(broker, job.job_id)] == ["done"]
+    assert await broker.hget(keys.job(job.job_id), "status") == "done"
 
 
 async def test_a_dead_job_tells_the_client(broker):
@@ -113,28 +146,3 @@ async def test_a_dead_job_tells_the_client(broker):
     assert (await events_of(broker, job.job_id)) == [
         ("error", {"code": "JOB_ABANDONED", "message": "the job did not finish"})
     ]
-
-
-async def test_a_failed_callback_is_recorded_on_the_job_not_retried(broker, monkeypatch):
-    posts = []
-
-    async def deliver(url, body, _timeout_s):
-        posts.append((url, body))
-        return "HTTP 500"
-
-    monkeypatch.setattr(callback, "deliver", deliver)
-    job = Job(kind="chat", message="hi", callback_url="https://example.com/hook")
-    await handler_for(broker).run(job)
-
-    assert len(posts) == 1 and posts[0][1]["status"] == "done"
-    assert posts[0][1]["done"]["result"]["reply"] == "Hello"
-    assert await broker.hget(keys.job(job.job_id), "callback_error") == "HTTP 500"
-
-
-async def test_deliver_reports_a_status_without_the_body(monkeypatch):
-    transport = httpx.MockTransport(lambda _request: httpx.Response(500, text=SECRET))
-    real_client = httpx.AsyncClient
-    monkeypatch.setattr(
-        callback.httpx, "AsyncClient", lambda **kwargs: real_client(transport=transport, **kwargs)
-    )
-    assert await callback.deliver("https://example.com/hook", {"job_id": "1"}, 1) == "HTTP 500"

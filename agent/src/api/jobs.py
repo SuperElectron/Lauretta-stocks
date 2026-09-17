@@ -12,7 +12,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
-from src.api.deps import BrokerDep, ClientDep, JobStatusDep, SettingsDep
+from src.api.deps import BrokerDep, ClientDep, JobId, JobStatusDep, SettingsDep
 from src.queue import events, submit
 from src.queue.models import Job, JobRequest
 
@@ -52,5 +52,5 @@ async def create_job(
 
 
 @router.get("/v1/jobs/{job_id}")
-async def job_status(job_id: str, status: JobStatusDep) -> dict[str, str]:
+async def job_status(job_id: JobId, status: JobStatusDep) -> dict[str, str]:
     return {"job_id": job_id, **status}

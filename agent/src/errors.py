@@ -58,3 +58,11 @@ class LockLost(AgentError):
 
     code = "LOCK_LOST"
     message = "the thread lock was lost while the job ran"
+
+
+class JobInterrupted(AgentError):
+    """A worker stopped mid-job. The job is not run again: its turn may already have written
+    to the conversation, the database or the investor's screen."""
+
+    code = "JOB_INTERRUPTED"
+    message = "the job was interrupted before it finished; send it again if still needed"

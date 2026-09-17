@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import PositiveFloat, PositiveInt, model_validator
+from pydantic import PositiveInt, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -39,9 +39,11 @@ class Settings(BaseSettings):
     AGENT_LOCK_TTL_MS: PositiveInt = 30_000
     # How long a job's status and events are kept for polling and resuming.
     EVENTS_TTL_S: PositiveInt = 86_400
-    CALLBACK_TIMEOUT_S: PositiveFloat = 10.0
-    # The longest `POST /v1/jobs?wait=` may block before answering 202.
-    API_MAX_WAIT_S: PositiveInt = 300
+    # The longest `POST /v1/jobs?wait=` may block before answering 202. The gateway's
+    # requestTimeout (30s) bounds the time to response headers, so stay under it.
+    API_MAX_WAIT_S: PositiveInt = 25
+    # An SSE stream ends with `error STREAM_TIMEOUT` after this long; the job carries on.
+    API_MAX_STREAM_S: PositiveInt = 900
 
     @model_validator(mode="after")
     def _sec_user_agent_names_a_contact(self) -> "Settings":

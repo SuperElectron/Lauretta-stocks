@@ -3,19 +3,27 @@
 Every check runs before the stream opens, so a refusal is a status code. The SSE id is the
 event's stream entry id: a reconnecting client sends it back as `Last-Event-ID` and resumes
 after it. FastAPI sends `: ping` every 15s while idle and sets `Cache-Control: no-cache` and
-`X-Accel-Buffering: no`. The stream ends after `done` or `error`.
+`X-Accel-Buffering: no`. The stream ends after `done` or `error`; when the job is found finished
+or expired with nothing more to send; or after `API_MAX_STREAM_S` with `error STREAM_TIMEOUT`
+(the job itself carries on).
 """
 
+import asyncio
 from collections.abc import AsyncIterable
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
-from src.api.deps import BrokerDep, JobStatusDep
+from src.api.deps import BrokerDep, JobId, JobStatusDep, SettingsDep
 from src.queue import events, keys
+from src.queue.models import TERMINAL, Error
 
 router = APIRouter()
+STREAM_TIMEOUT = Error(
+    code="STREAM_TIMEOUT",
+    message="this stream reached its time limit; the job carries on, reconnect to follow it",
+)
 
 
 def resume_after(last_event_id: Annotated[str | None, Header()] = None) -> str:
@@ -32,10 +40,17 @@ def to_sse(event: events.StoredEvent) -> ServerSentEvent:
 
 @router.get("/v1/jobs/{job_id}/events", response_class=EventSourceResponse)
 async def job_events(
-    job_id: str,
+    job_id: JobId,
     _job: JobStatusDep,
     broker: BrokerDep,
+    settings: SettingsDep,
     after: Annotated[str, Depends(resume_after)],
 ) -> AsyncIterable[ServerSentEvent]:
-    async for event in events.read(broker, job_id, after):
+    deadline = asyncio.get_running_loop().time() + settings.API_MAX_STREAM_S
+    ended = False
+    async for event in events.read(broker, job_id, after, deadline=deadline):
+        ended = event.type in TERMINAL
         yield to_sse(event)
+    if not ended and asyncio.get_running_loop().time() >= deadline:
+        # No id: a client that reconnects resumes after the last real event.
+        yield ServerSentEvent(data=STREAM_TIMEOUT.model_dump(), event=STREAM_TIMEOUT.type)

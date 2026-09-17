@@ -10,10 +10,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from loguru import logger
-from redis.asyncio import Redis
 
 from src.api import events, jobs, reads
 from src.db.pool import open_pool
+from src.queue.broker import connect
 from src.settings import Settings
 
 
@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = Settings()
     logger.remove()
     logger.add(sys.stderr, level=settings.LOG_LEVEL)
-    broker = Redis.from_url(settings.broker_url(), decode_responses=True)
+    broker = connect(settings.broker_url())
     try:
         async with open_pool(
             settings.DATABASE_URL, min_size=settings.DB_POOL_MIN, max_size=settings.DB_POOL_MAX

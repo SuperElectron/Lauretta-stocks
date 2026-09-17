@@ -2,6 +2,8 @@ from typing import Any
 
 import anthropic
 import httpx
+import httpx2
+import openai
 import pytest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
@@ -90,9 +92,30 @@ async def test_a_retry_resets_only_when_tokens_were_sent():
     assert [kind for kind, _ in events] == ["token", "reset"]
 
 
-class FlakyModel(GenericFakeChatModel):
-    """Streams part of a reply, then fails like a dropped connection, once."""
+REQUEST = httpx2.Request("POST", "https://provider.example/v1/messages")
 
+# Errors a provider raises after the reply started streaming: all transient.
+MID_STREAM_ERRORS = {
+    "anthropic connection": lambda: anthropic.APIConnectionError(request=REQUEST),
+    "anthropic error event on a 200 stream": lambda: anthropic.APIStatusError(
+        "overloaded", response=httpx2.Response(200, request=REQUEST), body=None
+    ),
+    "anthropic 529": lambda: anthropic.APIStatusError(
+        "overloaded", response=httpx2.Response(529, request=REQUEST), body=None
+    ),
+    "openai error event": lambda: openai.APIError("server_error", REQUEST, body=None),
+    "openai 502": lambda: openai.APIStatusError(
+        "bad gateway", response=httpx2.Response(502, request=REQUEST), body=None
+    ),
+    "httpx2 read error": lambda: httpx2.ReadError("connection reset"),
+    "httpx read error": lambda: httpx.ReadError("connection reset"),
+}
+
+
+class FlakyModel(GenericFakeChatModel):
+    """Streams part of a reply, then fails with `error()`, once."""
+
+    error: Any = None
     failed: bool = False
 
     async def _astream(self, messages, stop=None, run_manager=None, **kwargs):
@@ -100,17 +123,13 @@ class FlakyModel(GenericFakeChatModel):
             self.failed = True
             for text in ("Hal", "f"):
                 yield ChatGenerationChunk(message=AIMessageChunk(content=text))
-            raise anthropic.APIConnectionError(request=httpx.Request("POST", "https://x"))
+            raise self.error()
         async for chunk in super()._astream(messages, stop, run_manager, **kwargs):
             yield chunk
 
 
-async def test_a_real_retry_after_tokens_streams_reset_then_the_new_reply(monkeypatch):
-    async def no_sleep(_seconds):
-        return None
-
-    monkeypatch.setattr(llm.asyncio, "sleep", no_sleep)
-    bound = llm.with_backoff(FlakyModel(messages=iter([AIMessage(content="Hello there")])))
+def one_node_chat(model: Any) -> Any:
+    bound = llm.with_backoff(model)
 
     async def agent(state: MessagesState) -> dict[str, object]:
         return {"messages": [await bound.ainvoke(state["messages"])]}
@@ -119,13 +138,62 @@ async def test_a_real_retry_after_tokens_streams_reset_then_the_new_reply(monkey
     graph.add_node("agent", agent)
     graph.add_edge(START, "agent")
     graph.add_edge("agent", END)
+    return graph.compile(checkpointer=InMemorySaver())
+
+
+@pytest.fixture
+def no_backoff_sleep(monkeypatch):
+    async def no_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(llm.asyncio, "sleep", no_sleep)
+
+
+@pytest.mark.usefixtures("no_backoff_sleep")
+@pytest.mark.parametrize("error", MID_STREAM_ERRORS.values(), ids=MID_STREAM_ERRORS.keys())
+async def test_a_mid_stream_failure_after_tokens_streams_reset_then_the_new_reply(error):
+    model = FlakyModel(messages=iter([AIMessage(content="Hello there")]), error=error)
     events = Events()
 
-    result = await run_chat(graph.compile(checkpointer=InMemorySaver()), "t1", "hi", events)
+    result = await run_chat(one_node_chat(model), "t1", "a" * 32, "hi", events)
 
     assert events[:3] == [("token", {"text": "Hal"}), ("token", {"text": "f"}), ("reset", {})]
     assert "".join(data["text"] for kind, data in events[3:]) == "Hello there"
     assert result == {"thread_id": "t1", "reply": "Hello there", "notices": []}
+
+
+@pytest.mark.usefixtures("no_backoff_sleep")
+async def test_a_client_error_mid_stream_is_not_retried():
+    def bad_request():
+        return anthropic.APIStatusError(
+            "invalid", response=httpx2.Response(400, request=REQUEST), body=None
+        )
+
+    model = FlakyModel(messages=iter([AIMessage(content="never")]), error=bad_request)
+    events = Events()
+    with pytest.raises(anthropic.APIStatusError):
+        await run_chat(one_node_chat(model), "t1", "a" * 32, "hi", events)
+    assert [kind for kind, _ in events] == ["token", "token"]
+
+
+async def test_the_same_job_run_twice_leaves_one_investor_message():
+    graph = one_node_chat(GenericFakeChatModel(messages=iter([AIMessage("one"), AIMessage("two")])))
+    for _ in range(2):
+        await run_chat(graph, "t1", "b" * 32, "hi", Events())
+    state = await graph.aget_state({"configurable": {"thread_id": "t1"}})
+    assert [m.type for m in state.values["messages"]] == ["human", "ai", "ai"]
+
+
+async def test_text_before_a_tool_call_ends_its_message():
+    events = Events()
+    relay = ChatRelay(events)
+    calls = AIMessage(
+        content="Let me look.", tool_calls=[{"name": "get_thesis", "args": {}, "id": "c1"}]
+    )
+    await relay.feed(token("Let me look."))
+    await relay.feed(part("updates", {"agent": {"messages": [calls]}}))
+    await relay.feed(part("updates", {"agent": {"messages": [calls]}}))
+    assert [kind for kind, _ in events] == ["token", "message_end", "tool", "tool"]
 
 
 @pytest.mark.usefixtures("no_database")

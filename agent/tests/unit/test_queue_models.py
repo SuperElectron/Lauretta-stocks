@@ -15,7 +15,7 @@ from tests.utils import settings
         {"kind": "research", "ticker": "MSFT", "message": "hi"},
         {"kind": "research", "ticker": "MSFT; DROP"},
         {"kind": "chat", "message": "hi", "thread_id": "has spaces"},
-        {"kind": "chat", "message": "hi", "callback_url": "not a url"},
+        {"kind": "chat", "message": "hi", "callback_url": "https://example.com/hook"},
         {"kind": "chat", "message": "hi", "unexpected": 1},
         {"kind": "trade", "ticker": "MSFT"},
     ],
@@ -32,7 +32,7 @@ def test_valid_requests_default_the_thread():
 
 
 def test_a_job_round_trips_through_its_json():
-    job = Job(kind="chat", message="hi", callback_url="https://example.com/hook")
+    job = Job(kind="chat", message="hi", client={"client": "ios"})
     assert Job.model_validate_json(job.model_dump_json()) == job
 
 
@@ -56,3 +56,8 @@ def test_the_cli_needs_no_broker_settings():
     assert settings(BROKER_URL=None).BROKER_URL is None
     with pytest.raises(ValueError, match="BROKER_URL"):
         settings(BROKER_URL=None).broker_url()
+
+
+def test_wait_stays_under_the_gateway_timeout_by_default():
+    assert settings().API_MAX_WAIT_S == 25
+    assert settings().API_MAX_STREAM_S == 900

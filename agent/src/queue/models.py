@@ -1,19 +1,24 @@
-"""The job payload on the queue and the events a job publishes, as JSON on both sides."""
+"""The job payload on the queue and the events a job publishes, as JSON on both sides.
+
+Events, in the order a client may see them: `progress`, `tool`, `token`, `message_end` (text
+before a tool call is complete), `reset` (discard the partial message), `notice`, and last
+`done` or `error`.
+"""
 
 from datetime import UTC, datetime
 from typing import Any, ClassVar, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 JobKind = Literal["chat", "research"]
 
 
 class ClientInfo(BaseModel):
-    """Who sent the request, from the headers the gateway forwards."""
+    """Which app sent the request, from the headers the gateway forwards; `unknown` when it
+    does not name itself plainly."""
 
-    ip: str | None = None
-    client: str | None = None
+    client: str = "unknown"
 
 
 class JobRequest(BaseModel):
@@ -24,8 +29,6 @@ class JobRequest(BaseModel):
     thread_id: str = Field("main", pattern=r"^[A-Za-z0-9_.:-]{1,64}$")
     message: str | None = Field(None, min_length=1, max_length=20_000)
     ticker: str | None = Field(None, pattern=r"^[A-Za-z][A-Za-z0-9.-]{0,9}$")
-    # POSTed the job's outcome once when it finishes.
-    callback_url: HttpUrl | None = None
 
     @model_validator(mode="after")
     def _fields_match_kind(self) -> "JobRequest":
@@ -65,6 +68,13 @@ class Tool(Event):
     type = "tool"
     name: str
     status: Literal["started", "done", "error"]
+
+
+class MessageEnd(Event):
+    """The assistant's text so far is a finished message: it now calls a tool, and any later
+    tokens start a new message."""
+
+    type = "message_end"
 
 
 class Reset(Event):

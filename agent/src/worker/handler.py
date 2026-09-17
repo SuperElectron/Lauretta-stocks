@@ -1,22 +1,26 @@
-"""Runs one job: its thread lock, its events and status, its errors, and its callback.
+"""Runs one job: its thread lock, its events and its status.
 
-A job's own failure ends in an `error` event with an `AgentError`'s code and message, or
-`INTERNAL` for anything else, whose details go to the worker log only. A broker failure while
-publishing is raised, so the consumer leaves the job pending for another delivery.
+- A job's own failure ends in an `error` event with an `AgentError`'s code and message, or
+  `INTERNAL` for anything else, whose details go to the worker log only. Either way the job is
+  finished and acked.
+- A broker failure while publishing or marking is raised, so the consumer leaves the job
+  pending for another delivery.
+- A job delivered again is never run again once it started. If it already published `done` or
+  `error`, only its status is brought up to date; otherwise it fails `JOB_INTERRUPTED`.
 """
 
+import json
 from typing import Any
 
 from loguru import logger
 from redis.asyncio import Redis
 
 from src.app import App
-from src.errors import AgentError
+from src.errors import AgentError, JobInterrupted
 from src.queue import events, submit
 from src.queue.lock import ThreadLock
-from src.queue.models import Done, Error, Event, Job, Reset
+from src.queue.models import Done, Error, Event, Job
 from src.settings import Settings
-from src.worker import callback
 from src.worker.stream import run_chat, run_research
 
 INTERNAL = Error(code="INTERNAL", message="the job failed; the worker log has the details")
@@ -39,17 +43,18 @@ class JobHandler:
         await events.publish(self._broker, job_id, event, self._ttl_s)
 
     async def run(self, job: Job) -> None:
+        log = logger.bind(job_id=job.job_id, kind=job.kind)
         status = await submit.status_of(self._broker, job.job_id)
-        if status is not None and status.get("status") in submit.FINISHED:
-            logger.bind(job_id=job.job_id).warning("job.already_finished")
+        state = (status or {}).get("status")
+        if state in submit.FINISHED:
+            log.warning("job.already_finished")
             return
-        if await events.count(self._broker, job.job_id):
-            # A redelivered job starts over; what the last attempt streamed is void.
-            await self.publish(job.job_id, Reset())
+        if state == "running":
+            await self._redelivered(job)
+            return
         await submit.mark(
             self._broker, job.job_id, self._ttl_s, status="running", started_at=submit.now()
         )
-        log = logger.bind(job_id=job.job_id, kind=job.kind)
         try:
             result = await self._execute(job)
         except Exception as exc:
@@ -69,22 +74,27 @@ class JobHandler:
 
     async def finish(self, job: Job, outcome: Done | Error) -> None:
         await self.publish(job.job_id, outcome)
-        fields = {"status": "done" if isinstance(outcome, Done) else "failed"}
-        if isinstance(outcome, Error):
-            fields["error_code"] = outcome.code
-        await submit.mark(self._broker, job.job_id, self._ttl_s, **fields, finished_at=submit.now())
-        if job.callback_url is None:
+        await self._mark_finished(job.job_id, outcome.type, getattr(outcome, "code", None))
+
+    async def _redelivered(self, job: Job) -> None:
+        """A worker died (or lost the broker) mid-job. Its turn is not replayed."""
+        last = await events.last_terminal(self._broker, job.job_id)
+        if last is not None:
+            code = json.loads(last.data).get("code") if last.type == "error" else None
+            logger.bind(job_id=job.job_id).warning("job.finished_before_redelivery")
+            await self._mark_finished(job.job_id, last.type, code)
             return
-        body: dict[str, Any] = {"job_id": job.job_id, **fields, outcome.type: outcome.model_dump()}
-        reason = await callback.deliver(
-            str(job.callback_url), body, self._settings.CALLBACK_TIMEOUT_S
-        )
-        if reason is not None:
-            await submit.mark(self._broker, job.job_id, self._ttl_s, callback_error=reason)
+        logger.bind(job_id=job.job_id).error("job.interrupted")
+        await self.finish(job, error_event(JobInterrupted()))
+
+    async def _mark_finished(self, job_id: str, outcome: str, code: str | None) -> None:
+        fields = {"status": "done" if outcome == "done" else "failed"}
+        if code is not None:
+            fields["error_code"] = code
+        await submit.mark(self._broker, job_id, self._ttl_s, **fields, finished_at=submit.now())
 
     async def _execute(self, job: Job) -> dict[str, Any]:
-        signals = {"ip": job.client.ip, "client": job.client.client, "channel": "api"}
-        await self._app.record_signals(signals, "gateway")
+        await self._app.record_signals({"client": job.client.client, "channel": "api"}, "gateway")
 
         async def publish(event: Event) -> None:
             await self.publish(job.job_id, event)
@@ -98,4 +108,6 @@ class JobHandler:
             self._settings.AGENT_LOCK_WAIT_MS,
         )
         async with lock.held():
-            return await lock.guard(run_chat(self._app.chat, job.thread_id, job.message, publish))
+            return await lock.guard(
+                run_chat(self._app.chat, job.thread_id, job.job_id, job.message, publish)
+            )

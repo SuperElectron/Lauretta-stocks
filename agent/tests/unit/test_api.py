@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 
 import fastapi.routing
@@ -17,12 +18,19 @@ def broker():
     return FakeAsyncRedis(decode_responses=True)
 
 
-@pytest.fixture
-async def client(broker):
+@contextlib.asynccontextmanager
+async def client_for(broker, **overrides):
     app = create_app(with_lifespan=False)
-    app.state.settings, app.state.broker, app.state.pool = settings(API_MAX_WAIT_S=5), broker, None
+    app.state.settings = settings(API_MAX_WAIT_S=5, **overrides)
+    app.state.broker, app.state.pool = broker, None
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://api") as http:
+        yield http
+
+
+@pytest.fixture
+async def client(broker):
+    async with client_for(broker) as http:
         yield http
 
 
@@ -63,12 +71,8 @@ async def test_post_queues_the_job_with_forwarded_client_info(client, broker):
         "status": "queued",
         "events_url": f"/v1/jobs/{job.job_id}/events",
     }
-    assert (job.thread_id, job.message, job.client.ip, job.client.client) == (
-        "phone",
-        "hi",
-        "100.64.0.7",
-        "ios",
-    )
+    assert (job.thread_id, job.message, job.client.client) == ("phone", "hi", "ios")
+    assert "100.64.0.7" not in job.model_dump_json()
     status = (await client.get(f"/v1/jobs/{job.job_id}")).json()
     assert status["status"] == "queued" and status["kind"] == "chat"
 
@@ -80,8 +84,30 @@ async def test_invalid_jobs_are_refused_before_queueing(client, broker):
 
 
 async def test_unknown_jobs_are_404(client):
-    assert (await client.get("/v1/jobs/nope")).status_code == 404
-    assert (await client.get("/v1/jobs/nope/events")).status_code == 404
+    unknown = "0" * 32
+    assert (await client.get(f"/v1/jobs/{unknown}")).status_code == 404
+    assert (await client.get(f"/v1/jobs/{unknown}/events")).status_code == 404
+
+
+@pytest.mark.parametrize("job_id", ["nope", "A" * 32, "0" * 31, "0" * 32 + "0"])
+async def test_malformed_job_ids_are_422(client, job_id):
+    assert (await client.get(f"/v1/jobs/{job_id}")).status_code == 422
+    assert (await client.get(f"/v1/jobs/{job_id}/events")).status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("headers", "expected"),
+    [
+        ({"X-Client-Name": "ios-app/2.1", "User-Agent": "ua/1"}, "ios-app/2.1"),
+        ({"User-Agent": "curl/8.7.1"}, "curl/8.7.1"),
+        ({"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"}, "unknown"),
+        ({"X-Client-Name": "x" * 41}, "unknown"),
+        ({"X-Client-Name": "<script>"}, "unknown"),
+    ],
+)
+async def test_the_client_name_is_kept_only_when_plain(client, broker, headers, expected):
+    await client.post("/v1/jobs", json={"kind": "chat", "message": "hi"}, headers=headers)
+    assert (await queued_job(broker)).client.client == expected
 
 
 async def test_wait_returns_the_result_when_the_job_finishes_in_time(client, broker):
@@ -190,3 +216,48 @@ async def test_reads_return_saved_theses_and_holdings(client, monkeypatch):
     assert (await client.get("/v1/holdings")).json() == {
         "holdings": [{"ticker": "MSFT", "shares": 10.0}]
     }
+
+
+@pytest.fixture
+def short_reads(monkeypatch):
+    """Reads block briefly, so a stream notices its job ended within the test's patience."""
+    monkeypatch.setattr(events, "READ_BLOCK_MS", 50)
+
+
+@pytest.mark.usefixtures("short_reads")
+async def test_sse_ends_when_the_job_finished_without_more_events(client, broker):
+    job_id = await submitted(client)
+    await events.publish(broker, job_id, Token(text="Hi"), 60)
+    await broker.hset(keys.job(job_id), "status", "failed")
+
+    response = await asyncio.wait_for(client.get(f"/v1/jobs/{job_id}/events"), 5)
+
+    assert [f["event"] for f in parse_sse(response.text)] == ["token"]
+
+
+@pytest.mark.usefixtures("short_reads")
+async def test_sse_ends_when_the_job_expires_while_streaming(client, broker):
+    job_id = await submitted(client)
+    await events.publish(broker, job_id, Token(text="Hi"), 60)
+
+    async def expire_later():
+        await asyncio.sleep(0.1)
+        await broker.delete(keys.job(job_id), keys.events(job_id))
+
+    expiring = asyncio.create_task(expire_later())
+    response = await asyncio.wait_for(client.get(f"/v1/jobs/{job_id}/events"), 5)
+    await expiring
+    assert [f["event"] for f in parse_sse(response.text)] == ["token"]
+
+
+async def test_sse_gives_up_after_the_stream_cap_but_the_job_goes_on(broker):
+    async with client_for(broker, API_MAX_STREAM_S=1) as client:
+        job_id = await submitted(client)
+        await events.publish(broker, job_id, Token(text="Hi"), 60)
+        response = await asyncio.wait_for(client.get(f"/v1/jobs/{job_id}/events"), 5)
+
+    frames = parse_sse(response.text)
+    assert [f["event"] for f in frames] == ["token", "error"]
+    assert "id" not in frames[-1]
+    assert json.loads(frames[-1]["data"])["code"] == "STREAM_TIMEOUT"
+    assert await broker.hget(keys.job(job_id), "status") == "queued"

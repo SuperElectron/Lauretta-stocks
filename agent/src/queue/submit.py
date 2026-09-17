@@ -1,8 +1,7 @@
 """A job's life on the broker: submitted by the API, marked by the worker, read by both.
 
 The status hash `job:{id}` holds `status` (queued, running, done, failed), `kind`, timestamps,
-and on failure `error_code`; `callback_error` when the callback could not be delivered. It
-expires with the job's events.
+and on failure `error_code`. It expires with the job's events.
 """
 
 from datetime import UTC, datetime

@@ -11,7 +11,7 @@ from typing import Any
 from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
 from langgraph.graph.state import CompiledStateGraph
 
-from src.queue.models import Event, Notice, Progress, Reset, Token, Tool
+from src.queue.models import Event, MessageEnd, Notice, Progress, Reset, Token, Tool
 
 Publish = Callable[[Event], Awaitable[None]]
 # The chat graph's model node; its tokens are the reply.
@@ -61,6 +61,8 @@ class ChatRelay:
         for node, update in data.items():
             messages = (update or {}).get("messages", [])
             if node == ASSISTANT_NODE and messages:
+                if self._streamed and messages[-1].tool_calls:
+                    await self._publish(MessageEnd())
                 self._streamed = False
                 self.reply = messages[-1].text
                 for call in messages[-1].tool_calls:
@@ -73,11 +75,12 @@ class ChatRelay:
 
 
 async def run_chat(
-    chat: CompiledStateGraph, thread_id: str, message: str, publish: Publish
+    chat: CompiledStateGraph, thread_id: str, job_id: str, message: str, publish: Publish
 ) -> dict[str, Any]:
     relay = ChatRelay(publish)
     async for part in chat.astream(
-        {"messages": [HumanMessage(message)]},
+        # The job id as the message id: a second run of the job replaces it, never repeats it.
+        {"messages": [HumanMessage(message, id=job_id)]},
         {"configurable": {"thread_id": thread_id}},
         stream_mode=["messages", "updates", "custom"],
         subgraphs=True,
