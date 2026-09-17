@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     API_MAX_WAIT_S: PositiveInt = 25
     # An SSE stream ends with a `timeout` event (STREAM_TIMEOUT) after this long; the job goes on.
     API_MAX_STREAM_S: PositiveInt = 900
+    # The secret the gateway adds as `X-Lauretta-Gateway` (`api/edge.py`); api refuses anything
+    # without it. Unset (tests, local runs) nothing is checked; compose always sets it.
+    API_GATEWAY_SECRET: str | None = None
     # Speech (speaches: faster-whisper and Kokoro on CPU), reached by the API only. Unset, the
     # voice routes answer 503.
     SPEECH_URL: str | None = None

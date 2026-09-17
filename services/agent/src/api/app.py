@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from loguru import logger
 
 from src.api import events, jobs, reads
+from src.api.edge import GatewayOnly
 from src.api.mcpserver import server as mcp_server
 from src.api.openai import routes as openai_routes
 from src.api.openai.models import OpenAIError, error_response
@@ -27,6 +28,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = Settings()
     logger.remove()
     logger.add(sys.stderr, level=settings.LOG_LEVEL)
+    if not settings.API_GATEWAY_SECRET:
+        logger.error("api.gateway_secret_unset")
     broker = connect(settings.broker_url())
     try:
         async with open_pool(
@@ -47,6 +50,7 @@ def create_app(with_lifespan: bool = True) -> FastAPI:
     for module in (jobs, events, reads, openai_routes, voice_routes):
         api.include_router(module.router)
     api.add_exception_handler(OpenAIError, error_response)
+    api.add_middleware(GatewayOnly)
     # The MCP server (Goose and other MCP clients); its session manager runs in `lifespan`.
     api.mount("/mcp", mcp_server.mcp.streamable_http_app())
     return api

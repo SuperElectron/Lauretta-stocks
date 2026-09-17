@@ -148,6 +148,13 @@ services:
     environment:
       <<: *app-env
       SPEECH_URL: http://speech:8000
+      STT_MODEL: ${STT_MODEL:-Systran/faster-whisper-small}
+      TTS_MODEL: ${TTS_MODEL:-speaches-ai/Kokoro-82M-v1.0-ONNX}
+      TTS_VOICE: ${TTS_VOICE:-af_heart}
+      VOICE_MAX_UPLOAD_BYTES: ${VOICE_MAX_UPLOAD_BYTES:-10000000}
+      # api refuses any request without this header, which only the gateway adds (api/edge.py):
+      # the database, broker and speech containers share networks with api but cannot forge a user.
+      API_GATEWAY_SECRET: ${API_GATEWAY_SECRET:?set API_GATEWAY_SECRET (hex only, e.g. openssl rand -hex 32)}
     mem_limit: 2g
     healthcheck:
       test: ["CMD", "python", "/app/healthcheck.py", "api"]
@@ -244,6 +251,8 @@ services:
       GATEWAY_API_KEY: ${GATEWAY_API_KEY:?set GATEWAY_API_KEY (the owner's Bearer token)}
       ANYTHINGLLM_API_KEY: ${ANYTHINGLLM_API_KEY:?set ANYTHINGLLM_API_KEY}
       LLM_INTERNAL_KEY: ${LLM_INTERNAL_KEY:?set LLM_INTERNAL_KEY (the worker sends it to the llm listener)}
+      # Added to every request it sends api, which refuses any other (api/edge.py).
+      API_GATEWAY_SECRET: ${API_GATEWAY_SECRET:?set API_GATEWAY_SECRET}
     volumes:
       - ./services/gateway:/etc/agentgateway:ro
       # The image is distroless, so a static busybox is mounted to run the healthcheck.
@@ -286,8 +295,8 @@ services:
     image: ghcr.io/speaches-ai/speaches@sha256:21e3df06d842fb7802ab470dd77c25f0e8c0d22950e8d8c6ae886e851af53ef8
     restart: unless-stopped
     environment:
-      STT_MODEL: Systran/faster-whisper-small
-      TTS_MODEL: speaches-ai/Kokoro-82M-v1.0-ONNX
+      STT_MODEL: ${STT_MODEL:-Systran/faster-whisper-small}
+      TTS_MODEL: ${TTS_MODEL:-speaches-ai/Kokoro-82M-v1.0-ONNX}
     command:
       - sh
       - -c

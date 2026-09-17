@@ -12,7 +12,7 @@ from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.api.deps import CALLER_HEADER, BrokerDep, PoolDep, SettingsDep, UserDep, user_of
@@ -55,7 +55,7 @@ async def read_audio(upload: UploadFile, settings: Settings) -> bytes:
 
 class SpeechRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    input: str = Field(min_length=1, max_length=4_000)
+    input: str = Field(min_length=1, max_length=40_000)
     voice: str | None = Field(None, pattern=r"^[a-z]{2}_[a-z]{1,20}$")
 
 
@@ -74,12 +74,21 @@ async def transcriptions(
 @router.post("/v1/audio/speech")
 async def audio_speech(
     _caller: SpeechCaller, body: SpeechRequest, settings: SettingsDep
-) -> Response:
+) -> StreamingResponse:
+    """mp3, streamed a piece at a time, so a long reply never trips the gateway's time-to-headers
+    limit. Speech down before the first piece is a 503; after it, the stream ends early."""
+    audio = speech.speak_pieces(settings, body.input, body.voice or settings.TTS_VOICE)
     try:
-        audio = await speech.speak(settings, body.input, body.voice or settings.TTS_VOICE)
+        first = await anext(audio)
     except speech.SpeechUnavailable as exc:
         raise unavailable() from exc
-    return Response(audio, media_type="audio/mpeg")
+
+    async def rest() -> AsyncIterator[bytes]:
+        yield first
+        async for piece in audio:
+            yield piece
+
+    return StreamingResponse(rest(), media_type="audio/mpeg")
 
 
 async def voice_of(pool, user: str, settings: Settings) -> str:

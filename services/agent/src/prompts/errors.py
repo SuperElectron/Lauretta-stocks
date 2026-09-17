@@ -71,3 +71,4 @@ AUDIO_EMPTY = "no speech was heard in the recording"
 
 # MCP tools (`src/api/mcpserver`): anything unexpected, without its details.
 MCP_TOOL_FAILED = "the desk could not do that; the api log has the details"
+NOT_FROM_GATEWAY = "requests reach the api through the gateway only"

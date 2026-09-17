@@ -1,6 +1,6 @@
 # AGENTS.md
 
-A proof of concept for a friend: a research assistant for one private investor. It learns how
+A proof of concept for a friend: a research assistant for private investors (the owner and Max). It learns how
 they invest, keeps their holdings, and runs a three-agent research team on a stock. It never
 trades; it suggests. The background and open requirements questions are in `.cache/PLAN.md` (local only, not committed).
 
@@ -44,7 +44,8 @@ research pipeline (LangGraph)                                                   
 - **Compaction** (`graph/compaction.py`, wording in `prompts/compaction.py`): after a reply,
   once 20 messages have left the model's 40-message window, a silent flush saves the durable
   facts the investor stated in them to memory (deduplicated), then a running summary of them is
-  stored in the checkpoint (`summary`, `summarized`) and shown as `<conversation_summary>`. No
+  stored in the checkpoint (`summary`, `summarized`) and shown as `<conversation_summary>`. It runs
+  before the turn's `done`, so about every 20 messages a reply finishes a few seconds later. No
   message is ever deleted; a failed flush or summary logs an error and changes nothing.
 - **Stage** (`setup`/`ready`) is decided in code from `setup`, never by the model: `setup` while
   any step is still to do.
