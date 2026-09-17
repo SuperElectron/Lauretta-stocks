@@ -14,7 +14,7 @@ from redis.asyncio import Redis
 
 from src.db.queries import holdings, theses, threads
 from src.prompts import errors as wording
-from src.queue import events, submit
+from src.queue import events, keys, submit
 from src.queue.models import ClientInfo, Job
 from src.settings import Settings
 
@@ -58,9 +58,9 @@ class Desk:
     async def job(self, job_id: str) -> dict[str, Any]:
         """The job's status, and its result or error once finished; only this user's jobs."""
         status = await submit.status_of(self.broker, job_id)
-        if status is None or status.get("user") != self.user:
+        if status is None or status.get(keys.USER) != self.user:
             raise DeskError(wording.NO_SUCH_JOB)
-        found: dict[str, Any] = {"job_id": job_id, "status": status.get("status")}
+        found: dict[str, Any] = {"job_id": job_id, "status": status.get(keys.STATUS)}
         last = await events.last_terminal(self.broker, job_id)
         if last is not None:
             data = json.loads(last.data)

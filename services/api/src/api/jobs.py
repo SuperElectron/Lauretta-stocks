@@ -15,14 +15,14 @@ from redis.asyncio import Redis
 
 from src.api.deps import BrokerDep, ClientDep, JobId, JobStatusDep, PoolDep, SettingsDep, UserDep
 from src.db.queries import threads
-from src.queue import events, submit
+from src.queue import events, keys, submit
 from src.queue.models import Job, JobRequest
 
 router = APIRouter()
 
 
 def accepted(job_id: str) -> JSONResponse:
-    body = {"job_id": job_id, "status": "queued", "events_url": f"/v1/jobs/{job_id}/events"}
+    body = {"job_id": job_id, "status": keys.QUEUED, "events_url": f"/v1/jobs/{job_id}/events"}
     return JSONResponse(body, status_code=202)
 
 
@@ -31,9 +31,9 @@ async def outcome(broker: Redis, job_id: str, wait_s: int) -> dict[str, Any] | N
     deadline = asyncio.get_running_loop().time() + wait_s
     async for event in events.read(broker, job_id, deadline=deadline):
         if event.type == "done":
-            return {"job_id": job_id, "status": "done", **json.loads(event.data)}
+            return {"job_id": job_id, "status": keys.DONE, **json.loads(event.data)}
         if event.type == "error":
-            return {"job_id": job_id, "status": "failed", "error": json.loads(event.data)}
+            return {"job_id": job_id, "status": keys.FAILED, "error": json.loads(event.data)}
     return None
 
 
@@ -59,4 +59,4 @@ async def create_job(
 
 @router.get("/v1/jobs/{job_id}")
 async def job_status(job_id: JobId, status: JobStatusDep) -> dict[str, str]:
-    return {"job_id": job_id, **{k: v for k, v in status.items() if k != "user"}}
+    return {"job_id": job_id, **{k: v for k, v in status.items() if k != keys.USER}}

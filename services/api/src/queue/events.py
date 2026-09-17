@@ -36,8 +36,8 @@ def is_entry_id(value: str) -> bool:
 async def last_terminal(broker: Redis, job_id: str) -> StoredEvent | None:
     """The job's `done` or `error` event, if it published one (always its last event)."""
     for entry_id, fields in await broker.xrevrange(keys.events(job_id), count=1):
-        if fields["type"] in TERMINAL:
-            return StoredEvent(entry_id, fields["type"], fields["data"])
+        if fields[keys.ENTRY_TYPE] in TERMINAL:
+            return StoredEvent(entry_id, fields[keys.ENTRY_TYPE], fields[keys.ENTRY_DATA])
     return None
 
 
@@ -72,14 +72,14 @@ async def read(
             await asyncio.sleep(0)
         for entry_id, fields in entries:
             after = entry_id
-            yield StoredEvent(entry_id, fields["type"], fields["data"])
-            if fields["type"] in TERMINAL:
+            yield StoredEvent(entry_id, fields[keys.ENTRY_TYPE], fields[keys.ENTRY_DATA])
+            if fields[keys.ENTRY_TYPE] in TERMINAL:
                 return
 
 
 async def _over(broker: Redis, job_id: str, read_any: bool) -> bool:
     """Nothing more will be published: the job finished, or its records expired."""
-    status = await broker.hget(keys.job(job_id), "status")
+    status = await broker.hget(keys.job(job_id), keys.STATUS)
     if status is None or status in submit.FINISHED:
         return True
     return read_any and not await broker.exists(keys.events(job_id))
