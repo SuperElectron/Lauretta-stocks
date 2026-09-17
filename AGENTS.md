@@ -22,15 +22,15 @@ research pipeline (LangGraph)                                                   
   when its submit tool writes a validated result (`graph/outputs.py`). No submit is a hard error.
 - **Analyst** writes the stock story: business, driver, market gap, catalyst (dated), falsifier,
   risks, a sourced data snapshot, data gaps.
-- **Checker** re-pulls the figures with the same tools and approves or sends it back with
+- **Risk** (the `checker` node) re-pulls the figures with the same tools and approves or sends it back with
   required changes.
-- **Advisor** reads portfolio weights and memories; suggests buy/add/hold/trim/sell/watch/avoid
+- **PM** (the `advisor` node) reads portfolio weights and memories; suggests buy/add/hold/trim/sell/watch/avoid
   with a target weight, or refuses to size while the core profile is unknown.
 - **Assistant** (chat) onboards the investor into memory until the core topics
   (`memory/topics.py`) are known, then relays the team's results.
 - **Stage** (`bootstrap`/`onboard`/`ready`) is decided in code from what facts hold, never by
   the model: bootstrap until both names are known, onboard until the core topics are known.
-- **Persona** (chat assistant only): `<rules>` (code, `persona/rules.py`) then `<soul>`,
+- **Persona** (chat assistant only): `<rules>` (code, `prompts/rules.py`) then `<soul>`,
   `<identity>`, `<user>`, `<signals>`. The soul changes only when the investor replies
   `approve soul <id>`, which code applies in the context step; the advisor sees `<user>` only.
 
@@ -40,12 +40,19 @@ Every service has its own folder under `services/` (`agent`, `db`, `gateway`, `t
 `backup`); the repo root keeps the compose files, `justfile`, docs, `reports/` and `backups/`.
 Paths below are relative to `services/`.
 
-- `agent/src/graph/prompts/`: one system prompt per agent: a `_HEAD`, then data blocks
-  (`<investor>`, `<holdings>`, `<unknown>`, `<draft>`, `<review>`), then the stage instruction.
+- `agent/src/prompts/`: all prompts and user-facing wording live here, and nowhere else: rules,
+  default soul and desk lines, identity defaults, each agent's system prompt (`assistant`,
+  `analyst`, `risk`, `pm`), block empty states, progress labels, client notes, error text
+  (`errors`), tool notes (`tools`), fact sentences (`facts`) and the report. It imports nothing.
+  Templates use `str.format` fields; `tests/unit/test_prompts.py` checks their fields and fails
+  on wording found elsewhere (explicit `file:symbol` allowlist, each with a reason). Tool
+  descriptions stay as docstrings and `Field` descriptions on the tools.
+- `agent/src/graph/render.py`: stitches each system prompt from that wording: a head, then data
+  blocks (`<investor>`, `<holdings>`, `<unknown>`, `<draft>`, `<review>`), then the stage.
 - `agent/src/tools/`: one `build_*` factory per tool; argument schemas in `tools/models.py`.
 - `agent/src/data/`: `sec.py` + `xbrl.py` (SEC EDGAR, free, needs `SEC_USER_AGENT`),
   `market.py` (yfinance, free, unofficial).
-- `agent/src/persona/`: rules and default soul as constants, prompt blocks, soul approval.
+- `agent/src/persona/`: persona prompt blocks, the soul cap check, and soul approval.
 - `agent/src/db/`: pool, checkpointer, and `queries/` for facts (memories, profile, identity,
   signals, soul), holdings and theses. Signals are written by code (`facts.record_signals`).
   Schema is `db/init/00-schema.sql` (applied when the volume is first created).

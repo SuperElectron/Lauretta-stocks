@@ -9,6 +9,7 @@ from loguru import logger
 from src.api.deps import BrokerDep, PoolDep, SettingsDep
 from src.db.pool import rows
 from src.db.queries import holdings, theses
+from src.prompts import errors as wording
 
 router = APIRouter()
 
@@ -18,7 +19,11 @@ async def latest_thesis(ticker: str, pool: PoolDep, settings: SettingsDep) -> di
     saved = await theses.latest(pool, settings.USER_ID, ticker)
     if saved is None:
         raise HTTPException(
-            404, detail={"code": "THESIS_NOT_FOUND", "message": f"no research on {ticker}"}
+            404,
+            detail={
+                "code": "THESIS_NOT_FOUND",
+                "message": wording.NO_RESEARCH.format(ticker=ticker),
+            },
         )
     return saved
 

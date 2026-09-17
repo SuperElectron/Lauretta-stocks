@@ -1,4 +1,4 @@
-"""`GET /v1/models` and `POST /v1/chat/completions`: the court for OpenAI-compatible chat apps.
+"""`GET /v1/models` and `POST /v1/chat/completions`: the desk for OpenAI-compatible chat apps.
 
 A thin adapter over the job queue. Only the last user message enters the graph; the client's
 system prompt, retrieved context and resent history are ignored, because the thread's
@@ -21,6 +21,7 @@ from pydantic import ValidationError
 from src.api.deps import BrokerDep, ClientDep, PoolDep, SettingsDep, UserDep
 from src.api.openai import digests, stream, threads
 from src.api.openai.models import MODEL, ChatRequest, OpenAIError, chat_request
+from src.prompts import errors as wording
 from src.queue import keys, submit
 from src.queue.models import Job, JobRequest
 
@@ -50,18 +51,18 @@ async def chat_completions(
     x_thread_id: Annotated[str | None, Header()] = None,
 ) -> StreamingResponse | JSONResponse:
     if request.model != MODEL:
-        raise OpenAIError(404, f"no such model; use {MODEL!r}", "model_not_found", param="model")
+        raise OpenAIError(
+            404, wording.NO_SUCH_MODEL.format(model=MODEL), "model_not_found", param="model"
+        )
     message = request.last_user_text()
     # A conversation that opens without text would share its thread with every other such one.
     request.first_user_text()
     if x_thread_id is not None and not _THREAD_HEADER.fullmatch(x_thread_id):
-        raise OpenAIError(
-            400, "X-Thread-Id must be 1-64 letters, digits or _.:-", "invalid_thread_id"
-        )
+        raise OpenAIError(400, wording.BAD_THREAD_HEADER, "invalid_thread_id")
     try:
         JobRequest(kind="chat", message=message)
     except ValidationError as exc:
-        raise OpenAIError(400, "the last message is too long", "message_too_long") from exc
+        raise OpenAIError(400, wording.MESSAGE_TOO_LONG, "message_too_long") from exc
     request_key = keys.request(digests.request_key(user_id, request, x_thread_id))
     queued = await submit.attachable(broker, request_key)
     if queued is None:

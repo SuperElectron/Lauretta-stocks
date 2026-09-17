@@ -11,6 +11,7 @@ from loguru import logger
 
 from src.app import App, open_app
 from src.errors import AgentError
+from src.prompts import notes
 from src.report import render_report
 from src.settings import Settings
 
@@ -20,7 +21,7 @@ REPORTS_DIR = Path(__file__).resolve().parents[3] / "reports"
 async def chat(app: App, thread: str) -> None:
     config = {"configurable": {"thread_id": thread}}
     await app.record_signals({"channel": "cli"}, "cli")
-    print(f"chatting on thread {thread!r}; ctrl-d to quit")
+    print(notes.CLI_CHATTING.format(thread=thread))
     while True:
         try:
             text = (await asyncio.to_thread(input, "you> ")).strip()
@@ -33,28 +34,30 @@ async def chat(app: App, thread: str) -> None:
             final = await app.chat.ainvoke({"messages": [HumanMessage(text)]}, config)
         except Exception as exc:
             # The thread stays usable: unanswered tool calls are repaired on the next turn.
-            logger.exception("chat turn failed")
-            print(f"\nassistant> [turn failed: {type(exc).__name__}; see the log above]\n")
+            logger.exception("cli.turn_failed")
+            print(
+                notes.CLI_REPLY.format(reply=notes.CLI_TURN_FAILED.format(error=type(exc).__name__))
+            )
             continue
-        print(f"\nassistant> {final['messages'][-1].text}\n")
+        print(notes.CLI_REPLY.format(reply=final["messages"][-1].text))
 
 
 async def research(app: App, ticker: str) -> None:
-    print(f"researching {ticker.upper()}: analyst, checker, advisor (a minute or two)...")
+    print(notes.CLI_RESEARCHING.format(ticker=ticker.upper()))
     final = await app.research(ticker)
     report = render_report(final)
     REPORTS_DIR.mkdir(exist_ok=True)
     path = REPORTS_DIR / f"{final['ticker']}-{date.today().isoformat()}.md"
     path.write_text(report)
     print(report)
-    print(f"saved to {path}")
+    print(notes.CLI_SAVED.format(path=path))
 
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     chat_command = commands.add_parser("chat")
-    chat_command.add_argument("--thread", default="main", help="conversation to continue")
+    chat_command.add_argument("--thread", default="main", help=notes.CLI_THREAD_HELP)
     research_command = commands.add_parser("research")
     research_command.add_argument("ticker")
     args = parser.parse_args()

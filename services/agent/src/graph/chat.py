@@ -18,9 +18,10 @@ from src.graph import emit
 from src.graph.context import investor_blocks, persona_blocks, theses_block
 from src.graph.history import answered, recent
 from src.graph.llm import complete, with_backoff
-from src.graph.prompts.assistant import render_assistant_prompt
+from src.graph.render import render_assistant_prompt
 from src.graph.state import ChatState, stage
 from src.persona.approval import decide, parse_decision, proposal_notice, proposals_in_turn
+from src.prompts import progress
 
 # The model sees the latest messages only; long-term facts live in memory, not the transcript.
 HISTORY_MESSAGES = 40
@@ -64,7 +65,7 @@ def build_chat(
             state["soul_change"],
         )
         history = recent(answered(state["messages"]), HISTORY_MESSAGES)
-        emit.progress("assistant", "replying")
+        emit.progress("assistant", progress.ASSISTANT_WORKING)
         reply = await bound.ainvoke([SystemMessage(content=prompt), *history])
         return {"messages": [complete(reply)]}
 

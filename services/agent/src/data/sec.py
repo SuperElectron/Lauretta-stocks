@@ -10,6 +10,7 @@ import httpx
 
 from src.data.xbrl import annual_series, mark_stale
 from src.errors import UpstreamUnavailable
+from src.prompts import errors as wording
 
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 DATA_URL = "https://data.sec.gov"
@@ -107,7 +108,9 @@ class SecClient:
             try:
                 response = await client.get(url)
             except httpx.HTTPError as exc:
-                raise UpstreamUnavailable(f"SEC EDGAR unreachable: {type(exc).__name__}") from exc
+                raise UpstreamUnavailable(
+                    wording.SEC_UNREACHABLE.format(error=type(exc).__name__)
+                ) from exc
         if response.status_code != 200:
-            raise UpstreamUnavailable(f"SEC EDGAR returned {response.status_code}")
+            raise UpstreamUnavailable(wording.SEC_STATUS.format(status=response.status_code))
         return response.json()

@@ -14,6 +14,8 @@ from langchain_core.messages import AnyMessage, HumanMessage, ToolMessage
 from psycopg_pool import AsyncConnectionPool
 
 from src.db.queries import soul as queries
+from src.prompts.assistant import SOUL_CHANGE
+from src.prompts.notes import SOUL_PROPOSAL
 
 # The id shown to the investor: long enough not to collide within one investor's proposals.
 SHORT_ID_CHARS = 8
@@ -47,23 +49,10 @@ def judge(found: list[dict[str, Any]], now: datetime) -> str:
 
 
 def soul_change_block(verb: Verb, short_id: str, outcome: str, reason: str | None = None) -> str:
-    if outcome == "approved":
-        text = f"approved {short_id}: {reason}. The new soul is active from this reply."
-    elif outcome == "rejected":
-        text = f"rejected {short_id}: {reason}. The soul is unchanged."
-    elif outcome == "unknown":
-        text = f"no soul proposal {short_id} exists; nothing changed. Tell the investor."
-    elif outcome == "ambiguous":
-        text = f"{short_id} matches more than one proposal; nothing changed. Ask for the full id."
-    elif outcome == "expired":
-        text = (
-            f"proposal {short_id} is older than {PROPOSAL_MAX_AGE.days} days and expired; "
-            "nothing changed. Offer to propose it again."
-        )
-    else:
-        text = (
-            f"could not {verb} {short_id}: proposal {outcome}; nothing changed. Tell the investor."
-        )
+    template = SOUL_CHANGE.get(outcome, SOUL_CHANGE["other"])
+    text = template.format(
+        verb=verb, short_id=short_id, outcome=outcome, reason=reason, days=PROPOSAL_MAX_AGE.days
+    )
     return f"<soul_change>{text}</soul_change>"
 
 
@@ -98,10 +87,6 @@ def proposals_in_turn(messages: list[AnyMessage]) -> list[dict[str, Any]]:
 
 def proposal_notice(proposal: dict[str, Any]) -> str:
     """What the investor sees under the reply. Pure, so a streaming API can send it as an event."""
-    short_id = proposal["proposal_id"]
-    return (
-        f"---\nProposed change to my soul (id {short_id})\n"
-        f"Reason: {proposal['reason']}\n\n"
-        f"Proposed text:\n\n{proposal['content']}\n\n"
-        f"Reply `approve soul {short_id}` to apply it, or `reject soul {short_id}` to discard it."
+    return SOUL_PROPOSAL.format(
+        short_id=proposal["proposal_id"], reason=proposal["reason"], content=proposal["content"]
     )

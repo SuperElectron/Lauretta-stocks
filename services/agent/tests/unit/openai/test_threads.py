@@ -1,9 +1,9 @@
 """Which thread a chat app's request lands on, as AnythingLLM sends them."""
 
 from src.api.openai import digests
-from src.api.openai.chunks import TIMED_OUT
 from src.api.openai.models import ChatRequest
 from src.api.openai.threads import remember_answer
+from src.prompts.notes import TIMED_OUT
 from src.queue.models import Done, MessageEnd, Progress, Token, Tool
 from tests.unit.openai.conftest import body, chunks
 
@@ -61,7 +61,7 @@ async def test_conversations_that_open_alike_get_their_own_threads(client, worke
 
 async def test_a_forked_conversation_keeps_its_thread_after_a_tool_call_mid_answer(client, worker):
     worker.reply = lambda _job, n: [
-        Progress(stage="assistant", detail="replying"),
+        Progress(stage="assistant", detail="working it"),
         Token(text="Let me check."),
         MessageEnd(),
         Tool(name="research_stock", status="started"),

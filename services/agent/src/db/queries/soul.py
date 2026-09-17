@@ -14,6 +14,7 @@ from src.db.pool import rows
 from src.errors import PersonaInvalid
 from src.memory.embedder import Embedder, vector_literal
 from src.persona.soul import check_soul
+from src.prompts import errors as wording
 
 _ACTIVE = "SELECT id FROM facts WHERE user_id = %s AND kind = 'soul' AND status = 'active'"
 
@@ -60,7 +61,7 @@ async def approve(pool: AsyncConnectionPool, user_id: str, proposal_id: str) -> 
             (previous, user_id, proposal_id),
         )
         if not await cursor.fetchall():
-            raise PersonaInvalid(f"soul proposal {proposal_id} is no longer proposed")
+            raise PersonaInvalid(wording.PROPOSAL_NOT_PROPOSED.format(proposal_id=proposal_id))
 
 
 async def reject(pool: AsyncConnectionPool, user_id: str, proposal_id: str) -> None:
@@ -72,4 +73,4 @@ async def reject(pool: AsyncConnectionPool, user_id: str, proposal_id: str) -> N
         (user_id, proposal_id),
     )
     if not rejected:
-        raise PersonaInvalid(f"soul proposal {proposal_id} is no longer proposed")
+        raise PersonaInvalid(wording.PROPOSAL_NOT_PROPOSED.format(proposal_id=proposal_id))

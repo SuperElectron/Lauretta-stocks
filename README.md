@@ -4,30 +4,38 @@ By appointment to **His Excellency Max Lauretta**, Sovereign of the Portfolio, D
 the Dividend and Keeper of the Long Position, this humble establishment offers a research
 court for the running of his financial empire.
 
-A sovereign should not squint at 10-K filings by candlelight. Lauretta Stocks gives to whom it concerns a
-small, tireless court of advisers:
+Behind it sits a trading desk straight from the bullpen: cool, direct and professional, always
+working for the best risk-adjusted outcome for the portfolio and blunt about the downside.
 
-- **The Director** (chat assistant) remembers His Excellency's preferences, his appetite for
-  risk and every holding in the treasury, so nothing need be said twice.
-- **The Royal Analyst** reads the filings and the market, then writes a stock story: what the
-  company does, what could move it, what the market has missed, the date of reckoning, and
-  what would prove the whole thing wrong.
-- **The Inspector General** trusts nobody, re-checks every figure, and sends shoddy work back
-  to be done properly.
-- **The Privy Counsellor** weighs the story against the treasury and suggests whether to buy,
-  hold, trim or sell. It suggests; His Excellency decides. No trade is ever placed on his
-  behalf, and nothing here is financial advice.
+- **The desk** (chat assistant) remembers the investor's preferences, their appetite for risk
+  and every holding in the book, leads with the call and then the why, and says plainly what
+  would make it wrong.
+- **The Analyst** reads the filings and the market, then writes a stock story: what the company
+  does, what could move it, what the market has missed, the dated catalyst, and what would prove
+  the whole thing wrong.
+- **Risk** trusts nobody, re-checks every figure, and sends the story back until the numbers
+  hold up.
+- **The PM** sizes the story against the book and suggests whether to buy, add, hold, trim or
+  sell. It suggests; the investor decides. No trade is ever placed on their behalf, and nothing
+  here is financial advice.
 
-All data comes from free sources (SEC EDGAR and Yahoo Finance), because an empire is built by
-not wasting the crown's money.
+```
+Investor: should I sell my Shell?
+Desk:     Here's the read: hold, not sell. Risk approved the story but flagged refining margins
+          as the swing factor, and the PM would change the call if Q3 cash flow comes in under
+          dividend plus buybacks on 30 October. This is a suggestion, not financial advice.
+```
+
+All data comes from free sources (SEC EDGAR and Yahoo Finance): no paid feed without the
+owner's say-so.
 
 ## TLDR
 
 ```bash
 cp .env.example .env    # set ANTHROPIC_API_KEY and SEC_USER_AGENT="Your Name you@example.com"
 just up                 # start the database
-just chat               # speak with the court
-just research MSFT      # summon the full research team on one stock
+just chat               # talk to the desk
+just research MSFT      # put the whole desk on one stock
 ```
 
 ## Details
@@ -39,8 +47,8 @@ just research MSFT      # summon the full research team on one stock
 - **Reports:** `just research` saves a one-page report to `reports/`.
 - **First run:** downloads a small embedding model (about 70 MB) for memory search.
 - **Start fresh:** `just down clean=true` wipes memories, holdings and past research.
-- **The API:** for His Excellency's telephone and other distant devices, `just broker`,
-  `just api` and `just worker` run the court as a service. `POST /v1/jobs` queues a chat turn
+- **The API:** for phones and other devices, `just broker`,
+  `just api` and `just worker` run the desk as a service. `POST /v1/jobs` queues a chat turn
   (`{"kind": "chat", "message": "..."}`) or a research run (`{"kind": "research", "ticker":
   "MSFT"}`) and answers `202` with an `events_url`, which streams the reply token by token as
   server-sent events (`curl -N`). Add `?wait=25` to simply wait for the answer instead.
@@ -51,14 +59,13 @@ just research MSFT      # summon the full research team on one stock
   message and reports how soon the first token arrived and how the rest trickled in. It fails
   if the first token takes more than 2s after the model starts, or if the tokens come in one
   lump. Set `STREAM_CHECK_API_KEY` when going through the gateway.
-- **Chat apps:** the court also speaks the OpenAI Chat Completions dialect, so any chat app
-  with an "OpenAI-compatible" provider may be admitted. See the next section.
+- **Chat apps:** the desk also speaks the OpenAI Chat Completions dialect, so any chat app
+  with an "OpenAI-compatible" provider can connect. See the next section.
 - **How it works:** see `AGENTS.md`. For the original plan and open questions, see `.cache/PLAN.md` (local only, not committed).
 
 ## Chat apps (AnythingLLM and kin)
 
-His Excellency need not learn a new instrument: any chat app with a Generic OpenAI provider
-may petition the Director directly.
+No new app to learn: any chat app with a Generic OpenAI provider can reach the desk directly.
 
 | Setting | Value |
 |---|---|
@@ -67,46 +74,45 @@ may petition the Director directly.
 | Model | `lauretta` |
 | Streaming | on |
 
-- **Conversations:** the app sends no conversation id, so the court recognises a conversation
+- **Conversations:** the app sends no conversation id, so the desk recognises a conversation
   by the history it resends: each prompt and answer it has seen points back to its thread, so
   a long conversation keeps its thread after the first message scrolls out of the window. A
   message with no history opens a new conversation, even when it says "hi" like the last one.
   Apps that can send `X-Thread-Id` may name their own.
 - **What is heard:** only the latest message. The app's own system prompt, attached documents
-  and resent history are politely ignored; the court keeps its own minutes.
-- **What is shown:** the team's comings and goings ("The Royal Analyst drafting…") arrive as
+  and resent history are ignored; the desk keeps its own record.
+- **What is shown:** the team's comings and goings ("Analyst drafting the story…", "Risk re-checking the numbers…") arrive as
   reasoning, which most apps fold into a thought block; the answer arrives token by token.
 - **Patience:** an app that retries a request within 15 minutes, as the OpenAI SDKs do, rejoins
   the answer already under way; no research is run twice. Once an answer has been delivered, or
   if the turn failed, the same request is a new turn (a regenerate or a resend). A message sent
-  while the previous one is still being answered says at once that it is waiting; if the court
+  while the previous one is still being answered says at once that it is waiting; if the desk
   is still busy after half a minute it gives up, so send it again once the answer has arrived. Without
-  streaming the court waits up to `API_MAX_WAIT_S`, then says it is still working: wait a
+  streaming the desk waits up to `API_MAX_WAIT_S`, then says it is still working: wait a
   minute, then ask for the result.
 - **Check it:** `just stream-check --openai` (see above) times the first reasoning and the first
-  word through this door.
+  word through this endpoint.
 - **Not yet:** the app's own tools (agent skills) are not passed through; disable them.
 
-## Talking to the court
+## Talking to the desk
 
-His Excellency need not learn `curl`. The court receives visitors through
-[AnythingLLM](https://anythingllm.com), a proper reception hall with chat threads, where the
-Director answers.
+No `curl` needed. The desk is reached through [AnythingLLM](https://anythingllm.com), a chat
+web app with threads, where the desk answers.
 
-- **The hall:** open https://lauretta.tailae2b1.ts.net on any device on the tailnet. Any browser
+- **The web app:** open https://lauretta.tailae2b1.ts.net on any device on the tailnet. Any browser
   will do, the iPhone's included.
-- **The first visit** (the owner, straight after the first deploy): the hall asks for a password,
+- **The first visit** (the owner, straight after the first deploy): AnythingLLM asks for a password,
   which is `ANYTHINGLLM_AUTH_TOKEN` from the Spark's `.env`. Then, in Settings > Security, turn on
   multi-user mode and create the admin account, and in Settings > Users (under Admin) create
-  His Excellency's with the role **Default** (not Admin or Manager). From then on everyone signs
+  the investor's with the role **Default** (not Admin or Manager). From then on everyone signs
   in with their own account and the password is no longer used. Until this is done, whoever
-  holds the password holds the hall, so do it at once.
-- **The Android app:** install AnythingLLM from Google Play. In the hall (opened at the tailnet
+  holds the password holds the app, so do it at once.
+- **The Android app:** install AnythingLLM from Google Play. In AnythingLLM (opened at the tailnet
   address, not `localhost`), go to Settings > AnythingLLM Mobile and scan its QR code with the
   app. The phone must be on the tailnet too. There is no iPhone app; the browser serves.
-- **Documents:** the hall accepts uploads (up to 100 MiB each), but **the Director does not read
-  them yet**: the court's endpoint ignores the context AnythingLLM retrieves from them.
-- **Behind the curtain:** the hall comes preset as the [chat app](#chat-apps-anythingllm-and-kin)
+- **Documents:** AnythingLLM accepts uploads (up to 100 MiB each), but **the desk does not read
+  them yet**: the desk's endpoint ignores the context AnythingLLM retrieves from them.
+- **How it connects:** AnythingLLM comes preset as the [chat app](#chat-apps-anythingllm-and-kin)
   described above: it asks the gateway's `/v1` for the model `lauretta`, with
   `GATEWAY_API_KEY`, like any other client, and takes the plain streaming chat path (no agent
   tools). It sits on its own `web` network with the gateway alone and can reach nothing else in
@@ -116,8 +122,8 @@ Director answers.
 
 ## Running on the Spark
 
-On the Mac the court sits at the kitchen table. On the DGX Spark it keeps residence full time:
-the whole household runs in containers behind one guarded door, reachable only over the tailnet.
+On the Mac the desk runs for development. On the DGX Spark it runs full time: the whole stack
+runs in containers behind one gateway, reachable only over the tailnet.
 
 Before the first deploy, see that:
 
@@ -131,22 +137,22 @@ Before the first deploy, see that:
 
 ```bash
 just deploy             # from the Mac: git pull on the Spark, build natively, start the stack
-just ps                 # who is at their post
-just logs worker        # what the worker is muttering (omit the name for everyone)
+just ps                 # container status and health
+just logs worker        # follow the worker's logs (omit the name for every service)
 just backup             # a database dump now, into backups/ on the Spark
 ```
 
-- **The door:** AgentGateway (`services/gateway/config.yaml`). `/v1` and everything under it need
+- **The gateway:** AgentGateway (`services/gateway/config.yaml`). `/v1` and everything under it need
   `Authorization: Bearer $GATEWAY_API_KEY`; `/healthz` is open; every other path goes to
   AnythingLLM, which keeps its own login. It strips the key (for the api) and any claimed identity
   (including Tailscale's and forwarding headers), rate limits, and never buffers, so streams and
   WebSockets arrive as they are written. On `/` (AnythingLLM) only, bodies over 100 MiB are
   refused. It alone holds the provider keys, and its internal `llm` listener needs
   `LLM_INTERNAL_KEY`, which only api and worker hold.
-- **The tailnet:** the court lives at `https://lauretta.tailae2b1.ts.net`. The `tailscale`
+- **The tailnet:** the desk lives at `https://lauretta.tailae2b1.ts.net`. The `tailscale`
   container joins the tailnet as `lauretta-host` (`tag:lauretta`) and hosts the Tailscale Service
   `svc:lauretta`, with a real certificate, straight to the gateway. There is nothing to expose by
-  hand: `just deploy` brings it up. Only the owner and His Excellency can reach it, by tailnet
+  hand: `just deploy` brings it up. Only the owner and the investor can reach it, by tailnet
   policy; Funnel is off. The Spark's `.env` needs `TS_OAUTH_SECRET` (the OAuth client secret,
   copied from the owner's Mac at deploy). The service withdraws when the container stops and
   returns about 20 seconds after it starts. If the `tsstate` volume is ever wiped, delete the old,

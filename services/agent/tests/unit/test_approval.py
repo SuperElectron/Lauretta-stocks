@@ -128,7 +128,7 @@ async def test_chat_applies_the_phrase_before_the_model_and_appends_notices(monk
 
     model = scripted(
         call("propose_soul_change", {"content": "Be warm.", "reason": "warmer"}),
-        AIMessage("Proposed, Your Excellency."),
+        AIMessage("Proposed, boss."),
     )
     graph = build_chat(None, "friend", None, [propose_soul_change], model, 20)
     final = await graph.ainvoke({"messages": [HumanMessage("approve soul 3f2a1b9c")]})
@@ -136,6 +136,6 @@ async def test_chat_applies_the_phrase_before_the_model_and_appends_notices(monk
     assert decided == [("approve", "3f2a1b9c")]
     assert final["soul_change"].startswith("<soul_change>approved 3f2a1b9c")
     reply = final["messages"][-1]
-    assert reply.text.startswith("Proposed, Your Excellency.")
+    assert reply.text.startswith("Proposed, boss.")
     assert "`approve soul 0badc0de`" in reply.text
     assert sum(isinstance(m, AIMessage) and not m.tool_calls for m in final["messages"]) == 1

@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException, Path, Request
 from psycopg_pool import AsyncConnectionPool
 from redis.asyncio import Redis
 
+from src.prompts import errors as wording
 from src.queue import submit
 from src.queue.models import ClientInfo
 from src.settings import Settings
@@ -45,12 +46,12 @@ async def existing_job(job_id: JobId, broker: BrokerDep) -> dict[str, str]:
     """The job's status hash, or 404 for a job never submitted or expired."""
     status = await submit.status_of(broker, job_id)
     if status is None:
-        raise HTTPException(404, detail={"code": "JOB_NOT_FOUND", "message": "no such job"})
+        raise HTTPException(404, detail={"code": "JOB_NOT_FOUND", "message": wording.NO_SUCH_JOB})
     return status
 
 
 def current_user(request: Request) -> str:
-    """The user this request acts for: `USER_ID` while one investor uses the court.
+    """The user this request acts for: `USER_ID` while one investor uses the desk.
 
     Initiative 2 (multi-user identity) replaces this with the `X-Lauretta-User` header the
     gateway sets from the verified caller. Everything keyed per user goes through here.

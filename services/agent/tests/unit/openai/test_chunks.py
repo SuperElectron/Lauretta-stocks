@@ -1,6 +1,7 @@
 import pytest
 
-from src.api.openai.chunks import RETRYING, TIMED_OUT, Part, State, map_event
+from src.api.openai.chunks import Part, State, map_event
+from src.prompts.notes import RETRYING, TIMED_OUT
 
 FRESH = State()
 STARTED = State(content_sent=True)
@@ -14,7 +15,7 @@ STARTED = State(content_sent=True)
             FRESH,
             "progress",
             {"stage": "analyst", "detail": "drafting"},
-            [Part({"reasoning_content": "The Royal Analyst drafting…\n"})],
+            [Part({"reasoning_content": "Analyst drafting…\n"})],
             FRESH,
         ),
         (
@@ -76,7 +77,7 @@ def test_each_job_event_maps_to_its_deltas(state, event, data, parts, after):
 def test_an_error_is_a_readable_note_that_stops_and_carries_the_error(state, prefix):
     parts, after = map_event(state, "error", {"code": "THREAD_BUSY", "message": "busy"})
 
-    note = "The court could not answer: busy."
+    note = "The desk could not answer: busy."
     assert parts == [
         Part(
             {"content": prefix + note},

@@ -12,6 +12,7 @@ from langgraph.prebuilt import ToolNode
 from src.errors import RoleDidNotSubmit
 from src.graph.llm import complete, with_backoff
 from src.graph.state import RoleState
+from src.prompts import errors
 
 # Runs the role with a system prompt and a task, and returns what it submitted.
 Role = Callable[[str, str], Awaitable[dict[str, Any]]]
@@ -50,7 +51,7 @@ def build_role(
             {"system_prompt": system_prompt, "messages": [HumanMessage(task)], "result": None}
         )
         if final.get("result") is None:
-            raise RoleDidNotSubmit(f"the {name} stopped without submitting its work")
+            raise RoleDidNotSubmit(errors.ROLE_STOPPED.format(role=name))
         return final["result"]
 
     return run

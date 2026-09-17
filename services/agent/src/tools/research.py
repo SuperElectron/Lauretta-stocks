@@ -1,4 +1,4 @@
-"""Tools the chat assistant uses to run the research team and read what it saved."""
+"""Tools the chat assistant uses to put the desk to work and read what it saved."""
 
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -15,10 +15,10 @@ RunResearch = Callable[[str], Awaitable[dict[str, Any]]]
 def build_research_stock(run_research: RunResearch) -> BaseTool:
     @tool(args_schema=TickerArgs)
     async def research_stock(ticker: str) -> dict[str, Any]:
-        """Run the research team on one company: the analyst writes a stock story, the
-        checker re-verifies it, and the advisor weighs it against the investor's portfolio
-        and rules. Takes a minute or two and the result is saved. Use it when they ask what to
-        do about a stock and there is no recent thesis, or they ask for a fresh look.
+        """Put the desk on one company: the Analyst writes a stock story, Risk re-checks
+        every figure, and the PM sizes it against the investor's book and rules. Takes a minute
+        or two and the result is saved. Use it when they ask what to do about a stock and there
+        is no recent thesis, or they want a fresh read.
         """
         final = await run_research(ticker.upper())
         return {

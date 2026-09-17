@@ -14,13 +14,12 @@ from loguru import logger
 from psycopg_pool import AsyncConnectionPool
 
 from src.api.openai import digests
-from src.api.openai.chunks import TIMED_OUT, WAITING
 from src.api.openai.models import ChatRequest, OpenAIError
 from src.db.queries import threads
+from src.prompts import errors
+from src.prompts.notes import TIMED_OUT, WAITING
 
-FIXED_NOTES = frozenset(
-    digests.answer_text(note) for note in (TIMED_OUT, WAITING.delta["reasoning_content"])
-)
+FIXED_NOTES = frozenset(digests.answer_text(note) for note in (TIMED_OUT, WAITING))
 
 
 async def _owned(pool: AsyncConnectionPool, thread_id: str, user_id: str, client: str) -> str:
@@ -29,7 +28,7 @@ async def _owned(pool: AsyncConnectionPool, thread_id: str, user_id: str, client
         return thread_id
     if await threads.owner(pool, thread_id) != user_id:
         logger.bind(thread_id=thread_id).warning("openai.thread_not_owned")
-        raise OpenAIError(404, "no such conversation", "thread_not_found")
+        raise OpenAIError(404, errors.NO_SUCH_CONVERSATION, "thread_not_found")
     return thread_id
 
 

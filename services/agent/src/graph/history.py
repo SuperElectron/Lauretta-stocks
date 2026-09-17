@@ -2,7 +2,7 @@
 
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, ToolMessage
 
-UNFINISHED = "failed: this tool call did not complete; tell the investor if it mattered"
+from src.prompts.assistant import UNFINISHED_TOOL_CALL as UNFINISHED
 
 
 def answered(messages: list[AnyMessage]) -> list[AnyMessage]:

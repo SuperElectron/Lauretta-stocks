@@ -13,6 +13,7 @@ from src.db.pool import rows
 from src.errors import PersonaInvalid
 from src.memory.embedder import Embedder, vector_literal
 from src.memory.keys import KEYS, KeyedKind, Source
+from src.prompts import errors as wording
 
 # Where signals may come from: the request itself, never a model tool.
 SIGNAL_SOURCES: tuple[Source, ...] = ("gateway", "client", "cli")
@@ -76,7 +77,7 @@ async def set_many(
     given = {key: value for key, value in values.items() if value is not None}
     wrong = [key for key in given if key not in KEYS or KEYS[key].kind != kind]
     if wrong:
-        raise PersonaInvalid(f"not {kind} keys: {', '.join(wrong)}")
+        raise PersonaInvalid(wording.NOT_KEYS_OF_KIND.format(kind=kind, keys=", ".join(wrong)))
     for key, value in given.items():
         await set_keyed(pool, embedder, user_id, key, value, source)
     return given
@@ -92,5 +93,7 @@ async def record_signals(
     """Called by code on each request (API, CLI) with what it knows: ip, client, channel,
     last_seen_city. Only changed values are written."""
     if source not in SIGNAL_SOURCES:
-        raise PersonaInvalid(f"signals come from {', '.join(SIGNAL_SOURCES)}, not {source}")
+        raise PersonaInvalid(
+            wording.SIGNAL_SOURCE.format(sources=", ".join(SIGNAL_SOURCES), source=source)
+        )
     await set_many(pool, embedder, user_id, "signal", signals, source)
