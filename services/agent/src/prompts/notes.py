@@ -36,7 +36,6 @@ SOUL_DECISION = {
 CLI_CHATTING = "chatting on thread {thread!r}; ctrl-d to quit"
 CLI_TURN_FAILED = "[turn failed: {error}; see the log above]"
 CLI_RESEARCHING = "researching {ticker}: Analyst, Checker, Strategist (a minute or two)..."
-CLI_SAVED = "saved to {path}"
 CLI_REPLY = "\nassistant> {reply}\n"
 CLI_THREAD_HELP = "conversation to continue"
 CLI_USER_HELP = "the user to act for (default: the owner, first in ALLOWED_USERS)"

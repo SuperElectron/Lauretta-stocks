@@ -73,7 +73,7 @@ Microservices: every service has its own folder under `services/` (`api`, `agent
 (the job payload, job events, queue and key names, default agent names) is pinned in
 `contracts/` at the repo root; each service mirrors it in its own code and its tests load those
 fixtures. Change a contract and both mirrors in the same PR. The repo root keeps `contracts/`,
-the compose files, `justfile`, docs, `reports/` and `backups/`. Paths below are relative to
+the compose files, `justfile`, docs and `backups/`. Paths below are relative to
 `services/`.
 
 **`api/`** (FastAPI, `src.api.app:app`; no LangGraph): queues jobs and reads results, never runs

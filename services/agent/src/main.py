@@ -7,8 +7,6 @@ runtime context and thread keys as the worker, so the CLI and the API share a us
 import argparse
 import asyncio
 import sys
-from datetime import date
-from pathlib import Path
 
 from langchain_core.messages import HumanMessage
 from loguru import logger
@@ -20,8 +18,6 @@ from src.prompts import notes
 from src.queue import keys
 from src.report import render_report
 from src.settings import Settings
-
-REPORTS_DIR = Path(__file__).resolve().parents[3] / "reports"
 
 
 async def chat(app: App, user: str, thread: str) -> None:
@@ -54,12 +50,9 @@ async def chat(app: App, user: str, thread: str) -> None:
 async def research(app: App, user: str, ticker: str) -> None:
     print(notes.CLI_RESEARCHING.format(ticker=ticker.upper()))
     final = await app.research(ticker, Ctx(user_id=user))
-    report = render_report(final)
-    REPORTS_DIR.mkdir(exist_ok=True)
-    path = REPORTS_DIR / f"{final['ticker']}-{date.today().isoformat()}.md"
-    path.write_text(report)
-    print(report)
-    print(notes.CLI_SAVED.format(path=path))
+    # Printed only: the thesis is saved in the database for the user, and devices get it through
+    # the API, chat or MCP. Nothing is written to disk.
+    print(render_report(final))
 
 
 async def main() -> None:

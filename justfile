@@ -11,7 +11,7 @@ help:
 chat thread="main" user="":
     cd services/agent && uv run python -m src.main {{ if user == "" { "" } else { "--user " + quote(user) } }} chat --thread {{ thread }}
 
-# Run the research team on one ticker for user (default: the owner) and save a report in reports/.
+# Run the research team on one ticker for user (default: the owner) and print its report.
 research ticker user="":
     cd services/agent && uv run python -m src.main {{ if user == "" { "" } else { "--user " + quote(user) } }} research {{ ticker }}
 
