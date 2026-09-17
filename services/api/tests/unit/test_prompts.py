@@ -71,8 +71,7 @@ def test_every_allowlist_entry_still_matches_something():
     "source",
     [
         'note = f"The court could not answer: {x}."',
-        'emit.progress("analyst", "grand entrance incoming now")',
-        'emit.progress("analyst", f"on {x}")',
+        'raise DeskError("the desk could not do that")',
         'raise OpenAIError(404, "no such thing", "not_found")',
         'raise HTTPException(404, detail={"code": "X", "message": f"none for {t}"})',
         'label = "a short label"',
@@ -85,11 +84,10 @@ def test_the_guard_flags_wording(source):
 @pytest.mark.parametrize(
     "source",
     [
-        'emit.progress("analyst", detail)',
         'raise OpenAIError(400, wording.BODY_NOT_JSON, "invalid_json")',
         'logger.bind(job_id=job_id).info("job.done")',
         'x: str = Field(description="What the model reads about this argument.")',
-        'raise PersonaInvalid(wording.X.format(keys=", ".join(wrong)))',
+        'raise DeskError(wording.X.format(keys=", ".join(wrong)))',
     ],
 )
 def test_the_guard_ignores_code(source):

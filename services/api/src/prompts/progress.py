@@ -23,8 +23,6 @@ CHECKER_CHECKING = "re-checking the numbers"
 CHECKER_VERDICT = "verdict: {verdict}"
 STRATEGIST_SIZING = "sizing it against your book"
 SAVING = "saving the thesis"
-# A long thread is summarised and its durable facts saved, after the reply.
-COMPACTING = "filing the older notes"
 
 # A tool step; the first letter is capitalised when the line is sent.
 TOOL = {

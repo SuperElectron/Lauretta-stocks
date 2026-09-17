@@ -81,8 +81,12 @@ def test_default_names_by_stage():
     assert default_name("assistant") == EVENTS["defaults"]["director_name"]
 
 
-def test_chat_result_shape_is_what_the_api_reads():
-    from src.api.voice import routes  # reads result["reply"] and result["notices"]
+def test_chat_result_keys_are_what_the_api_reads():
+    """The voice turn reads `reply` and `notices` from a chat job's result."""
+    import inspect
 
-    result = EVENTS["results"]["chat"]
-    assert {"reply", "notices"} <= set(result) and routes is not None
+    from src.api.voice import routes
+
+    source = inspect.getsource(routes.voice_turn)
+    read = {key for key in EVENTS["results"]["chat"] if f'result.get("{key}"' in source}
+    assert read == {"reply", "notices"}

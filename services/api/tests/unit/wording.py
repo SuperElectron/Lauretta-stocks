@@ -3,9 +3,8 @@
 A string is wording when it is not a docstring, a pydantic `Field(description=...)` (tool
 schemas the model reads beside the tool) or SQL in `db/queries/`, and either
 - reads as text: at least `MIN_CHARS` long with a space, or over several lines, or
-- is handed to something that shows it: `emit.progress`/`emit.notice`, an error constructor
-  (`...Error`, `HTTPException`, `RoleDidNotSubmit` and other `AgentError`s) or a `message=` or
-  `detail=` argument, and has a word in it.
+- is handed to something that shows it: an error constructor (`...Error`, `HTTPException`,
+  `DeskError`) or a `message=` or `detail=` argument, and has a word in it.
 Parts of an f-string count one by one, so `f"The court could not answer: {x}."` is caught.
 """
 
@@ -13,7 +12,7 @@ import ast
 import re
 
 MIN_CHARS = 12
-SHOWN_CALLS = {"progress", "notice", "HTTPException", "RoleDidNotSubmit", "PersonaInvalid"}
+SHOWN_CALLS = {"HTTPException", "DeskError", "ApiError"}
 SHOWN_KEYWORDS = {"message", "detail"}
 SQL = re.compile(r"\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b")
 WORD = re.compile(r"[A-Za-z]{2,}.* |.* [A-Za-z]{2,}")
