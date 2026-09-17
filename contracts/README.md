@@ -8,7 +8,7 @@ both mirrors keep the same shape.
 |---|---|---|
 | `queue_keys.v1.json` | Valkey stream and group names, the job entry's payload field, the `job:{id}` status hash fields and statuses, and key vectors (`job`, `events`, `thread`, `thread_lock`, `thread_job`, `request`) | `api`, `agent` |
 | `job.v1.json` | The job payload on the `jobs` stream: valid jobs per kind and channel, and invalid ones that must be refused | `api`, `agent` |
-| `job_events.v1.json` | One example of each event on `job:{id}:events` (`type` plus its JSON `data`), which are terminal, and the Director's default name for progress events without one | `api`, `agent` |
+| `job_events.v1.json` | One example of each event on `job:{id}:events` (`type` plus its JSON `data`), which are terminal, each stage's default agent name for progress events sent without one, and the `done` result of a chat job | `api`, `agent` |
 
 Rules:
 - A job's `user` is set by the API from the gateway's header, never from a request body.

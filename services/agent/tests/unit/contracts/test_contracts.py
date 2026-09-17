@@ -74,5 +74,13 @@ def test_events_round_trip(event):
     assert json.loads(parsed.model_dump_json()) == event["data"]
 
 
-def test_default_director_name():
+def test_default_names_by_stage():
+    names = EVENTS["defaults"]["names_by_stage"]
+    assert {stage: default_name(stage) for stage in names} == names
     assert default_name("assistant") == EVENTS["defaults"]["director_name"]
+
+
+def test_chat_result_shape():
+    from src.worker.stream import run_chat  # noqa: F401 (the producer of this shape)
+
+    assert set(EVENTS["results"]["chat"]) == {"thread_id", "reply", "notices"}

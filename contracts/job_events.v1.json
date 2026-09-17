@@ -1,17 +1,98 @@
 {
-  "terminal": ["done", "error"],
-  "events": [
-    {"type": "progress", "data": {"stage": "analyst", "detail": "drafting the story", "name": "Andy"}},
-    {"type": "progress", "data": {"stage": "assistant", "detail": "working it", "name": null}},
-    {"type": "tool", "data": {"name": "research_stock", "status": "started"}},
-    {"type": "reasoning", "data": {"text": "The investor asked about NVDA."}},
-    {"type": "token", "data": {"text": "Andy"}},
-    {"type": "message_end", "data": {}},
-    {"type": "reset", "data": {}},
-    {"type": "notice", "data": {"text": "Proposed soul change 1a2b."}},
-    {"type": "done", "data": {"result": {"thread_id": "main", "reply": "Hold.", "notices": []}}},
-    {"type": "error", "data": {"code": "THREAD_BUSY", "message": "another message on this thread is still being answered; send it again after"}},
-    {"type": "timeout", "data": {"code": "STREAM_TIMEOUT", "message": "this stream reached its time limit; the job carries on, reconnect to follow it"}}
+  "terminal": [
+    "done",
+    "error"
   ],
-  "defaults": {"director_name": "the Director"}
+  "events": [
+    {
+      "type": "progress",
+      "data": {
+        "stage": "analyst",
+        "detail": "drafting the story",
+        "name": "Andy"
+      }
+    },
+    {
+      "type": "progress",
+      "data": {
+        "stage": "assistant",
+        "detail": "working it",
+        "name": null
+      }
+    },
+    {
+      "type": "tool",
+      "data": {
+        "name": "research_stock",
+        "status": "started"
+      }
+    },
+    {
+      "type": "reasoning",
+      "data": {
+        "text": "The investor asked about NVDA."
+      }
+    },
+    {
+      "type": "token",
+      "data": {
+        "text": "Andy"
+      }
+    },
+    {
+      "type": "message_end",
+      "data": {}
+    },
+    {
+      "type": "reset",
+      "data": {}
+    },
+    {
+      "type": "notice",
+      "data": {
+        "text": "Proposed soul change 1a2b."
+      }
+    },
+    {
+      "type": "done",
+      "data": {
+        "result": {
+          "thread_id": "main",
+          "reply": "Hold.",
+          "notices": []
+        }
+      }
+    },
+    {
+      "type": "error",
+      "data": {
+        "code": "THREAD_BUSY",
+        "message": "another message on this thread is still being answered; send it again after"
+      }
+    },
+    {
+      "type": "timeout",
+      "data": {
+        "code": "STREAM_TIMEOUT",
+        "message": "this stream reached its time limit; the job carries on, reconnect to follow it"
+      }
+    }
+  ],
+  "defaults": {
+    "director_name": "the Director",
+    "names_by_stage": {
+      "assistant": "the Director",
+      "save": "the Director",
+      "analyst": "Andy",
+      "checker": "Charlie",
+      "advisor": "Sammy"
+    }
+  },
+  "results": {
+    "chat": {
+      "thread_id": "main",
+      "reply": "Hold.",
+      "notices": []
+    }
+  }
 }
