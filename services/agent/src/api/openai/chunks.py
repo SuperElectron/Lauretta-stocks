@@ -5,6 +5,7 @@
 | (stream open) | `role: assistant`; then `WAITING` when queued behind another turn    |
 | `progress`    | `reasoning_content`: "Analyst drafting…"                            |
 | `tool`        | `reasoning_content`: "Consulting research stock…"                   |
+| `reasoning`   | `reasoning_content`, as streamed                                    |
 | `token`       | `content`                                                           |
 | `message_end` | `content` "\\n\\n", so text before a tool call stays readable       |
 | `reset`       | nothing before any content; after, a "retrying" note (no rollback) |
@@ -34,6 +35,8 @@ class State:
     # Content went out, so a retried model call can no longer be hidden from the client.
     content_sent: bool = False
     finished: bool = False
+    # The model's reasoning so far ends mid-line, so the next desk line starts a new one.
+    mid_thought: bool = False
 
 
 ROLE = Part({"role": "assistant"})
@@ -47,21 +50,25 @@ def _content(state: State, text: str) -> tuple[list[Part], State]:
     return [Part({"content": text})], replace(state, content_sent=True)
 
 
-def _reasoning(line: str) -> list[Part]:
-    return [Part({"reasoning_content": line + "\n"})]
+def _reasoning(state: State, line: str) -> tuple[list[Part], State]:
+    prefix = "\n" if state.mid_thought else ""
+    return [Part({"reasoning_content": prefix + line + "\n"})], replace(state, mid_thought=False)
 
 
 def map_event(state: State, event: str, data: dict[str, Any]) -> tuple[list[Part], State]:
     """The deltas one job event becomes, and the state after it."""
     if event == "token":
         return _content(state, data["text"])
+    if event == "reasoning":
+        after = replace(state, mid_thought=not data["text"].endswith("\n"))
+        return [Part({"reasoning_content": data["text"]})], after
     if event == "progress":
         title = progress.TITLES.get(data["stage"], data["stage"].capitalize())
-        return _reasoning(progress.LINE.format(title=title, detail=data["detail"])), state
+        return _reasoning(state, progress.LINE.format(title=title, detail=data["detail"]))
     if event == "tool":
         name = data["name"].replace("_", " ")
         line = progress.TOOL.get(data["status"], progress.TOOL["error"]).format(name=name)
-        return _reasoning(line[0].upper() + line[1:]), state
+        return _reasoning(state, line[0].upper() + line[1:])
     if event == "message_end":
         return _content(state, "\n\n")
     if event == "reset":

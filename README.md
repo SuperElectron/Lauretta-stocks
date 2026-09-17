@@ -56,9 +56,14 @@ just research MSFT      # put the whole desk on one stock
   a time, so each device or conversation should send its own `thread_id`. A stream that runs
   past `API_MAX_STREAM_S` ends with a `timeout` event; the job carries on, so reconnect to follow it.
 - **Stream check:** `STREAM_CHECK_URL=http://127.0.0.1:8000 just stream-check` sends one
-  message and reports how soon the first token arrived and how the rest trickled in. It fails
-  if the first token takes more than 2s after the model starts, or if the tokens come in one
-  lump. Set `STREAM_CHECK_API_KEY` when going through the gateway.
+  message and reports how soon the model's first reasoning and first token arrived and how the
+  rest trickled in. It fails if the model shows nothing (reasoning or token) for more than 2s
+  after it starts, or if the tokens come in one lump; the first token is reported, not gated,
+  since a reasoning model thinks first. Set `STREAM_CHECK_API_KEY` when going through the
+  gateway. The events stream sends the model's own thinking as `reasoning` events, apart from
+  its `token`s; it is never part of the reply. It is unverified model thinking: figures there are
+  not sourced. The investor's network address and last seen place are redacted from it,
+  and `AGENT_STREAM_REASONING=false` turns it off.
 - **Chat apps:** the desk also speaks the OpenAI Chat Completions dialect, so any chat app
   with an "OpenAI-compatible" provider can connect. See the next section.
 - **How it works:** see `AGENTS.md`. For the original plan and open questions, see `.cache/PLAN.md` (local only, not committed).
@@ -81,8 +86,10 @@ No new app to learn: any chat app with a Generic OpenAI provider can reach the d
   Apps that can send `X-Thread-Id` may name their own.
 - **What is heard:** only the latest message. The app's own system prompt, attached documents
   and resent history are ignored; the desk keeps its own record.
-- **What is shown:** the team's comings and goings ("Analyst drafting the story…", "Risk re-checking the numbers…") arrive as
-  reasoning, which most apps fold into a thought block; the answer arrives token by token.
+- **What is shown:** the team's comings and goings ("Analyst drafting the story…", "Risk re-checking the numbers…") and the
+  desk model's own thinking arrive as reasoning, which most apps fold into a thought block; the
+  answer arrives token by token. The thinking is unverified model thinking: figures there are
+  not sourced, and only the answer holds to the desk's rules.
 - **Patience:** an app that retries a request within 15 minutes, as the OpenAI SDKs do, rejoins
   the answer already under way; no research is run twice. Once an answer has been delivered, or
   if the turn failed, the same request is a new turn (a regenerate or a resend). A message sent
@@ -90,8 +97,9 @@ No new app to learn: any chat app with a Generic OpenAI provider can reach the d
   is still busy after half a minute it gives up, so send it again once the answer has arrived. Without
   streaming the desk waits up to `API_MAX_WAIT_S`, then says it is still working: wait a
   minute, then ask for the result.
-- **Check it:** `just stream-check --openai` (see above) times the first reasoning and the first
-  word through this endpoint.
+- **Check it:** `just stream-check --openai` (see above) times the first reasoning, the model's
+  own first reasoning and the first word through this endpoint. It passes when the first
+  reasoning comes within 1s and the words trickle in; the first word is reported, not gated.
 - **Not yet:** the app's own tools (agent skills) are not passed through; disable them.
 
 ## Talking to the desk

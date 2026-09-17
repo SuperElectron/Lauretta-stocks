@@ -19,6 +19,11 @@ from src.graph.role import build_role
 from src.memory.embedder import Embedder
 from src.settings import Settings
 from src.tools.research import RunResearch
+from src.worker.redact import identifying_values
+
+
+async def _no_signals() -> list[str]:
+    return []
 
 
 @dataclass(frozen=True)
@@ -29,6 +34,8 @@ class App:
     pipeline: CompiledStateGraph
     # Records how the investor reached us (channel, client, ip...); only changes are stored.
     record_signals: Callable[[dict[str, str | None], facts.Source], Awaitable[None]]
+    # The investor's identifying signal values (ip, place), kept out of streamed reasoning.
+    signal_values: Callable[[], Awaitable[list[str]]] = _no_signals
 
 
 @asynccontextmanager
@@ -60,6 +67,14 @@ async def open_app(settings: Settings) -> AsyncGenerator[App]:
 
         tools = toolsets.assistant_tools(pool, embedder, user, run_research)
         chat = build_chat(pool, user, checkpointer, tools, model, limit)
+
+        async def signal_values() -> list[str]:
+            return identifying_values(await facts.persona_rows(pool, user))
+
         yield App(
-            chat=chat, research=run_research, pipeline=pipeline, record_signals=record_signals
+            chat=chat,
+            research=run_research,
+            pipeline=pipeline,
+            record_signals=record_signals,
+            signal_values=signal_values,
         )

@@ -13,6 +13,8 @@ TITLES = {
 LINE = "{title} {detail}…"
 
 ASSISTANT_WORKING = "working it"
+# A model call that had only reasoned is tried again.
+ASSISTANT_RETRYING = "retrying"
 ANALYST_DRAFTING = "drafting the story"
 ANALYST_REDRAFTING = "redrafting (revision {revision})"
 RISK_CHECKING = "re-checking the numbers"

@@ -1326,7 +1326,7 @@ requires-dist = [
     { name = "httpx2", specifier = ">=2.13.0" },
     { name = "langchain-anthropic" },
     { name = "langchain-core" },
-    { name = "langchain-openai" },
+    { name = "langchain-openai", specifier = ">=1.6.2,<1.7" },
     { name = "langgraph", specifier = ">=1.2" },
     { name = "langgraph-checkpoint-postgres" },
     { name = "loguru" },

@@ -7,7 +7,8 @@ dependencies = [
     "langgraph-checkpoint-postgres",
     "langchain-core",
     "langchain-anthropic",
-    "langchain-openai",
+    # reasoning.py overrides a private ChatOpenAI hook; bump minors deliberately (#19)
+    "langchain-openai>=1.6.2,<1.7",
     "pydantic",
     "pydantic-settings",
     "psycopg[binary,pool]",

@@ -117,6 +117,13 @@ class JobHandler:
             self._settings.AGENT_LOCK_WAIT_MS,
         )
         async with lock.held():
-            return await lock.guard(
-                run_chat(self._app.chat, job.thread_id, job.job_id, job.message, publish)
+            chat = run_chat(
+                self._app.chat,
+                job.thread_id,
+                job.job_id,
+                job.message,
+                publish,
+                secrets=await self._app.signal_values(),
+                stream_reasoning=self._settings.AGENT_STREAM_REASONING,
             )
+            return await lock.guard(chat)
