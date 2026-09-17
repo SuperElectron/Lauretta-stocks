@@ -80,14 +80,17 @@ research pipeline (LangGraph)                                                   
   (2) objective and outcomes, (3) task list. Each issue is scoped for one agent; issues may run
   in parallel only when their responsibilities do not overlap.
 - **Execution:** give each agent a fixed scope and every detail it needs. Each agent works in its
-  own git worktree under `.claude/worktrees/`, named for what it is working on.
-- **Branches:** branch off `main`, one feature per branch, merged by pull request.
+  own git worktree under `.claude/worktrees/`, named for what it is working on. Remove the
+  worktree and stop the agent once its PR is merged.
+- **Branches:** branch off `staging`, one feature per branch, merged into `staging` by pull
+  request. `main` only receives `staging` once every issue in a phase is merged, reviewed and
+  deployed successfully.
 - **Review:** every pull request gets a full code review, by a separate reviewer from the author,
-  before it merges.
+  before it merges. Merging `staging` into `main` needs a full review of the phase.
 - **Testing:** write unit tests that match the issue's outcomes. `just test` must pass before
   committing and before merging.
 - **Issue board:** [Lauretta-stocks project](https://github.com/users/SuperElectron/projects/6),
   linked to this repo. Move each issue through `Todo` (planning), `Ready` (approved, an agent
-  can take it), `In progress` (an agent is on it and opens a PR when done), `In review` (PR
-  open) and `Done` (merged).
+  can take it), `In progress` (an agent is on it and opens a PR into `staging` when done), `In review`
+  (PR open or merged into `staging`) and `Done` (merged into `main`).
 - Never push or force-push without the owner's say-so.
