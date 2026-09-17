@@ -114,7 +114,8 @@ Paths below are relative to `services/`.
 
 - `langgraph-docs`, `context7`: current LangGraph/LangChain and library docs. Check them before
   changing graph, tool or checkpointer code; do not rely on memory of these APIs.
-- `postgres`: read-only (restricted) access to the local db on :5433 while `just up` runs. Use it
+- `postgres`: read-only (restricted) access to the local db on :5433 while `just up` runs; set
+  `LAURETTA_LOCAL_DB_URI` (the local `DATABASE_URL`) in your shell first. Use it
   to inspect facts, holdings, theses and checkpoints.
 - `fetch`: read a web page, for example an SEC filing linked in a thesis.
 
@@ -127,7 +128,7 @@ Paths below are relative to `services/`.
 - Prefer free data sources; a paid one needs the owner's approval first.
 - Keep Python files under 150 lines where it is logical.
 - Changing the schema means `just down clean=true` then `just up` (POC, no migrations).
-- Never read or commit `.env`; add new settings to `.env.example` and `src/settings.py`.
+- Never read or commit `.env`; add new settings to `.env.example` and `services/agent/src/settings.py`.
 
 ## Software development lifecycle
 
