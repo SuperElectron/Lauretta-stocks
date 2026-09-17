@@ -14,7 +14,7 @@ from src.graph.role import build_role
 from src.prompts import progress
 from src.tools.submit import build_submit_stock_story
 from src.worker.stream import ChatRelay, run_chat
-from tests.unit.openai_sse import model, openrouter, tool_call
+from tests.unit.openai_sse import model, reasoning_delta, tool_call
 from tests.unit.test_worker_stream import Events, part
 from tests.utils import STORY
 
@@ -62,7 +62,7 @@ async def test_a_retry_after_reasoning_alone_marks_the_break_without_a_reset():
 
 async def test_a_research_role_run_inside_a_tool_never_leaks_its_reasoning():
     analyst_model = model(
-        ([openrouter("ANALYST SECRET"), tool_call("submit_stock_story", STORY)], "tool_calls")
+        ([reasoning_delta("ANALYST SECRET"), tool_call("submit_stock_story", STORY)], "tool_calls")
     )
     role = build_role("analyst", analyst_model, [build_submit_stock_story()], 10)
 
@@ -73,8 +73,8 @@ async def test_a_research_role_run_inside_a_tool_never_leaks_its_reasoning():
         return "story ready"
 
     chat_model = model(
-        ([openrouter("chat thinks "), tool_call("consult", {})], "tool_calls"),
-        ([openrouter("after "), {"content": "Done"}], "stop"),
+        ([reasoning_delta("chat thinks "), tool_call("consult", {})], "tool_calls"),
+        ([reasoning_delta("after "), {"content": "Done"}], "stop"),
     )
     bound = llm.with_backoff(chat_model.bind_tools([consult]))
 

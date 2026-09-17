@@ -2,7 +2,7 @@
 #
 #   tailnet https://lauretta.tailae2b1.ts.net -> tailscale -> gateway :18400 -> api :8000 (/v1, /healthz)
 #                                                              gateway :18400 -> anythingllm :3001 (/)
-#                                                              gateway :3000  -> vLLM / OpenRouter
+#                                                              gateway :3000  -> vllm :8000 (llm network)
 #   api -> broker -> worker
 #
 # No host ports at all: the tailscale container is the only way in, and it reaches the gateway
@@ -16,6 +16,9 @@ networks:
   # AnythingLLM and the gateway only: the web app reaches nothing else in the stack.
   web:
     driver: bridge
+  # The gateway and vLLM only: api and worker reach the model through the gateway's llm listener.
+  llm:
+    driver: bridge
 
 volumes:
   pgdata:
@@ -24,11 +27,9 @@ volumes:
   tsstate:
   anythingllm:
 
-# Provider keys are files mounted into the gateway only; api and worker hold none.
+# The model key is a file mounted into the gateway and vllm; api and worker hold none.
 secrets:
-  openrouter_api_key:
-    environment: OPENROUTER_API_KEY
-  # vLLM `--api-key` on the Spark. If vLLM runs without one, any non-empty value works.
+  # vLLM's API key: vllm checks it, the gateway sends it.
   spark_vllm_api_key:
     environment: SPARK_VLLM_API_KEY
 
@@ -47,12 +48,13 @@ x-app: &app
     BROKER_URL: redis://:${BROKER_PASSWORD:?set BROKER_PASSWORD}@broker:6379/0
     DB_POOL_MIN: ${DB_POOL_MIN}
     DB_POOL_MAX: ${DB_POOL_MAX}
-    # Models go through the gateway, which holds the provider keys. This internal key only opens
+    # Models go through the gateway, which holds vLLM's key. This internal key only opens
     # the gateway's llm listener; the gateway swaps it for the provider's key.
     AGENT_PROVIDER: openai
     AGENT_BASE_URL: http://gateway:3000/v1
     OPENAI_API_KEY: ${LLM_INTERNAL_KEY:?set LLM_INTERNAL_KEY (random, e.g. openssl rand -hex 32)}
-    AGENT_MODEL: ${STACK_AGENT_MODEL:-gpt-oss-120b}
+    # vLLM's served model name.
+    AGENT_MODEL: gpt-oss-120b
     AGENT_TEMPERATURE: ${AGENT_TEMPERATURE}
     AGENT_MAX_TOKENS: ${AGENT_MAX_TOKENS}
     AGENT_TIMEOUT: ${AGENT_TIMEOUT}
@@ -178,9 +180,6 @@ services:
     environment:
       GATEWAY_API_KEY: ${GATEWAY_API_KEY:?set GATEWAY_API_KEY (clients send it as a Bearer token)}
       LLM_INTERNAL_KEY: ${LLM_INTERNAL_KEY:?set LLM_INTERNAL_KEY (api and worker send it to the llm listener)}
-    # Linux Docker has no host.docker.internal by default; vLLM listens on the Spark host.
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
       - ./services/gateway:/etc/agentgateway:ro
       # The image is distroless, so a static busybox is mounted to run the healthcheck.
@@ -191,10 +190,9 @@ services:
         image:
           subpath: bin
     secrets:
-      - openrouter_api_key
       - spark_vllm_api_key
     mem_limit: 256m
-    networks: [court, web]
+    networks: [court, web, llm]
     healthcheck:
       # agentgateway's readiness endpoint: ready once the config is loaded and listeners are up.
       test: ["CMD", "/hc/busybox", "wget", "-qO-", "http://127.0.0.1:15021/healthz/ready"]
@@ -211,6 +209,79 @@ services:
       anythingllm:
         condition: service_started
         restart: true
+      # Started, not healthy: the model loads for minutes, and the stack comes up meanwhile (model
+      # calls fail until vllm is healthy). Recreating vllm restarts the gateway, as above.
+      vllm:
+        condition: service_started
+        restart: true
+
+  # gpt-oss-120b, served OpenAI-compatible on the llm network alone: no host port, so the Spark's
+  # firewall never sees it. The flags are the measured budget from dgx-model-serve
+  # (box/scripts/start-models.sh): one 121 GB pool shared with the host and other workloads, so
+  # change them together, never one alone. The image is pinned by digest for sm_121a / arm64.
+  vllm:
+    image: ghcr.io/timothystewart6/vllm-gb10@sha256:fa87aea586e02719aba804f76e0895d1f096e8c387573e7981e2681589b3b712
+    # Comes back after a reboot. A load that keeps failing (say, out of memory) reloads 65 GiB on
+    # every restart next to the Spark's other workloads: stop it with `docker compose stop vllm`.
+    restart: unless-stopped
+    # The key comes from the secret file, not the environment, so `docker inspect` never shows it.
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        key=$$(cat /run/secrets/spark_vllm_api_key) && [ -n "$$key" ]
+        || { echo "vllm: the key is empty; set SPARK_VLLM_API_KEY" >&2; exit 1; };
+        VLLM_API_KEY=$$key exec "$$@"
+      - vllm
+    command:
+      - vllm
+      - serve
+      - openai/gpt-oss-120b
+      # The name clients ask for; any other name 404s.
+      - --served-model-name=gpt-oss-120b
+      - --host=0.0.0.0
+      - --port=8000
+      # A fraction of the whole pool; KV bytes are exact so start order does not decide the split.
+      - --gpu-memory-utilization=0.64
+      - --kv-cache-memory-bytes=8053063680
+      - --max-num-batched-tokens=16384
+      - --kv-cache-dtype=fp8
+      - --enable-prefix-caching
+      # Without these, every request that carries `tools` is refused with a 400.
+      - --tool-call-parser=openai
+      - --reasoning-parser=openai_gptoss
+      - --enable-auto-tool-choice
+      # A bad attention kernel corrupts tokens rather than failing; Triton is the known-good one.
+      - --attention-backend=TRITON_ATTN
+      # Deterministic defaults; the checkpoint's generation_config is discarded.
+      - --generation-config=vllm
+      - --override-generation-config={"temperature":0,"top_p":1,"top_k":-1}
+    secrets:
+      - spark_vllm_api_key
+    environment:
+      # The weights (~65 GiB) must already be in the cache: a missing model fails at once rather
+      # than downloading for longer than the healthcheck allows.
+      HF_HUB_OFFLINE: "1"
+    volumes:
+      - ${HOME}/.cache/huggingface:/root/.cache/huggingface
+    ipc: host
+    # No nvidia runtime is registered with Docker on the Spark; its CDI spec is.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: cdi
+              device_ids: ["nvidia.com/gpu=all"]
+              capabilities: [gpu]
+    # No mem_limit: host and GPU memory are one pool, and the budget is the flags above.
+    networks: [llm]
+    healthcheck:
+      # /health needs no key. Loading the weights takes about 9 minutes on the Spark.
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15m
 
   # pg_dump and a tar of AnythingLLM's storage, at start and nightly into ./backups (git-ignored).
   # A compose service rather than a host cron:

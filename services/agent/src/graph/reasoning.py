@@ -1,8 +1,7 @@
 """The model's own reasoning, kept from an OpenAI-compatible stream.
 
 `ChatOpenAI` reads only the official delta fields, so the reasoning a provider adds is dropped
-(langchain-openai 1.6, `_convert_delta_to_message_chunk`). OpenRouter streams it as
-`delta.reasoning` (and again, structured, as `reasoning_details`); vLLM as
+(langchain-openai 1.6, `_convert_delta_to_message_chunk`). vLLM streams it as
 `delta.reasoning_content`, or `delta.reasoning` in newer releases. This subclass keeps the text
 on each chunk as `additional_kwargs["reasoning_content"]`, the key LangChain's own provider
 packages use, so a streaming caller can show it apart from the answer.

@@ -16,7 +16,7 @@ from src.graph.reasoning import REASONING
 from src.queue.models import Job
 from src.worker import handler as handler_module
 from src.worker.stream import run_chat
-from tests.unit.openai_sse import model, one_node_chat, openrouter
+from tests.unit.openai_sse import model, one_node_chat, reasoning_delta
 from tests.unit.test_handler import handler_for
 from tests.unit.test_worker_stream import Events
 
@@ -26,9 +26,9 @@ def thought(events: Events) -> str:
     return "".join(data["text"] for kind, data in events if kind == "reasoning")
 
 
-OPENROUTER_TURN = [
-    openrouter("The investor "),
-    openrouter("says hi."),
+THINKING_TURN = [
+    reasoning_delta("The investor "),
+    reasoning_delta("says hi."),
     {"role": "assistant", "content": "Good"},
     {"content": " day"},
 ]
@@ -46,8 +46,8 @@ def test_the_private_chatopenai_hook_reasoning_relies_on_is_still_there():
     ), "BaseChatOpenAI._astream no longer calls _convert_chunk_to_generation_chunk"
 
 
-async def test_openrouter_reasoning_streams_before_the_tokens_and_stays_out_of_the_reply():
-    graph = one_node_chat(model((OPENROUTER_TURN, "stop")))
+async def test_reasoning_streams_before_the_tokens_and_stays_out_of_the_reply():
+    graph = one_node_chat(model((THINKING_TURN, "stop")))
     events = Events()
 
     result = await run_chat(graph, "t1", "a" * 32, "hi", events)
@@ -71,13 +71,17 @@ async def test_vllm_reasoning_content_is_kept_too():
 
 async def test_switched_off_no_reasoning_is_sent():
     events = Events()
-    graph = one_node_chat(model((OPENROUTER_TURN, "stop")))
+    graph = one_node_chat(model((THINKING_TURN, "stop")))
     await run_chat(graph, "t1", "a" * 32, "hi", events, stream_reasoning=False)
     assert [kind for kind, _ in events] == ["token", "token"]
 
 
 async def test_signal_values_and_think_tags_never_reach_the_client():
-    deltas = [openrouter("They came from 100.64."), openrouter("0.7 via </think>"), openrouter("x")]
+    deltas = [
+        reasoning_delta("They came from 100.64."),
+        reasoning_delta("0.7 via </think>"),
+        reasoning_delta("x"),
+    ]
     events = Events()
     graph = one_node_chat(model((deltas + [{"content": "Hi"}], "stop")))
     await run_chat(graph, "t1", "a" * 32, "hi", events, secrets=["100.64.0.7"])
@@ -86,7 +90,7 @@ async def test_signal_values_and_think_tags_never_reach_the_client():
 
 async def test_reasoning_counts_toward_the_limit_and_truncation_still_fails_the_turn():
     events = Events()
-    graph = one_node_chat(model(([openrouter("Thinking at length")], "length")))
+    graph = one_node_chat(model(([reasoning_delta("Thinking at length")], "length")))
     with pytest.raises(ReplyTruncated):
         await run_chat(graph, "t1", "a" * 32, "hi", events)
     assert events == [("reasoning", {"text": "Thinking at length"})]
@@ -94,7 +98,7 @@ async def test_reasoning_counts_toward_the_limit_and_truncation_still_fails_the_
 
 async def test_a_reply_that_only_reasoned_fails_visibly():
     events = Events()
-    graph = one_node_chat(model(([openrouter("I wonder")], "stop")))
+    graph = one_node_chat(model(([reasoning_delta("I wonder")], "stop")))
     with pytest.raises(EmptyReply):
         await run_chat(graph, "t1", "a" * 32, "hi", events)
     assert thought(events) == "I wonder"

@@ -147,8 +147,8 @@ runs in containers behind one gateway, reachable only over the tailnet.
 Before the first deploy, see that:
 
 - the Spark runs Docker Engine 28 or newer (the gateway's healthcheck mounts an image volume);
-- vLLM answers from inside a container at `host.docker.internal:8000` (listening on the host
-  loopback alone is not enough);
+- the gpt-oss-120b weights are in the Spark's `~/.cache/huggingface` and about 80 GiB of its
+  memory is free for the `vllm` service;
 - `DB_PASSWORD` and `BROKER_PASSWORD` are URL-safe (letters, digits, `-`, `_`), since they go
   into connection URLs;
 - `~/lauretta-stocks` on the Spark is a clone of this repo with its own `.env`, and ssh with a
@@ -176,8 +176,17 @@ just backup             # a database dump now, into backups/ on the Spark
   copied from the owner's Mac at deploy). The service withdraws when the container stops and
   returns about 20 seconds after it starts. If the `tsstate` volume is ever wiped, delete the old,
   offline `lauretta-host` device in the admin console.
-- **Models:** api and worker ask the gateway's internal `llm` port for `gpt-oss-120b` (vLLM on the
-  Spark) or `openai/gpt-oss-120b` (OpenRouter). Failover between them is issue #4.
+- **Model:** api and worker ask the gateway's internal `llm` port for `gpt-oss-120b`, which the
+  `vllm` service serves on the Spark's GPU. vLLM sits on the private `llm` network with the
+  gateway alone and reads `SPARK_VLLM_API_KEY` from a secret file. The weights must already be in
+  the Spark's `~/.cache/huggingface` (it never downloads them). It takes about 9 minutes to load,
+  so a `just deploy` that creates or recreates `vllm` (the first one, or a change to its image or
+  flags) waits that long before it returns, and gives up after 20 minutes; the rest of the stack
+  is up meanwhile, and model calls fail until `vllm` is healthy. It restarts unless stopped, so a
+  load that keeps failing reloads the weights each time: stop it with `docker compose stop vllm`.
+  Its flags are a measured memory budget shared with the Spark's other workloads (see the
+  comments in `docker-compose.yaml`), so two engines never fit:
+  `just deploy` refuses while the hand-started `vllm-gpt-oss-120b` container still runs.
 - **Backups:** the `backup` service dumps the database and tars AnythingLLM's storage when it
   starts and at 03:00 UTC into `backups/`, keeps the newest `BACKUP_KEEP` of each, and turns
   unhealthy after 26 hours without either. Restore with `pg_restore`, and untar the storage into
@@ -193,10 +202,10 @@ just backup             # a database dump now, into backups/ on the Spark
 | Port | Bound to | Serves |
 |---|---|---|
 | 443 on `lauretta.tailae2b1.ts.net` | tailnet only (`svc:lauretta`) | HTTPS to the gateway |
-| 18400, 3000 | compose networks `court` and `web` | gateway ingress and `llm` |
+| 18400, 3000 | compose networks `court`, `web` and `llm` | gateway ingress and `llm` |
 | 3001 | compose network `web` only | anythingllm |
 | 8000, 5432, 6379 | compose network `court` only | api, db, broker |
+| 8000 | compose network `llm` only | vllm |
 
-The stack publishes no host ports at all. The Spark's own ports (8000-8004 and friends) are left alone; vLLM
-is reached from inside at `host.docker.internal:8000`. For local development, `just up` still
-starts only the database, on loopback `DB_PORT`.
+The stack publishes no host ports at all, vLLM included, so the Spark's firewall needs no rule
+for it. For local development, `just up` still starts only the database, on loopback `DB_PORT`.
