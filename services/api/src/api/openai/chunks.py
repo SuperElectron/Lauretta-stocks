@@ -20,8 +20,8 @@ Anything else is not part of the contract and maps to nothing.
 from dataclasses import dataclass, replace
 from typing import Any
 
-from src.persona.layers import default_name
 from src.prompts import notes, progress
+from src.prompts.names import default_name
 
 
 @dataclass(frozen=True)

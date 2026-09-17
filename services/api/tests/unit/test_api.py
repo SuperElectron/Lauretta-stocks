@@ -11,6 +11,7 @@ from src.api import jobs
 from src.api.app import create_app
 from src.queue import events, keys
 from src.queue.models import Done, Error, Job, Progress, Reasoning, Token
+from tests import worker_side
 from tests.utils import settings
 
 
@@ -134,8 +135,8 @@ async def test_wait_returns_the_result_when_the_job_finishes_in_time(client, bro
         while not await broker.exists(keys.JOBS):
             await asyncio.sleep(0.01)
         job = await queued_job(broker)
-        await events.publish(broker, job.job_id, Token(text="Hi"), 60)
-        await events.publish(broker, job.job_id, Done(result={"reply": "Hi"}), 60)
+        await worker_side.publish(broker, job.job_id, Token(text="Hi"), 60)
+        await worker_side.publish(broker, job.job_id, Done(result={"reply": "Hi"}), 60)
 
     working = asyncio.create_task(worker())
     response = await client.post("/v1/jobs?wait=5", json={"kind": "chat", "message": "hi"})
@@ -151,9 +152,11 @@ async def test_wait_returns_202_when_the_job_is_still_running(client):
 
 async def test_sse_streams_named_events_with_stream_ids_and_ends_after_error(client, broker):
     job_id = await submitted(client)
-    first = await events.publish(broker, job_id, Progress(stage="analyst", detail="drafting"), 60)
-    await events.publish(broker, job_id, Error(code="THREAD_BUSY", message="busy"), 60)
-    await events.publish(broker, job_id, Token(text="never sent"), 60)
+    first = await worker_side.publish(
+        broker, job_id, Progress(stage="analyst", detail="drafting"), 60
+    )
+    await worker_side.publish(broker, job_id, Error(code="THREAD_BUSY", message="busy"), 60)
+    await worker_side.publish(broker, job_id, Token(text="never sent"), 60)
 
     response = await client.get(f"/v1/jobs/{job_id}/events")
 
@@ -168,9 +171,9 @@ async def test_sse_streams_named_events_with_stream_ids_and_ends_after_error(cli
 
 async def test_sse_sends_model_reasoning_as_its_own_event(client, broker):
     job_id = await submitted(client)
-    await events.publish(broker, job_id, Reasoning(text="Thinking"), 60)
-    await events.publish(broker, job_id, Token(text="Hi"), 60)
-    await events.publish(broker, job_id, Done(result={"reply": "Hi"}), 60)
+    await worker_side.publish(broker, job_id, Reasoning(text="Thinking"), 60)
+    await worker_side.publish(broker, job_id, Token(text="Hi"), 60)
+    await worker_side.publish(broker, job_id, Done(result={"reply": "Hi"}), 60)
 
     frames = parse_sse((await client.get(f"/v1/jobs/{job_id}/events")).text)
 
@@ -183,9 +186,9 @@ async def test_sse_sends_model_reasoning_as_its_own_event(client, broker):
 
 async def test_sse_resumes_after_last_event_id(client, broker):
     job_id = await submitted(client)
-    first = await events.publish(broker, job_id, Token(text="Hel"), 60)
-    await events.publish(broker, job_id, Token(text="lo"), 60)
-    await events.publish(broker, job_id, Done(result={}), 60)
+    first = await worker_side.publish(broker, job_id, Token(text="Hel"), 60)
+    await worker_side.publish(broker, job_id, Token(text="lo"), 60)
+    await worker_side.publish(broker, job_id, Done(result={}), 60)
 
     response = await client.get(f"/v1/jobs/{job_id}/events", headers={"Last-Event-ID": first})
 
@@ -208,7 +211,7 @@ async def test_sse_pings_while_the_job_is_quiet(client, broker, monkeypatch):
 
     async def finish_later():
         await asyncio.sleep(0.3)
-        await events.publish(broker, job_id, Done(result={}), 60)
+        await worker_side.publish(broker, job_id, Done(result={}), 60)
 
     finishing = asyncio.create_task(finish_later())
     response = await client.get(f"/v1/jobs/{job_id}/events")
@@ -261,7 +264,7 @@ def short_reads(monkeypatch):
 @pytest.mark.usefixtures("short_reads")
 async def test_sse_ends_when_the_job_finished_without_more_events(client, broker):
     job_id = await submitted(client)
-    await events.publish(broker, job_id, Token(text="Hi"), 60)
+    await worker_side.publish(broker, job_id, Token(text="Hi"), 60)
     await broker.hset(keys.job(job_id), "status", "failed")
 
     response = await asyncio.wait_for(client.get(f"/v1/jobs/{job_id}/events"), 5)
@@ -272,7 +275,7 @@ async def test_sse_ends_when_the_job_finished_without_more_events(client, broker
 @pytest.mark.usefixtures("short_reads")
 async def test_sse_ends_when_the_job_expires_while_streaming(client, broker):
     job_id = await submitted(client)
-    await events.publish(broker, job_id, Token(text="Hi"), 60)
+    await worker_side.publish(broker, job_id, Token(text="Hi"), 60)
 
     async def expire_later():
         await asyncio.sleep(0.1)
@@ -287,7 +290,7 @@ async def test_sse_ends_when_the_job_expires_while_streaming(client, broker):
 async def test_sse_ends_with_timeout_at_the_stream_cap_but_the_job_goes_on(broker):
     async with client_for(broker, API_MAX_STREAM_S=1) as client:
         job_id = await submitted(client)
-        await events.publish(broker, job_id, Token(text="Hi"), 60)
+        await worker_side.publish(broker, job_id, Token(text="Hi"), 60)
         response = await asyncio.wait_for(client.get(f"/v1/jobs/{job_id}/events"), 5)
 
     frames = parse_sse(response.text)

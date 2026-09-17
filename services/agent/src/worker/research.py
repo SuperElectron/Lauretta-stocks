@@ -7,6 +7,9 @@ from langgraph.graph.state import CompiledStateGraph
 from src.graph.ctx import Ctx
 from src.worker.stream import Publish, progress_event
 
+# The `done` result of a research job, as `contracts/job_events.v1.json` pins it.
+RESULT_FIELDS = ("ticker", "thesis_id", "revisions", "story", "review", "advice", "names")
+
 
 async def run_research(
     pipeline: CompiledStateGraph, user: str, ticker: str, publish: Publish
@@ -22,5 +25,4 @@ async def run_research(
             final = part["data"]
         elif part["data"].get("event") == "progress":
             await publish(progress_event(part["data"]))
-    fields = ("ticker", "thesis_id", "revisions", "story", "review", "advice", "names")
-    return {field: final[field] for field in fields}
+    return {field: final[field] for field in RESULT_FIELDS}

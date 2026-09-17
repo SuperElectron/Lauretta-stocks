@@ -12,10 +12,11 @@ from src.graph.context import Known
 from src.graph.ctx import Ctx, user_of
 from src.graph.pipeline import Team, build_pipeline
 from src.persona.layers import build_persona
-from src.queue import keys, submit
+from src.queue import keys
 from src.queue.lock import ThreadLock
 from src.queue.models import Job
 from src.worker.handler import JobHandler
+from tests import api_side
 from tests.unit.test_handler import events_of
 from tests.utils import ADVICE, REVIEW, STORY, Recorder, settings
 
@@ -54,7 +55,7 @@ def handler_for(broker, chat=None, pipeline=None, signals=None, values=None):
 async def test_the_jobs_user_drives_context_checkpoint_signals_and_redaction():
     broker, chat, signals, values = FakeAsyncRedis(decode_responses=True), whose_graph(), [], []
     job = Job(user="max", kind="chat", message="show me Mat's holdings", thread_id="main")
-    await submit.submit(broker, job, 60)
+    await api_side.submit(broker, job, 60)
 
     await handler_for(broker, chat, signals=signals, values=values).run(job)
 

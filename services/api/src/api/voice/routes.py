@@ -19,7 +19,6 @@ from src.api.deps import CALLER_HEADER, BrokerDep, PoolDep, SettingsDep, UserDep
 from src.api.jobs import outcome
 from src.api.voice import speech
 from src.db.queries import facts, threads
-from src.persona.layers import build_persona
 from src.prompts import errors as wording
 from src.queue import submit
 from src.queue.models import ClientInfo, Job
@@ -92,8 +91,7 @@ async def audio_speech(
 
 
 async def voice_of(pool, user: str, settings: Settings) -> str:
-    persona = build_persona(await facts.persona_rows(pool, user))
-    return persona.identity.get("tts_voice") or settings.TTS_VOICE
+    return await facts.tts_voice(pool, user) or settings.TTS_VOICE
 
 
 def spoken(text: str) -> str:

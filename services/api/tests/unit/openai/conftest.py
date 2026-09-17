@@ -12,8 +12,9 @@ from fakeredis import FakeAsyncRedis
 
 from src.api.app import create_app
 from src.api.openai import threads
-from src.queue import events, keys, submit
+from src.queue import keys
 from src.queue.models import Done, Event, Job, Token
+from tests import worker_side
 from tests.utils import settings
 
 
@@ -99,10 +100,10 @@ class FakeWorker:
 
     async def answer(self, job: Job, outcome: list[Event]) -> None:
         for event in outcome:
-            await events.publish(self.broker, job.job_id, event, 60)
+            await worker_side.publish(self.broker, job.job_id, event, 60)
             if event.type in ("done", "error"):
                 status = "done" if event.type == "done" else "failed"
-                await submit.mark(self.broker, job.job_id, 60, status=status)
+                await worker_side.mark(self.broker, job.job_id, 60, status=status)
 
 
 @pytest.fixture

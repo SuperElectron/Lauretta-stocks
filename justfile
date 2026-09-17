@@ -17,7 +17,7 @@ research ticker user="":
 
 # Run the HTTP API on :8000 (needs a broker: `just broker`, and BROKER_URL in .env).
 api:
-    cd services/agent && uv run uvicorn src.api.app:app --host 127.0.0.1 --port 8000
+    cd services/api && uv run uvicorn src.api.app:app --host 127.0.0.1 --port 8000
 
 # Run the job worker that the API queues chat turns and research runs for.
 worker:
@@ -29,7 +29,7 @@ broker:
 
 # Check streaming through the API: time to first token and gaps between tokens.
 stream-check *args:
-    cd services/agent && uv run python scripts/stream_check.py {{ args }}
+    cd services/api && uv run python scripts/stream_check.py {{ args }}
 
 # Create or migrate the checkpoint tables in the local database (as DATABASE_SETUP_URL, else
 # DATABASE_URL). The Spark uses the compose `migrate` service instead.
@@ -48,6 +48,7 @@ down clean="false": _local-only
 
 # test: unit tests and lint.
 test:
+    cd services/api && uv run pytest -q && uv run ruff check . && uv run ruff format --check .
     cd services/agent && uv run pytest -q && uv run ruff check . && uv run ruff format --check .
 
 # test: the database isolation tests (row-level security as the app role) in a throwaway
@@ -82,6 +83,7 @@ _spark cmd:
     target=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]))["spark"]; print(d["username"] + "@" + d["host"])' "{{ justfile_directory() }}/.claude/secrets/devices.json")
     ssh -t -o BatchMode=yes "$target" {{ quote(cmd) }}
 
-# Refuses where the full stack runs (its api container exists): up/down would act on its database.
+# Refuses where the full stack runs or has run: its api container, or a volume only the stack
+# creates, exists. up/down would act on its database (clean=true would delete every user's data).
 _local-only:
-    @if docker ps -a --format '{{{{.Names}}' | grep -qx 'lauretta-stocks-api-1'; then echo "this host runs the stack; use just deploy/ps/logs instead" >&2; exit 1; fi
+    @if docker ps -a --format '{{{{.Names}}' | grep -qx 'lauretta-stocks-api-1' || docker volume ls -q | grep -qxE 'lauretta-stocks_(anythingllm|tsstate|brokerdata|speechmodels)'; then echo "this host runs the stack; use just deploy/ps/logs instead" >&2; exit 1; fi

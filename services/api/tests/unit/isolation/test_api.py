@@ -6,8 +6,9 @@ import asyncio
 import pytest
 
 from src.api import reads
-from src.queue import events, keys
+from src.queue import keys
 from src.queue.models import Done, Token
+from tests import worker_side
 from tests.unit.isolation.conftest import queued
 from tests.unit.openai.conftest import FakeWorker, body, client_for
 
@@ -61,8 +62,8 @@ async def test_max_gets_404_for_mats_job_status_and_events_before_any_stream(bro
         job_id = (await mat.post("/v1/jobs", json={"kind": "chat", "message": "hi"})).json()[
             "job_id"
         ]
-        await events.publish(broker, job_id, Token(text="Mat's secret"), 60)
-        await events.publish(broker, job_id, Done(result={"reply": "Mat's secret"}), 60)
+        await worker_side.publish(broker, job_id, Token(text="Mat's secret"), 60)
+        await worker_side.publish(broker, job_id, Done(result={"reply": "Mat's secret"}), 60)
 
         status = await max_.get(f"/v1/jobs/{job_id}")
         stream = await asyncio.wait_for(max_.get(f"/v1/jobs/{job_id}/events"), 2)

@@ -54,6 +54,7 @@ secrets:
   spark_vllm_api_key:
     environment: SPARK_VLLM_API_KEY
 
+# The agent service (services/agent): the worker, and the one-shot checkpoint migrate.
 x-app: &app
   build:
     context: ./services/agent
@@ -84,15 +85,13 @@ x-app: &app
     EMBED_MODEL: ${EMBED_MODEL:?set EMBED_MODEL}
     EMBED_DIMS: ${EMBED_DIMS:?set EMBED_DIMS}
     SEC_USER_AGENT: ${SEC_USER_AGENT:?set SEC_USER_AGENT}
-    # Queue and API tuning; the defaults match src/settings.py.
+    # Queue tuning; the defaults match services/agent/src/settings.py.
     BROKER_MIN_IDLE_MS: ${BROKER_MIN_IDLE_MS:-60000}
     BROKER_MAX_DELIVERIES: ${BROKER_MAX_DELIVERIES:-3}
     WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
     AGENT_LOCK_WAIT_MS: ${AGENT_LOCK_WAIT_MS:-30000}
     AGENT_LOCK_TTL_MS: ${AGENT_LOCK_TTL_MS:-30000}
     EVENTS_TTL_S: ${EVENTS_TTL_S:-86400}
-    API_MAX_WAIT_S: ${API_MAX_WAIT_S:-25}
-    API_MAX_STREAM_S: ${API_MAX_STREAM_S:-900}
     AGENT_STREAM_REASONING: ${AGENT_STREAM_REASONING:-true}
   depends_on:
     db:
@@ -141,12 +140,30 @@ services:
       interval: 5s
       retries: 20
 
+  # The API service (services/api): FastAPI, queues jobs and reads results, never runs a graph.
+  # Its own image, with none of the agent's model or data libraries.
   api:
-    <<: *app
+    build:
+      context: ./services/api
+    image: lauretta-stocks-api:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      broker:
+        condition: service_healthy
     command: ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
     networks: [app, api-data, speech]
     environment:
-      <<: *app-env
+      LOG_LEVEL: ${LOG_LEVEL:?set LOG_LEVEL}
+      ALLOWED_USERS: ${ALLOWED_USERS:-mat,max}
+      DATABASE_URL: postgresql://lauretta_app:${DB_APP_PASSWORD:?set DB_APP_PASSWORD (random, e.g. openssl rand -hex 32)}@db:5432/${DB_NAME:?set DB_NAME}
+      BROKER_URL: redis://:${BROKER_PASSWORD:?set BROKER_PASSWORD}@broker:6379/0
+      DB_POOL_MIN: ${DB_POOL_MIN:?set DB_POOL_MIN}
+      DB_POOL_MAX: ${DB_POOL_MAX:?set DB_POOL_MAX}
+      EVENTS_TTL_S: ${EVENTS_TTL_S:-86400}
+      API_MAX_WAIT_S: ${API_MAX_WAIT_S:-25}
+      API_MAX_STREAM_S: ${API_MAX_STREAM_S:-900}
       SPEECH_URL: http://speech:8000
       STT_MODEL: ${STT_MODEL:-Systran/faster-whisper-small}
       TTS_MODEL: ${TTS_MODEL:-speaches-ai/Kokoro-82M-v1.0-ONNX}
@@ -157,7 +174,7 @@ services:
       API_GATEWAY_SECRET: ${API_GATEWAY_SECRET:?set API_GATEWAY_SECRET (hex only, e.g. openssl rand -hex 32)}
     mem_limit: 2g
     healthcheck:
-      test: ["CMD", "python", "/app/healthcheck.py", "api"]
+      test: ["CMD", "python", "/app/healthcheck.py"]
       interval: 10s
       timeout: 5s
       retries: 6

@@ -14,6 +14,8 @@ class RoleState(MessagesState):
 
     system_prompt: str
     result: dict[str, Any] | None
+    # Times the role was reminded to submit after replying without a tool call.
+    reminders: int
 
 
 class PipelineState(TypedDict, total=False):

@@ -34,10 +34,10 @@ def speech_service(monkeypatch):
 
     monkeypatch.setattr(speech, "speak_pieces", speak_pieces)
 
-    async def no_facts(_pool, _user):
-        return []
+    async def no_voice(_pool, _user):
+        return None
 
-    monkeypatch.setattr(routes.facts, "persona_rows", no_facts)
+    monkeypatch.setattr(routes.facts, "tts_voice", no_voice)
     calls["heard"] = heard
     return calls
 
