@@ -13,7 +13,7 @@ from redis.asyncio import Redis
 from src.queue import keys
 
 Status = Literal["queued", "running", "done", "failed"]
-FINISHED: frozenset[str] = frozenset({"done", "failed"})
+FINISHED: frozenset[str] = frozenset({keys.DONE, keys.FAILED})
 
 
 def now() -> str:

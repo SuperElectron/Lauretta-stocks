@@ -15,7 +15,7 @@ from redis.asyncio import Redis
 
 from src.api.deps import BrokerDep, ClientDep, JobId, JobStatusDep, PoolDep, SettingsDep, UserDep
 from src.db.queries import threads
-from src.queue import events, submit
+from src.queue import events, keys, submit
 from src.queue.models import Job, JobRequest
 
 router = APIRouter()
@@ -59,4 +59,4 @@ async def create_job(
 
 @router.get("/v1/jobs/{job_id}")
 async def job_status(job_id: JobId, status: JobStatusDep) -> dict[str, str]:
-    return {"job_id": job_id, **{k: v for k, v in status.items() if k != "user"}}
+    return {"job_id": job_id, **{k: v for k, v in status.items() if k != keys.USER}}

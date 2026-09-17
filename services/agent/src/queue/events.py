@@ -22,7 +22,10 @@ class StoredEvent:
 
 async def publish(broker: Redis, job_id: str, event: Event, ttl_s: int) -> str:
     async with broker.pipeline(transaction=True) as pipe:
-        pipe.xadd(keys.events(job_id), {"type": event.type, "data": event.model_dump_json()})
+        pipe.xadd(
+            keys.events(job_id),
+            {keys.ENTRY_TYPE: event.type, keys.ENTRY_DATA: event.model_dump_json()},
+        )
         pipe.expire(keys.events(job_id), ttl_s)
         entry_id, _ = await pipe.execute()
     return entry_id
@@ -31,6 +34,6 @@ async def publish(broker: Redis, job_id: str, event: Event, ttl_s: int) -> str:
 async def last_terminal(broker: Redis, job_id: str) -> StoredEvent | None:
     """The job's `done` or `error` event, if it published one (always its last event)."""
     for entry_id, fields in await broker.xrevrange(keys.events(job_id), count=1):
-        if fields["type"] in TERMINAL:
-            return StoredEvent(entry_id, fields["type"], fields["data"])
+        if fields[keys.ENTRY_TYPE] in TERMINAL:
+            return StoredEvent(entry_id, fields[keys.ENTRY_TYPE], fields[keys.ENTRY_DATA])
     return None

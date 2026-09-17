@@ -17,7 +17,7 @@ from src.queue import keys
 from src.queue.models import Job
 
 Status = Literal["queued", "running", "done", "failed"]
-FINISHED: frozenset[str] = frozenset({"done", "failed"})
+FINISHED: frozenset[str] = frozenset({keys.DONE, keys.FAILED})
 # The jobs stream is trimmed to about this many entries; a job's record is its hash and events.
 JOBS_MAXLEN = 10_000
 
@@ -49,8 +49,8 @@ async def attachable(broker: Redis | Pipeline, request_key: str) -> Queued | Non
     if record is None:
         return None
     job_id, thread_id = record.split(" ", 1)
-    status = await broker.hget(keys.job(job_id), "status")
-    return None if status in (None, "failed") else Queued(job_id, thread_id, attached=True)
+    status = await broker.hget(keys.job(job_id), keys.STATUS)
+    return None if status in (None, keys.FAILED) else Queued(job_id, thread_id, attached=True)
 
 
 async def submit_once(
@@ -66,13 +66,15 @@ async def submit_once(
                 if existing is not None:
                     return existing
                 previous = await pipe.get(keys.thread_job(job.user, job.thread_id))
-                status = previous and await pipe.hget(keys.job(previous), "status")
+                status = previous and await pipe.hget(keys.job(previous), keys.STATUS)
                 pipe.multi()
                 pipe.set(request_key, f"{job.job_id} {job.thread_id}", ex=request_ttl_s)
                 pipe.set(keys.thread_job(job.user, job.thread_id), job.job_id, ex=ttl_s)
                 _queue(pipe, job, ttl_s)
                 await pipe.execute()
-                return Queued(job.job_id, job.thread_id, behind=status in ("queued", "running"))
+                return Queued(
+                    job.job_id, job.thread_id, behind=status in (keys.QUEUED, keys.RUNNING)
+                )
             except WatchError:
                 # A request on the same key or thread won the race; look again.
                 continue
@@ -89,10 +91,10 @@ def _queue(pipe: Pipeline, job: Job, ttl_s: int) -> None:
     pipe.hset(
         keys.job(job.job_id),
         mapping={
-            "status": "queued",
-            "kind": job.kind,
-            "user": job.user,
-            "created_at": job.submitted_at,
+            keys.STATUS: keys.QUEUED,
+            keys.KIND: job.kind,
+            keys.USER: job.user,
+            keys.CREATED_AT: job.submitted_at,
         },
     )
     pipe.expire(keys.job(job.job_id), ttl_s)

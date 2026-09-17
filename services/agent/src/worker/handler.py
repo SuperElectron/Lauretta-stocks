@@ -26,7 +26,7 @@ from redis.asyncio import Redis
 from src.app import App
 from src.errors import AgentError, JobInterrupted
 from src.prompts import errors as wording
-from src.queue import events, submit
+from src.queue import events, keys, submit
 from src.queue.lock import ThreadLock
 from src.queue.models import Done, Error, Event, Job
 from src.settings import Settings
@@ -55,15 +55,18 @@ class JobHandler:
     async def run(self, job: Job) -> None:
         log = logger.bind(job_id=job.job_id, kind=job.kind)
         status = await submit.status_of(self._broker, job.job_id)
-        state = (status or {}).get("status")
+        state = (status or {}).get(keys.STATUS)
         if state in submit.FINISHED:
             log.warning("job.already_finished")
             return
-        if state == "running":
+        if state == keys.RUNNING:
             await self._redelivered(job)
             return
         await submit.mark(
-            self._broker, job.job_id, self._ttl_s, status="running", started_at=submit.now()
+            self._broker,
+            job.job_id,
+            self._ttl_s,
+            **{keys.STATUS: keys.RUNNING, keys.STARTED_AT: submit.now()},
         )
         try:
             result = await self._execute(job)
@@ -98,10 +101,11 @@ class JobHandler:
         await self.finish(job, error_event(JobInterrupted()))
 
     async def _mark_finished(self, job_id: str, outcome: str, code: str | None) -> None:
-        fields = {"status": "done" if outcome == "done" else "failed"}
+        fields = {keys.STATUS: keys.DONE if outcome == "done" else keys.FAILED}
         if code is not None:
-            fields["error_code"] = code
-        await submit.mark(self._broker, job_id, self._ttl_s, **fields, finished_at=submit.now())
+            fields[keys.ERROR_CODE] = code
+        fields[keys.FINISHED_AT] = submit.now()
+        await submit.mark(self._broker, job_id, self._ttl_s, **fields)
 
     async def _execute(self, job: Job) -> dict[str, Any]:
         user = job.user
