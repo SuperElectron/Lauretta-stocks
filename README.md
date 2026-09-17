@@ -143,6 +143,20 @@ web app with threads, where the desk answers.
 - **What it fetches from the internet:** at boot, LiteLLM's model map (GitHub) and model prices
   (models.dev); on the first document, its embedding model, once. None of it carries user data.
 
+## MCP clients (Goose and kin)
+
+The desk is also an MCP server (streamable HTTP) at `https://lauretta.tailae2b1.ts.net/mcp/`, for
+Goose and other MCP clients on the tailnet. It takes the owner's key only (`GATEWAY_API_KEY`, as
+`Authorization: Bearer <key>`) and acts as `mat`; AnythingLLM's key is refused.
+
+- **Tools:** `ask_assistant(message, thread_id="mcp")`, `research_stock(ticker)` (waits, with
+  MCP progress notifications per step), `start_research(ticker)` and `get_job(job_id)` (without
+  waiting), `get_thesis(ticker)`, `holdings()`.
+- **Goose:** add a remote extension of type *Streamable HTTP* with that URL and the header
+  `Authorization: Bearer <GATEWAY_API_KEY>`.
+- **How it runs:** inside api (`src/api/mcpserver/`), stateless, over the same jobs, queue and
+  reads as `/v1`; the gateway names the user exactly as for `/v1`.
+
 ## Running on the Spark
 
 On the Mac the desk runs for development. On the DGX Spark it runs full time: the whole stack

@@ -84,6 +84,10 @@ routes:
     matches:
       - path:
           pathPrefix: /v1/
+      # The MCP server (Goose and other MCP clients), streamable HTTP inside api. The owner's key
+      # only: the authorization rule below keeps AnythingLLM's key to /v1/models and chat.
+      - path:
+          pathPrefix: /mcp
     policies:
       apiKey:
         mode: strict
