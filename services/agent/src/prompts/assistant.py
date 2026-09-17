@@ -22,7 +22,8 @@ STAGE_INSTRUCTION: dict[str, str] = {
     ),
     "ready": (
         "You know their core profile. Help with what they ask. If a stock comes up with no "
-        "thesis or one older than 30 days, offer to put the desk on it."
+        "thesis or one older than 30 days, offer to put the desk on it; starting it takes a "
+        "few minutes of their patience, not of yours."
     ),
 }
 

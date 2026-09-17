@@ -188,8 +188,9 @@ services:
       <<: *app-env
       # This internal key only opens the gateway's llm listener; the gateway swaps it for vLLM's.
       OPENAI_API_KEY: ${LLM_INTERNAL_KEY:?set LLM_INTERNAL_KEY (random, e.g. openssl rand -hex 32)}
-    # Covers the longest research run, so a deploy lets a job finish instead of killing it mid-run.
-    stop_grace_period: 180s
+    # A research run takes about 11 minutes, so a deploy waits that long for one in flight
+    # rather than killing it; a killed job is redelivered and fails JOB_INTERRUPTED.
+    stop_grace_period: 900s
     mem_limit: 3g
     healthcheck:
       test: ["CMD", "python", "/app/healthcheck.py", "worker"]

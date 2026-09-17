@@ -23,7 +23,7 @@
     {
       "type": "tool",
       "data": {
-        "name": "research_stock",
+        "name": "start_research",
         "status": "started"
       }
     },

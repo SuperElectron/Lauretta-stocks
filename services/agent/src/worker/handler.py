@@ -27,7 +27,7 @@ from src.app import App
 from src.errors import AgentError, JobInterrupted
 from src.queue import events, keys, submit
 from src.queue.lock import ThreadLock
-from src.queue.models import Done, Error, Event, Job
+from src.queue.models import DESK, Done, Error, Event, Job
 from src.settings import Settings
 from src.worker.research import run_research
 from src.worker.stream import run_chat
@@ -111,9 +111,12 @@ class JobHandler:
 
     async def _execute(self, job: Job) -> dict[str, Any]:
         user = job.user
-        await self._app.record_signals(
-            user, {"client": job.client.client, "channel": job.channel}, "gateway"
-        )
+        # Only a job a client sent says how the investor reached us; the desk queues its own
+        # research, and that is not the investor arriving.
+        if job.client.client != DESK:
+            await self._app.record_signals(
+                user, {"client": job.client.client, "channel": job.channel}, "gateway"
+            )
 
         async def publish(event: Event) -> None:
             await self.publish(job.job_id, event)

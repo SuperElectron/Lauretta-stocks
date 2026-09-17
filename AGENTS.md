@@ -10,9 +10,9 @@ Run `just --list` for every command.
 
 ```
 chat (LangGraph, checkpointed in Postgres)
-  context -> agent <-> tools -> notice  memory, holdings, snapshot, get_thesis, research_stock,
-                                        set_identity, set_user_details, skip_setup_step,
-                                        propose_soul_change
+  context -> agent <-> tools -> notice  memory, holdings, snapshot, get_thesis, start_research,
+                                        check_research, set_identity, set_user_details,
+                                        skip_setup_step, propose_soul_change
                                                                                   |
 research pipeline (LangGraph)                                                     v
   load_context -> analyst -> checker --revise (max PIPELINE_MAX_REVISIONS)--> analyst
@@ -30,6 +30,16 @@ research pipeline (LangGraph)                                                   
   profile is unknown.
 - **The Director** (the chat assistant) guides the investor through setup, then relays the
   team's results.
+- **Research from chat** (`src/runs.py`, `graph/research.py`): a run takes minutes, so
+  `start_research` only queues it (as an ordinary research job, `contracts/job.v1.json`, client
+  `desk`, which writes no signals) and the turn ends. `research:{user}` on the broker maps ticker
+  to job id for what the desk started and has not reported; the ticker's field is claimed before
+  the job is queued, so one ticker never runs twice at once. Every investor message renders a
+  `<research>` block from the job statuses: runs still going are named, a finished or failed one
+  is reported, and a run whose record is gone is reported as lost, never as finished. What the
+  block reported is forgotten when the next message is answered, so a turn that dies says it
+  again. The CLI has no queue, so there a run is a background task in its own process
+  (`runs.LocalRuns`).
 - **Setup** (`graph/setup.py`, wording in `prompts/setup.py`): the context node computes the
   steps from memory every turn (`investor_name`, `team_names` optional, `core_profile` from
   `memory/topics.py`, `holdings` optional) into `setup` in `ChatState`, and renders a `<setup>`

@@ -1,5 +1,7 @@
 """Which tools each agent gets, in the order they are described to the model."""
 
+from typing import TYPE_CHECKING
+
 from langchain_core.tools import BaseTool
 from psycopg_pool import AsyncConnectionPool
 
@@ -16,8 +18,11 @@ from src.tools.persona import (
     build_skip_setup_step,
 )
 from src.tools.portfolio import build_get_portfolio, build_remove_holding, build_set_holding
-from src.tools.research import RunResearch, build_get_thesis, build_research_stock
+from src.tools.research import build_check_research, build_get_thesis, build_start_research
 from src.tools.submit import build_submit_advice, build_submit_review, build_submit_stock_story
+
+if TYPE_CHECKING:
+    from src.runs import Runs
 
 
 def research_tools(sec: SecClient) -> list[BaseTool]:
@@ -50,9 +55,7 @@ def advisor_tools(pool: AsyncConnectionPool, embedder: Embedder) -> list[BaseToo
     ]
 
 
-def assistant_tools(
-    pool: AsyncConnectionPool, embedder: Embedder, run_research: RunResearch
-) -> list[BaseTool]:
+def assistant_tools(pool: AsyncConnectionPool, embedder: Embedder, runs: "Runs") -> list[BaseTool]:
     """No tool takes a user: each reads it from the run's context (`graph/ctx.py`)."""
     return [
         build_remember(pool, embedder),
@@ -62,7 +65,8 @@ def assistant_tools(
         build_remove_holding(pool),
         build_get_portfolio(pool),
         build_get_market_snapshot(),
-        build_research_stock(run_research),
+        build_start_research(runs),
+        build_check_research(runs),
         build_get_thesis(pool),
         build_set_identity(pool, embedder),
         build_set_user_details(pool, embedder),
