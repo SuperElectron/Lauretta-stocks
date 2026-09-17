@@ -74,7 +74,11 @@ def test_no_court_theme_in_the_assistant_prompt_or_the_notes():
 
 
 def test_no_court_theme_in_the_wording_readme_or_compose():
-    files = [*sorted((ROOT / "services/agent/src/prompts").glob("*.py")), ROOT / "README.md"]
+    prompts = [
+        *(ROOT / "services/agent/src/prompts").glob("*.py"),
+        *(ROOT / "services/api/src/prompts").glob("*.py"),
+    ]
+    files = [*sorted(prompts), ROOT / "README.md"]
     files.append(ROOT / "docker-compose.yaml")
     hits = [
         f"{path.name}:{number}: {line.strip()}"
