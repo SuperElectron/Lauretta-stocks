@@ -2,21 +2,38 @@
 #
 #   tailnet https://lauretta.tailae2b1.ts.net -> tailscale -> gateway :18400 -> api :8000 (/v1, /healthz)
 #                                                              gateway :18400 -> anythingllm :3001 (/)
-#                                                              gateway :3000  -> vllm :8000 (llm network)
+#   worker -> gateway :3000 -> vllm :8000
 #   api -> broker -> worker
 #
 # No host ports at all: the tailscale container is the only way in, and it reaches the gateway
-# on the `court` network. Local dev (`just up`) uses docker-compose.dev.yaml, the database alone.
+# alone. Each network joins only the containers that must talk, so only the gateway reaches
+# api:8000 (the api trusts the user header the gateway sets). Local dev (`just up`) uses
+# docker-compose.dev.yaml, the database alone.
 
 name: lauretta-stocks
 
 networks:
-  court:
+  # The tailscale container and the gateway: the way in.
+  edge:
+    driver: bridge
+  # The gateway and api only.
+  app:
+    driver: bridge
+  # api with the database and the broker.
+  api-data:
+    driver: bridge
+  # The worker with the database and the broker, and the gateway's llm listener (`models`).
+  worker-data:
+    driver: bridge
+  models:
+    driver: bridge
+  # The backup and the database only.
+  dump:
     driver: bridge
   # AnythingLLM and the gateway only: the web app reaches nothing else in the stack.
   web:
     driver: bridge
-  # The gateway and vLLM only: api and worker reach the model through the gateway's llm listener.
+  # The gateway and vLLM only: the worker reaches the model through the gateway's llm listener.
   llm:
     driver: bridge
 
@@ -38,21 +55,21 @@ x-app: &app
     context: ./services/agent
   image: lauretta-stocks-agent:latest
   restart: unless-stopped
-  networks: [court]
   volumes:
     - models:/cache
-  environment:
+  environment: &app-env
     LOG_LEVEL: ${LOG_LEVEL}
-    USER_ID: ${USER_ID}
-    DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+    # Who may use the desk; the first is the owner. The gateway maps callers to these ids.
+    ALLOWED_USERS: ${ALLOWED_USERS:-mat,max}
+    # The app role: row-level security applies to it (services/db/init).
+    DATABASE_URL: postgresql://lauretta_app:${DB_APP_PASSWORD:?set DB_APP_PASSWORD (random, e.g. openssl rand -hex 32)}@db:5432/${DB_NAME}
     BROKER_URL: redis://:${BROKER_PASSWORD:?set BROKER_PASSWORD}@broker:6379/0
     DB_POOL_MIN: ${DB_POOL_MIN}
     DB_POOL_MAX: ${DB_POOL_MAX}
-    # Models go through the gateway, which holds vLLM's key. This internal key only opens
-    # the gateway's llm listener; the gateway swaps it for the provider's key.
+    # Models go through the gateway, which holds vLLM's key. Only the worker calls a model, so
+    # only it gets the gateway's internal key (below).
     AGENT_PROVIDER: openai
     AGENT_BASE_URL: http://gateway:3000/v1
-    OPENAI_API_KEY: ${LLM_INTERNAL_KEY:?set LLM_INTERNAL_KEY (random, e.g. openssl rand -hex 32)}
     # vLLM's served model name.
     AGENT_MODEL: gpt-oss-120b
     AGENT_TEMPERATURE: ${AGENT_TEMPERATURE}
@@ -87,11 +104,15 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
+      # Read once, by services/db/init/01-app-role.sh, when the volume is first created. Changing
+      # them later also needs `ALTER ROLE ... PASSWORD` (README, Users and isolation).
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:?set DB_APP_PASSWORD}
+      DB_MIGRATOR_PASSWORD: ${DB_MIGRATOR_PASSWORD:?set DB_MIGRATOR_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./services/db/init:/docker-entrypoint-initdb.d:ro
     mem_limit: 1g
-    networks: [court]
+    networks: [api-data, worker-data, dump]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -107,7 +128,7 @@ services:
     volumes:
       - brokerdata:/data
     mem_limit: 256m
-    networks: [court]
+    networks: [api-data, worker-data]
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 5s
@@ -116,6 +137,7 @@ services:
   api:
     <<: *app
     command: ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    networks: [app, api-data]
     mem_limit: 2g
     healthcheck:
       test: ["CMD", "python", "/app/healthcheck.py", "api"]
@@ -127,6 +149,11 @@ services:
   worker:
     <<: *app
     command: ["python", "-m", "src.worker"]
+    networks: [worker-data, models]
+    environment:
+      <<: *app-env
+      # This internal key only opens the gateway's llm listener; the gateway swaps it for vLLM's.
+      OPENAI_API_KEY: ${LLM_INTERNAL_KEY:?set LLM_INTERNAL_KEY (random, e.g. openssl rand -hex 32)}
     # Covers the longest research run, so a deploy lets a job finish instead of killing it mid-run.
     stop_grace_period: 180s
     mem_limit: 3g
@@ -136,6 +163,21 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+  # One-off deploy step: creates or migrates LangGraph's checkpoint tables as lauretta_migrator,
+  # then exits. Only it holds that role's password; the worker just checks the tables at start.
+  # Run by `just deploy` and services/db/reset-and-restore.sh: `docker compose run --rm migrate`.
+  migrate:
+    <<: *app
+    profiles: [migrate]
+    restart: "no"
+    command: ["python", "-m", "src.db.migrate"]
+    networks: [worker-data]
+    environment:
+      <<: *app-env
+      DATABASE_SETUP_URL: postgresql://lauretta_migrator:${DB_MIGRATOR_PASSWORD:?set DB_MIGRATOR_PASSWORD (random, e.g. openssl rand -hex 32)}@db:5432/${DB_NAME}
+    healthcheck:
+      disable: true
 
   # The web app at / (and the Android app's pairing server). Its chat model is the desk itself:
   # the Generic OpenAI provider calls the gateway's /v1 with the API key, like any other client.
@@ -152,7 +194,10 @@ services:
       AUTH_TOKEN: ${ANYTHINGLLM_AUTH_TOKEN:?set ANYTHINGLLM_AUTH_TOKEN (the first-run password)}
       LLM_PROVIDER: generic-openai
       GENERIC_OPEN_AI_BASE_PATH: http://gateway:18400/v1
-      GENERIC_OPEN_AI_API_KEY: ${GATEWAY_API_KEY:?set GATEWAY_API_KEY}
+      # Its own key, not the owner's: the gateway lets it only list models and chat, and names
+      # the user from the model. Each person's workspace sets its chat model to lauretta-<user>
+      # (README); this default model names nobody, so a chat outside those workspaces is refused.
+      GENERIC_OPEN_AI_API_KEY: ${ANYTHINGLLM_API_KEY:?set ANYTHINGLLM_API_KEY (random, e.g. openssl rand -hex 32)}
       GENERIC_OPEN_AI_MODEL_PREF: lauretta
       GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT: "128000"
       GENERIC_OPEN_AI_MAX_TOKENS: "8192"
@@ -178,8 +223,10 @@ services:
     restart: unless-stopped
     command: ["-f", "/etc/agentgateway/config.yaml"]
     environment:
-      GATEWAY_API_KEY: ${GATEWAY_API_KEY:?set GATEWAY_API_KEY (clients send it as a Bearer token)}
-      LLM_INTERNAL_KEY: ${LLM_INTERNAL_KEY:?set LLM_INTERNAL_KEY (api and worker send it to the llm listener)}
+      # The owner's key (scripts; acts as mat) and AnythingLLM's (acts per workspace model).
+      GATEWAY_API_KEY: ${GATEWAY_API_KEY:?set GATEWAY_API_KEY (the owner's Bearer token)}
+      ANYTHINGLLM_API_KEY: ${ANYTHINGLLM_API_KEY:?set ANYTHINGLLM_API_KEY}
+      LLM_INTERNAL_KEY: ${LLM_INTERNAL_KEY:?set LLM_INTERNAL_KEY (the worker sends it to the llm listener)}
     volumes:
       - ./services/gateway:/etc/agentgateway:ro
       # The image is distroless, so a static busybox is mounted to run the healthcheck.
@@ -192,7 +239,7 @@ services:
     secrets:
       - spark_vllm_api_key
     mem_limit: 256m
-    networks: [court, web, llm]
+    networks: [edge, app, models, web, llm]
     healthcheck:
       # agentgateway's readiness endpoint: ready once the config is loaded and listeners are up.
       test: ["CMD", "/hc/busybox", "wget", "-qO-", "http://127.0.0.1:15021/healthz/ready"]
@@ -307,7 +354,7 @@ services:
       - ./backups:/backups
       - anythingllm:/anythingllm:ro
     mem_limit: 256m
-    networks: [court]
+    networks: [dump]
     # Unhealthy when the newest dump or storage tar is older than 26 h (a missed night).
     healthcheck:
       test: ["CMD-SHELL", "find /backups -name \"$${PGDATABASE}-*.dump\" -mmin -1560 | grep -q . && find /backups -name 'anythingllm-*.tar.gz' -mmin -1560 | grep -q ."]
@@ -344,7 +391,7 @@ services:
       # A directory mount, so containerboot sees changes to serve.json.
       - ./services/tailscale:/config:ro
     mem_limit: 128m
-    networks: [court]
+    networks: [edge]
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9002/healthz"]
       interval: 30s

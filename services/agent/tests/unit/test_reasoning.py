@@ -50,13 +50,13 @@ async def test_reasoning_streams_before_the_tokens_and_stays_out_of_the_reply():
     graph = one_node_chat(model((THINKING_TURN, "stop")))
     events = Events()
 
-    result = await run_chat(graph, "t1", "a" * 32, "hi", events)
+    result = await run_chat(graph, "mat", "t1", "a" * 32, "hi", events)
 
     kinds = [kind for kind, _ in events]
     assert kinds == ["reasoning"] * (len(kinds) - 2) + ["token", "token"]
     assert thought(events) == "The investor says hi."
     assert result["reply"] == "Good day"
-    state = await graph.aget_state({"configurable": {"thread_id": "t1"}})
+    state = await graph.aget_state({"configurable": {"thread_id": "mat:t1"}})
     stored = state.values["messages"][-1]
     assert stored.text == "Good day" and REASONING not in stored.additional_kwargs
     assert "says hi" not in json.dumps(stored.model_dump())
@@ -65,14 +65,14 @@ async def test_reasoning_streams_before_the_tokens_and_stays_out_of_the_reply():
 async def test_vllm_reasoning_content_is_kept_too():
     deltas = [{"role": "assistant", "reasoning_content": "Hmm"}, {"content": "Yes"}]
     events = Events()
-    await run_chat(one_node_chat(model((deltas, "stop"))), "t1", "a" * 32, "hi", events)
+    await run_chat(one_node_chat(model((deltas, "stop"))), "mat", "t1", "a" * 32, "hi", events)
     assert events == [("reasoning", {"text": "Hmm"}), ("token", {"text": "Yes"})]
 
 
 async def test_switched_off_no_reasoning_is_sent():
     events = Events()
     graph = one_node_chat(model((THINKING_TURN, "stop")))
-    await run_chat(graph, "t1", "a" * 32, "hi", events, stream_reasoning=False)
+    await run_chat(graph, "mat", "t1", "a" * 32, "hi", events, stream_reasoning=False)
     assert [kind for kind, _ in events] == ["token", "token"]
 
 
@@ -84,7 +84,7 @@ async def test_signal_values_and_think_tags_never_reach_the_client():
     ]
     events = Events()
     graph = one_node_chat(model((deltas + [{"content": "Hi"}], "stop")))
-    await run_chat(graph, "t1", "a" * 32, "hi", events, secrets=["100.64.0.7"])
+    await run_chat(graph, "mat", "t1", "a" * 32, "hi", events, secrets=["100.64.0.7"])
     assert thought(events) == "They came from [redacted] via x"
 
 
@@ -92,7 +92,7 @@ async def test_reasoning_counts_toward_the_limit_and_truncation_still_fails_the_
     events = Events()
     graph = one_node_chat(model(([reasoning_delta("Thinking at length")], "length")))
     with pytest.raises(ReplyTruncated):
-        await run_chat(graph, "t1", "a" * 32, "hi", events)
+        await run_chat(graph, "mat", "t1", "a" * 32, "hi", events)
     assert events == [("reasoning", {"text": "Thinking at length"})]
 
 
@@ -100,7 +100,7 @@ async def test_a_reply_that_only_reasoned_fails_visibly():
     events = Events()
     graph = one_node_chat(model(([reasoning_delta("I wonder")], "stop")))
     with pytest.raises(EmptyReply):
-        await run_chat(graph, "t1", "a" * 32, "hi", events)
+        await run_chat(graph, "mat", "t1", "a" * 32, "hi", events)
     assert thought(events) == "I wonder"
 
 
@@ -122,12 +122,12 @@ async def test_a_chat_job_guards_reasoning_with_the_signal_values_and_the_settin
         seen.update(secrets=secrets, stream_reasoning=stream_reasoning)
         return {"reply": "ok"}
 
-    async def signal_values():
+    async def signal_values(_user_id):
         return ["100.64.0.7", "phone"]
 
     monkeypatch.setattr(handler_module, "run_chat", run_chat)
     handler = handler_for(FakeAsyncRedis(decode_responses=True), AGENT_STREAM_REASONING=False)
     handler._app = replace(handler._app, signal_values=signal_values)
-    await handler.run(Job(kind="chat", message="hi"))
+    await handler.run(Job(user="mat", kind="chat", message="hi"))
 
     assert seen == {"secrets": ["100.64.0.7", "phone"], "stream_reasoning": False}

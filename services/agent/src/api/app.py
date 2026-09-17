@@ -1,7 +1,8 @@
 """The HTTP API (`uvicorn src.api.app:app`): queues jobs for the worker and reads results.
 
 It opens the database pool for reads and the broker connection, and never runs a graph.
-Authentication is the gateway's; the API trusts the headers it forwards.
+Authentication is the gateway's, the only container that can reach this API: it names the user
+in `X-Lauretta-User` (see `deps.py`), and every read, job and thread is that user's alone.
 """
 
 import sys

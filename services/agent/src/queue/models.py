@@ -44,8 +44,10 @@ class JobRequest(BaseModel):
 
 
 class Job(JobRequest):
-    """A request as queued: with its id and who sent it."""
+    """A request as queued: with its id, the user it acts for and the app that sent it. `user` is
+    set by the API from the gateway's header, never from the request body (which forbids it)."""
 
+    user: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,31}$")
     job_id: str = Field(default_factory=lambda: uuid4().hex)
     client: ClientInfo = ClientInfo()
     submitted_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())

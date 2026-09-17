@@ -4,9 +4,10 @@
 #
 #   18400  ingress  -> api:8000 (/v1/*, /healthz) and anythingllm:3001 (everything else).
 #                      Not published to the host; the tailscale container terminates TLS for
-#                      svc:lauretta and proxies here.
+#                      svc:lauretta and proxies here. The gateway is the only container that
+#                      shares a network with api, so every API call passes the checks below.
 #   3000   llm      -> vllm:8000 on the llm network. Compose networks only, never published;
-#                      needs the internal key that only api and worker hold.
+#                      needs the internal key that only the worker holds.
 #
 # Route choice is by match, not list order: an exact path beats a prefix, and a longer prefix
 # beats a shorter one, so /healthz and /v1/ always reach api and `/` takes only the rest.
@@ -43,6 +44,9 @@ routes:
           - Tailscale-User-Name
           - Tailscale-User-Profile-Pic
           - Tailscale-Headers-Info
+          - Tailscale-App-Capabilities
+          - X-Lauretta-User
+          - X-Lauretta-Caller
           - X-Forwarded-For
           - X-Real-IP
           - Forwarded
@@ -58,15 +62,23 @@ routes:
     backends:
       - host: api:8000
 
-  # Identity is the API key for now: no client or proxy header is trusted as a caller's identity.
-  # tailscale serve sets Tailscale-User-Login (and -Name, -Profile-Pic) for user callers and deletes
-  # incoming copies; they are stripped here too until something chooses to trust them.
-  # The API. Every request needs `Authorization: Bearer <GATEWAY_API_KEY>`; anything else is 401.
+  # The API, and who each request acts for. Two keys, each with its caller in the metadata:
+  #   GATEWAY_API_KEY      the owner's own key (scripts, curl): always the user `mat`.
+  #   ANYTHINGLLM_API_KEY  AnythingLLM's key. It sends no user, so the user comes from the model
+  #                        its workspace chats with: lauretta-mat -> mat, lauretta-max -> max.
+  #                        It may only list models and chat.
+  # The gateway sets X-Lauretta-User and X-Lauretta-Caller itself. A client's copy never reaches
+  # api: `set` replaces it, and when the expression cannot name a user (another model, no body,
+  # a body too big to buffer) the header is removed and left out, so api answers 401. Tested on
+  # v1.5.0. They are not in requestHeaderModifier.remove below: that runs after `set` and would
+  # strip the gateway's own value.
+  # To add a user (five places, README "Users and isolation"): the user map and the model list
+  # in the authorization rule below, a rate-limit bucket, ALLOWED_USERS, and a workspace.
+  # Authorization, cookies and the other identity and forwarding headers are then removed.
+  # tailscale serve's Tailscale-User-* headers are not trusted: AnythingLLM's calls carry none.
   # apiKey in v1.5.0 takes the key inline (or its sha256 hash), not from a file, so compose
-  # passes GATEWAY_API_KEY into the gateway's environment only.
-  # The Authorization header is checked, then removed with every client-supplied identity
-  # header: api never sees the key and never trusts a caller's claim of who they are.
-  # No `buffer` policy, so server-sent events stream through as they are written.
+  # passes the keys into the gateway's environment only.
+  # Reading `request.body` buffers the request body (not the response): streams still flow.
   - name: ingress-api
     gateways: [ingress]
     matches:
@@ -81,6 +93,17 @@ routes:
             prefix: "Bearer "
         keys:
           - key: ${GATEWAY_API_KEY}
+            metadata: {caller: owner, user: mat}
+          - key: ${ANYTHINGLLM_API_KEY}
+            metadata: {caller: anythingllm}
+      # AnythingLLM may list models, and chat only as a user the map below names: any other
+      # model, or a body that cannot be read, is refused here (403) rather than sent on.
+      authorization:
+        rules:
+          - require: >-
+              apiKey.caller != "anythingllm" || request.path == "/v1/models"
+              || (request.path == "/v1/chat/completions"
+                  && json(request.body).model in ["lauretta-mat", "lauretta-max"])
       requestHeaderModifier:
         remove:
           - Authorization
@@ -92,16 +115,34 @@ routes:
           - Tailscale-User-Name
           - Tailscale-User-Profile-Pic
           - Tailscale-Headers-Info
+          - Tailscale-App-Capabilities
           - X-Forwarded-For
           - X-Real-IP
           - Forwarded
           - X-Forwarded-Host
           - X-Forwarded-Proto
+      transformations:
+        request:
+          set:
+            X-Lauretta-Caller: 'apiKey.caller'
+            X-Lauretta-User: >-
+              apiKey.caller == "anythingllm"
+              ? {"lauretta-mat": "mat", "lauretta-max": "max"}[json(request.body).model]
+              : apiKey.user
+      # A bucket per user: Max's chats from AnythingLLM never use up the owner's.
       localRateLimit:
-        - maxTokens: 120
-          tokensPerFill: 120
-          fillInterval: 60s
-          type: requests
+        conditional:
+          - condition: >-
+              apiKey.caller == "anythingllm" && request.method == "POST"
+              && json(request.body).model == "lauretta-max"
+            maxTokens: 120
+            tokensPerFill: 120
+            fillInterval: 60s
+            type: requests
+          - maxTokens: 120
+            tokensPerFill: 120
+            fillInterval: 60s
+            type: requests
       # requestTimeout bounds only the time to the response headers in v1.5.0, not the body,
       # so a long research stream is not cut; api bounds the stream itself.
       timeout:
@@ -132,6 +173,8 @@ routes:
           - Tailscale-User-Name
           - Tailscale-User-Profile-Pic
           - Tailscale-Headers-Info
+          - X-Lauretta-User
+          - X-Lauretta-Caller
           - X-Forwarded-For
           - X-Real-IP
           - Forwarded
@@ -156,7 +199,7 @@ routes:
     backends:
       - host: anythingllm:3001
 
-# Model egress. api and worker call http://gateway:3000/v1 with the internal key, which apiKey
+# Model egress. The worker calls http://gateway:3000/v1 with the internal key, which apiKey
 # checks and removes; the gateway then attaches vLLM's own key. The listener is reachable
 # from every network the gateway joins (including AnythingLLM's `web`), so it is never open.
 # The only model is gpt-oss-120b, served by the vllm service on the Spark.

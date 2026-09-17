@@ -9,7 +9,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
 
-from src.db.pool import rows
+from src.db.pool import rows, scoped
 from src.errors import PersonaInvalid
 from src.memory.embedder import Embedder, vector_literal
 from src.memory.keys import KEYS, KeyedKind, Source
@@ -23,6 +23,7 @@ async def persona_rows(pool: AsyncConnectionPool, user_id: str) -> list[dict[str
     """Every active identity, profile, signal and soul row for the investor."""
     return await rows(
         pool,
+        user_id,
         """SELECT id::text, kind, key, content, value, created_at::date::text AS created
            FROM facts WHERE user_id = %s AND status = 'active'
              AND kind IN ('identity', 'profile', 'signal', 'soul')""",
@@ -42,6 +43,7 @@ async def set_keyed(
     spec = KEYS[key]
     current = await rows(
         pool,
+        user_id,
         """SELECT id, value FROM facts
            WHERE user_id = %s AND subject = %s AND key = %s AND status = 'active'""",
         (user_id, spec.subject, key),
@@ -51,7 +53,7 @@ async def set_keyed(
     content = spec.sentence.format(value)
     vector = vector_literal(await embedder.embed(content))
     previous = current[0]["id"] if current else None
-    async with pool.connection() as conn, conn.transaction():
+    async with scoped(pool, user_id) as conn:
         if previous is not None:
             await conn.execute("UPDATE facts SET status = 'superseded' WHERE id = %s", (previous,))
         cursor = await conn.execute(

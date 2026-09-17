@@ -6,11 +6,12 @@ from typing import Any
 import pytest
 
 from src.db.queries import facts
+from src.graph.ctx import Ctx
 from src.graph.pipeline import Team, build_pipeline
 from src.persona.layers import build_persona, desk_names, render_persona
 from src.report import render_report
 from src.tools.persona import build_set_identity
-from tests.utils import ADVICE, REVIEW, STORY, Recorder
+from tests.utils import ADVICE, REVIEW, STORY, Recorder, run_as
 
 
 class FactsTable:
@@ -18,9 +19,13 @@ class FactsTable:
 
     def __init__(self) -> None:
         self.rows: list[dict[str, Any]] = []
+        # The user each transaction was scoped to.
+        self.scopes: list[str] = []
 
     async def execute(self, sql: str, params: tuple) -> "FactsTable":
-        if sql.lstrip().startswith("SELECT"):
+        if "set_config('app.user_id'" in sql:
+            self.scopes.append(params[0])
+        elif sql.lstrip().startswith("SELECT"):
             user_id, subject, key = params
             wanted = (user_id, subject, key, "active")
             self.found = [
@@ -75,10 +80,10 @@ def test_defaults_render_in_the_identity_block():
 
 async def test_set_identity_renames_agents_and_keeps_the_old_names():
     table = FactsTable()
-    set_identity = build_set_identity(table, Embedder(), "friend")
+    set_identity = build_set_identity(table, Embedder())
 
-    await set_identity.ainvoke({"analyst_name": "Sarah", "checker_name": "Ivy"})
-    await set_identity.ainvoke({"strategist_name": "Rex", "analyst_name": "Tom"})
+    await run_as("friend", set_identity, {"analyst_name": "Sarah", "checker_name": "Ivy"})
+    await run_as("friend", set_identity, {"strategist_name": "Rex", "analyst_name": "Tom"})
 
     names = desk_names(build_persona(table.active()))
     assert names == {
@@ -103,8 +108,8 @@ async def test_the_same_name_twice_writes_nothing():
 @pytest.mark.usefixtures("no_database")
 async def test_each_role_is_told_its_name_and_the_report_uses_them():
     analyst, checker, advisor = Recorder(STORY), Recorder(REVIEW), Recorder(ADVICE)
-    pipeline = build_pipeline(None, "friend", Team(analyst, checker, advisor), max_revisions=1)
-    final = await pipeline.ainvoke({"ticker": "MSFT"})
+    pipeline = build_pipeline(None, Team(analyst, checker, advisor), max_revisions=1)
+    final = await pipeline.ainvoke({"ticker": "MSFT"}, context=Ctx(user_id="friend"))
 
     assert analyst.prompts[0].startswith("You are Sarah, the Analyst")
     assert checker.prompts[0].startswith("You are Charlie, the Checker")

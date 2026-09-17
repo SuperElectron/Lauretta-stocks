@@ -63,7 +63,8 @@ class ForgetArgs(ToolArgs):
 class FieldUpdateArgs(ToolArgs):
     @model_validator(mode="after")
     def _sets_something(self) -> "FieldUpdateArgs":
-        if all(value is None for value in self.model_dump().values()):
+        given = (getattr(self, name) for name in type(self).model_fields if name != "runtime")
+        if all(value is None for value in given):
             raise ValueError(wording.NOTHING_TO_SET)
         return self
 

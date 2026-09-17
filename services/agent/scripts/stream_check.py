@@ -5,9 +5,11 @@
 Fails (exit 1) when the assistant model shows nothing (no `reasoning` or `token` event) for
 more than 2s after it starts (its `progress` event), or when the tokens arrive as one burst
 rather than incrementally. A reasoning model thinks before it answers, so the first token is
-reported but not gated. `STREAM_CHECK_API_KEY` is sent as a bearer token for the gateway; leave
-it unset when calling the API directly. `STREAM_CHECK_MESSAGE` and `STREAM_CHECK_THREAD` choose
-what is sent where.
+reported but not gated. `STREAM_CHECK_API_KEY` is sent as a bearer token for the gateway (the
+owner's key acts as `mat`); leave it unset when calling the API directly, which then gets the
+gateway's `X-Lauretta-User` header for `STREAM_CHECK_USER` (default `mat`), whose model
+`lauretta-<user>` the OpenAI check asks for. `STREAM_CHECK_MESSAGE` and `STREAM_CHECK_THREAD`
+choose what is sent where.
 
 With `--openai` it streams `POST /v1/chat/completions` as a chat app would, on a new thread
 each run, so the timings are for a fresh turn. It passes when the first reasoning delta (the
@@ -46,7 +48,8 @@ def events(response: httpx.Response):
 def main() -> int:
     base = os.environ.get("STREAM_CHECK_URL", "http://127.0.0.1:8000").rstrip("/")
     key = os.environ.get("STREAM_CHECK_API_KEY")
-    headers = {"Authorization": f"Bearer {key}"} if key else {}
+    user = os.environ.get("STREAM_CHECK_USER", "mat")
+    headers = {"Authorization": f"Bearer {key}"} if key else {"X-Lauretta-User": user}
     body = {
         "kind": "chat",
         "thread_id": os.environ.get("STREAM_CHECK_THREAD", "stream-check"),
@@ -54,7 +57,7 @@ def main() -> int:
     }
     with httpx.Client(base_url=base, headers=headers, timeout=httpx.Timeout(30, read=120)) as http:
         if "--openai" in sys.argv[1:]:
-            return check_openai(http, body["message"])
+            return check_openai(http, body["message"], f"lauretta-{user}")
         posted = http.post("/v1/jobs", json=body)
         posted.raise_for_status()
         job = posted.json()
@@ -101,8 +104,8 @@ def openai_chunks(response: httpx.Response):
             yield json.loads(line.removeprefix("data: "))
 
 
-def check_openai(http: httpx.Client, message: str) -> int:
-    body = {"model": "lauretta", "stream": True, "messages": [{"role": "user", "content": message}]}
+def check_openai(http: httpx.Client, message: str, model: str) -> int:
+    body = {"model": model, "stream": True, "messages": [{"role": "user", "content": message}]}
     thread = {"X-Thread-Id": f"stream-check-{int(time.time())}"}
     started = time.monotonic()
     first_reasoning, model_start, thought, stamps = None, None, None, []

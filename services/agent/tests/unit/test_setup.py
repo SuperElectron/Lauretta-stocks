@@ -12,6 +12,7 @@ from src.persona.layers import build_persona, desk_names, render_persona
 from src.tools.models import SetIdentityArgs
 from src.tools.persona import build_skip_setup_step
 from tests.unit.test_desk_names import Embedder, FactsTable
+from tests.utils import run_as
 
 CORE = list(CORE_TOPICS)
 
@@ -63,9 +64,9 @@ def test_the_strategist_reads_missing_core_topics_from_setup():
 
 async def test_a_skip_is_stored_and_never_asked_again():
     table = FactsTable()
-    skip = build_skip_setup_step(table, Embedder(), "friend")
-    await skip.ainvoke({"step": "team_names"})
-    await skip.ainvoke({"step": "holdings"})
+    skip = build_skip_setup_step(table, Embedder())
+    await run_as("friend", skip, {"step": "team_names"})
+    await run_as("friend", skip, {"step": "holdings"})
     rows = [NAME, *table.active()]
     assert statuses(rows, [], 0) == {
         "investor_name": "done", "team_names": "skipped", "core_profile": "done",
@@ -78,7 +79,7 @@ async def test_a_skip_is_stored_and_never_asked_again():
 async def test_memory_search_never_returns_setup_skips(monkeypatch):
     seen = {}
 
-    async def fake_rows(_pool, sql, params):
+    async def fake_rows(_pool, _user_id, sql, params):
         seen.update(sql=sql, params=params)
         return []
 

@@ -19,8 +19,14 @@ def events(job_id: str) -> str:
     return f"job:{job_id}:events"
 
 
-def thread_lock(thread_id: str) -> str:
-    return f"lock:thread:{thread_id}"
+def thread(user: str, thread_id: str) -> str:
+    """The server-side key of a user's thread: the checkpoint's thread id. A user id holds no
+    colon, so no two users' keys are ever equal, whatever thread id a client sends."""
+    return f"{user}:{thread_id}"
+
+
+def thread_lock(user: str, thread_id: str) -> str:
+    return f"lock:thread:{thread(user, thread_id)}"
 
 
 def request(digest: str) -> str:
@@ -28,6 +34,6 @@ def request(digest: str) -> str:
     return f"oa:req:{digest}"
 
 
-def thread_job(thread_id: str) -> str:
-    """The job most recently queued on the thread."""
-    return f"thread:{thread_id}:job"
+def thread_job(user: str, thread_id: str) -> str:
+    """The job most recently queued on the user's thread."""
+    return f"thread:{thread(user, thread_id)}:job"

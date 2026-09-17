@@ -14,8 +14,10 @@ from typing import Any
 from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
 from langgraph.graph.state import CompiledStateGraph
 
+from src.graph.ctx import Ctx
 from src.graph.reasoning import reasoning_text
 from src.prompts import progress
+from src.queue import keys
 from src.queue.models import Event, MessageEnd, Notice, Progress, Reasoning, Reset, Token, Tool
 from src.worker.redact import ReasoningFilter
 
@@ -106,6 +108,7 @@ class ChatRelay:
 
 async def run_chat(
     chat: CompiledStateGraph,
+    user: str,
     thread_id: str,
     job_id: str,
     message: str,
@@ -113,12 +116,14 @@ async def run_chat(
     secrets: Iterable[str] = (),
     stream_reasoning: bool = True,
 ) -> dict[str, Any]:
+    """One turn on the user's thread; the checkpoint key and the context are the user's."""
     relay = ChatRelay(publish, secrets, stream_reasoning)
     try:
         async for part in chat.astream(
             # The job id as the message id: a second run of the job replaces it, never repeats it.
             {"messages": [HumanMessage(message, id=job_id)]},
-            {"configurable": {"thread_id": thread_id}},
+            {"configurable": {"thread_id": keys.thread(user, thread_id)}},
+            context=Ctx(user_id=user),
             stream_mode=["messages", "updates", "custom"],
             subgraphs=True,
             version="v2",
@@ -128,18 +133,3 @@ async def run_chat(
         # The thinking before a failure is still shown; the error follows it.
         await relay.flush()
     return {"thread_id": thread_id, "reply": relay.reply, "notices": relay.notices}
-
-
-async def run_research(
-    pipeline: CompiledStateGraph, ticker: str, publish: Publish
-) -> dict[str, Any]:
-    final: dict[str, Any] = {}
-    async for part in pipeline.astream(
-        {"ticker": ticker.upper()}, stream_mode=["custom", "values"], version="v2"
-    ):
-        if part["type"] == "values":
-            final = part["data"]
-        elif part["data"].get("event") == "progress":
-            await publish(progress_event(part["data"]))
-    fields = ("ticker", "thesis_id", "revisions", "story", "review", "advice", "names")
-    return {field: final[field] for field in fields}

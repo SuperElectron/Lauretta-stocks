@@ -10,6 +10,7 @@ from src.errors import PersonaInvalid
 from src.graph import chat as chat_module
 from src.graph.chat import build_chat
 from src.graph.context import Known
+from src.graph.ctx import Ctx
 from src.persona import approval
 from src.persona.approval import (
     decide,
@@ -132,8 +133,10 @@ async def test_chat_applies_the_phrase_before_the_model_and_appends_notices(monk
         call("propose_soul_change", {"content": "Be warm.", "reason": "warmer"}),
         AIMessage("Proposed, boss."),
     )
-    graph = build_chat(None, "friend", None, [propose_soul_change], model, 20)
-    final = await graph.ainvoke({"messages": [HumanMessage("approve soul 3f2a1b9c")]})
+    graph = build_chat(None, None, [propose_soul_change], model, 20)
+    final = await graph.ainvoke(
+        {"messages": [HumanMessage("approve soul 3f2a1b9c")]}, context=Ctx(user_id="friend")
+    )
 
     assert decided == [("approve", "3f2a1b9c")]
     assert final["soul_change"].startswith("<soul_change>approved 3f2a1b9c")

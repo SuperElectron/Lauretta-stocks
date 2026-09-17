@@ -10,7 +10,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
 
-from src.db.pool import rows
+from src.db.pool import rows, scoped
 from src.errors import PersonaInvalid
 from src.memory.embedder import Embedder, vector_literal
 from src.persona.soul import check_soul
@@ -25,9 +25,10 @@ async def propose(
     """Stores a soul as `proposed`, with its reason and the soul active now. Changes nothing."""
     content = check_soul(text)
     vector = vector_literal(await embedder.embed(content))
-    current = await rows(pool, _ACTIVE, (user_id,))
+    current = await rows(pool, user_id, _ACTIVE, (user_id,))
     (saved,) = await rows(
         pool,
+        user_id,
         """INSERT INTO facts (user_id, subject, kind, content, value, embedding, source, status,
                               supersedes)
            VALUES (%s, 'assistant', 'soul', %s, %s, %s::vector, 'chat', 'proposed', %s)
@@ -42,6 +43,7 @@ async def matching(pool: AsyncConnectionPool, user_id: str, short_id: str) -> li
     """Soul rows whose id starts with `short_id` (lowercase hex, checked by the caller)."""
     return await rows(
         pool,
+        user_id,
         """SELECT id::text, status, value->>'reason' AS reason, created_at FROM facts
            WHERE user_id = %s AND kind = 'soul' AND id::text LIKE %s""",
         (user_id, f"{short_id}%"),
@@ -49,7 +51,7 @@ async def matching(pool: AsyncConnectionPool, user_id: str, short_id: str) -> li
 
 
 async def approve(pool: AsyncConnectionPool, user_id: str, proposal_id: str) -> None:
-    async with pool.connection() as conn, conn.transaction():
+    async with scoped(pool, user_id) as conn:
         current = await (await conn.execute(_ACTIVE, (user_id,))).fetchall()
         previous = current[0]["id"] if current else None
         if previous is not None:
@@ -67,6 +69,7 @@ async def approve(pool: AsyncConnectionPool, user_id: str, proposal_id: str) -> 
 async def reject(pool: AsyncConnectionPool, user_id: str, proposal_id: str) -> None:
     rejected = await rows(
         pool,
+        user_id,
         """UPDATE facts SET status = 'rejected'
            WHERE user_id = %s AND id::text = %s AND kind = 'soul' AND status = 'proposed'
            RETURNING id""",

@@ -47,6 +47,13 @@ class EmptyReply(AgentError):
     message = wording.EMPTY_REPLY
 
 
+class NoUser(AgentError):
+    """A graph ran without the user it acts for; nothing is read or written."""
+
+    code = "NO_USER"
+    message = wording.NO_USER
+
+
 class UpstreamUnavailable(Exception):
     """A data source could not be read. Says nothing about the company."""
 
