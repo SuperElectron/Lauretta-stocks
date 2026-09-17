@@ -159,7 +159,7 @@ Before the first deploy, see that:
   key works (the recipes never prompt for a password).
 
 ```bash
-just deploy             # from the Mac: git pull on the Spark, build natively, start the stack
+just deploy             # from the Mac: git pull on the Spark, build natively, migrate, start the stack
 just ps                 # container status and health
 just logs worker        # follow the worker's logs (omit the name for every service)
 just backup             # a database dump now, into backups/ on the Spark
@@ -228,7 +228,7 @@ on its own:
 | api | Acts only for a user in `ALLOWED_USERS` (else 401). Another user's job, status or events is 404. A chat model must be the caller's own (`lauretta-<user>`, else 404). Threads are keyed `{user}:{thread}` on the server. |
 | queue, worker | A job carries its user; locks, checkpoints and signals are keyed by it. |
 | graphs | The user is LangGraph runtime context (`graph/ctx.py`). Tools read it through `ToolRuntime`, which is not in any schema the model sees, so the model can neither read nor set it. |
-| Postgres | api and worker connect as `lauretta_app` (no superuser, no BYPASSRLS). Forced row-level security on `facts`, `holdings`, `theses`, `threads` and `thread_aliases` shows each transaction only the rows of its `app.user_id`; a query outside a user's scope sees nothing. The worker creates LangGraph's checkpoint tables as `lauretta_migrator` (no superuser, no rights on those five tables); no app container holds the owner's password. |
+| Postgres | api and worker connect as `lauretta_app` (no superuser, no BYPASSRLS). Forced row-level security on `facts`, `holdings`, `theses`, `threads` and `thread_aliases` shows each transaction only the rows of its `app.user_id`; a query outside a user's scope sees nothing. LangGraph's checkpoint tables are created by a one-shot deploy step, the compose `migrate` service, as `lauretta_migrator` (no superuser, no rights on those five tables); the long-running api and worker hold neither that role nor the owner's password, and the worker only checks the tables are current. |
 
 Tests: `just test` covers the api, queue, worker and graphs (including prompt injection as Max);
 `just test-db` runs the row-level security tests against a throwaway database (on the Spark).
@@ -254,8 +254,13 @@ or `POST /api/v1/admin/workspaces/{slug}/manage-users` with `{"userIds": [<id>],
 A chat anywhere else uses the default model `lauretta`, which the desk refuses. Create no embed
 widgets on these workspaces.
 
-**Adding a user:** their id in `ALLOWED_USERS`, a model for them in the gateway's `ingress-api`
-route (`lauretta-<id>` in the user map, and a rate-limit bucket), and an AnythingLLM workspace.
+**Adding a user** touches five places:
+
+1. their id in `ALLOWED_USERS` (`.env`, or the compose default);
+2. the gateway's `ingress-api` user map (`X-Lauretta-User`): `"lauretta-<id>": "<id>"`;
+3. the gateway's authorization rule, which lists the models AnythingLLM may chat with;
+4. the gateway's rate-limit buckets (a `conditional` entry for their model);
+5. an AnythingLLM workspace with chat model `lauretta-<id>`, shared with them alone.
 
 **What this does not cover:**
 

@@ -72,7 +72,8 @@ routes:
   # a body too big to buffer) the header is removed and left out, so api answers 401. Tested on
   # v1.5.0. They are not in requestHeaderModifier.remove below: that runs after `set` and would
   # strip the gateway's own value.
-  # To add a user: a model here, their id in ALLOWED_USERS, and an AnythingLLM workspace.
+  # To add a user (five places, README "Users and isolation"): the user map and the model list
+  # in the authorization rule below, a rate-limit bucket, ALLOWED_USERS, and a workspace.
   # Authorization, cookies and the other identity and forwarding headers are then removed.
   # tailscale serve's Tailscale-User-* headers are not trusted: AnythingLLM's calls carry none.
   # apiKey in v1.5.0 takes the key inline (or its sha256 hash), not from a file, so compose

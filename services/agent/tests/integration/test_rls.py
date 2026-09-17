@@ -7,6 +7,7 @@ import pytest
 from src.db.checkpointer import build_checkpointer
 from src.db.pool import rows, scoped
 from src.db.queries import holdings, memories, theses, threads
+from src.errors import DatabaseUnavailable
 from tests.integration.conftest import OWNER_URL, SETUP_URL, TABLES, VECTOR
 
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("mat_only")]
@@ -118,6 +119,17 @@ async def test_checkpoint_tables_are_created_by_the_migrator_and_used_by_the_app
             "SELECT tableowner FROM pg_tables WHERE tablename = 'checkpoints'"
         ).fetchone()
     assert owner == "lauretta_migrator"
+    # The worker, without the migrator, only checks the tables are current, and refuses to start
+    # when they are not; running the migration again (as every deploy does) fixes that.
+    await build_checkpointer(pool)
+    with psycopg.connect(OWNER_URL, autocommit=True) as conn:
+        conn.execute(
+            "DELETE FROM checkpoint_migrations WHERE v = (SELECT max(v) FROM checkpoint_migrations)"
+        )
+    with pytest.raises(DatabaseUnavailable):
+        await build_checkpointer(pool)
+    await build_checkpointer(pool, SETUP_URL)
+    await build_checkpointer(pool)
     with pytest.raises(psycopg.errors.InsufficientPrivilege):
         await rows(pool, "max", "CREATE TABLE sneaky (id int)")
 

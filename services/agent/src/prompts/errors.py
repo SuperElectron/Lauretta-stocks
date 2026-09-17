@@ -12,6 +12,9 @@ JOB_LOST = "its record expired before it finished; ask again"
 # Each `AgentError`'s message, shown after `ERROR`.
 AGENT_FAILED = "the agent failed"
 DATABASE_UNAVAILABLE = "the database is unavailable; is `just up` running?"
+CHECKPOINTS_NOT_MIGRATED = (
+    "the checkpoint tables are missing or out of date; run `docker compose run --rm migrate`"
+)
 EMBEDDER_MISMATCH = "the embedding model's size does not match EMBED_DIMS and the facts table"
 ROLE_DID_NOT_SUBMIT = "a research role finished without submitting its result"
 REPLY_TRUNCATED = (

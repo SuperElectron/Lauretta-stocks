@@ -1,7 +1,8 @@
 """`python -m src.db.migrate`: creates the checkpoint tables and exits.
 
-The worker does the same at startup; the restore script (`services/db/restore.sh`) runs this
-alone, so the tables exist before conversations are restored and before any job can run.
+A deploy step, never part of a long-running service: the compose `migrate` service (profile
+`migrate`) runs it as `lauretta_migrator` before the stack starts, from `just deploy` and from
+`services/db/reset-and-restore.sh`. The worker only checks the tables are current.
 """
 
 import asyncio

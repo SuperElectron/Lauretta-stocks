@@ -21,7 +21,9 @@ class Settings(BaseSettings):
     # The app role (`lauretta_app`), which row-level security applies to.
     DATABASE_URL: str
     # `lauretta_migrator`, which owns the checkpoint tables and may create tables but reads no
-    # user data; used at startup to create them. None uses DATABASE_URL (local development).
+    # user data. Set for `python -m src.db.migrate` (the compose `migrate` service), or locally so
+    # the CLI creates the tables itself; never on the long-running worker, which then only
+    # checks that the tables are current.
     DATABASE_SETUP_URL: str | None = None
     DB_POOL_MIN: int
     DB_POOL_MAX: int

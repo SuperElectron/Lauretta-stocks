@@ -152,9 +152,6 @@ services:
     networks: [worker-data, models]
     environment:
       <<: *app-env
-      # lauretta_migrator: creates the checkpoint tables at startup. No superuser, and no rights
-      # on the user tables; the worker never holds the owner's password.
-      DATABASE_SETUP_URL: postgresql://lauretta_migrator:${DB_MIGRATOR_PASSWORD:?set DB_MIGRATOR_PASSWORD (random, e.g. openssl rand -hex 32)}@db:5432/${DB_NAME}
       # This internal key only opens the gateway's llm listener; the gateway swaps it for vLLM's.
       OPENAI_API_KEY: ${LLM_INTERNAL_KEY:?set LLM_INTERNAL_KEY (random, e.g. openssl rand -hex 32)}
     # Covers the longest research run, so a deploy lets a job finish instead of killing it mid-run.
@@ -166,6 +163,21 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+  # One-off deploy step: creates or migrates LangGraph's checkpoint tables as lauretta_migrator,
+  # then exits. Only it holds that role's password; the worker just checks the tables at start.
+  # Run by `just deploy` and services/db/reset-and-restore.sh: `docker compose run --rm migrate`.
+  migrate:
+    <<: *app
+    profiles: [migrate]
+    restart: "no"
+    command: ["python", "-m", "src.db.migrate"]
+    networks: [worker-data]
+    environment:
+      <<: *app-env
+      DATABASE_SETUP_URL: postgresql://lauretta_migrator:${DB_MIGRATOR_PASSWORD:?set DB_MIGRATOR_PASSWORD (random, e.g. openssl rand -hex 32)}@db:5432/${DB_NAME}
+    healthcheck:
+      disable: true
 
   # The web app at / (and the Android app's pairing server). Its chat model is the desk itself:
   # the Generic OpenAI provider calls the gateway's /v1 with the API key, like any other client.
