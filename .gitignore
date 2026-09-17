@@ -23,6 +23,10 @@ __pycache__/
 reports/*
 !reports/.gitkeep
 
+# --- Database dumps (the folder is kept) ---
+backups/*
+!backups/.gitkeep
+
 # --- OS / editor ---
 .DS_Store
 .idea/

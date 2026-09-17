@@ -1,0 +1,1 @@
+{"Services":{"svc:lauretta":{"TCP":{"443":{"HTTPS":true}},"Web":{"lauretta.tailae2b1.ts.net:443":{"Handlers":{"/":{"Proxy":"http://gateway:18400"}}}}}}}
