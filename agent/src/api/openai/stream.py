@@ -3,21 +3,20 @@
 A stream opens with the role delta (and `WAITING` when the turn is queued behind another),
 sends `KEEPALIVE` every `KEEPALIVE_SECONDS` while the job is quiet, and always ends with
 `data: [DONE]`: after `done` or `error`, after `limit_s` with the still-working note, or with
-`JOB_LOST` when the job's records are gone before it finished. After the last byte the whole
-answer text is handed to `Turn.answered`, so the client's next request finds its thread.
+`JOB_LOST` when the job's records are gone before it finished. As the outcome is read, the
+answer is recorded in its own task (`settle.py`), so the client's next request finds its thread.
 """
 
 import asyncio
 import json
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
 
 from fastapi.responses import JSONResponse
-from loguru import logger
 from redis.asyncio import Redis
-from starlette.background import BackgroundTask
 
+from src.api.openai import settle
 from src.api.openai.chunks import KEEPALIVE, ROLE, WAITING, Part, State, map_event
 from src.api.openai.models import OpenAIError
 from src.queue import events, keys
@@ -41,8 +40,7 @@ class Turn:
     job_id: str
     meta: Meta
     behind: bool
-    # Called with the answer text sent, and whether the job finished `done`.
-    answered: Callable[[str, bool], Awaitable[None]]
+    answered: settle.Answered
 
 
 def chunk(meta: Meta, part: Part) -> dict[str, Any]:
@@ -87,34 +85,13 @@ async def _with_keepalive(
         pending.cancel()
 
 
-@dataclass
-class Outcome:
-    """What the client was sent, filled in as the answer ends."""
-
-    text: str = ""
-    done: bool = False
-    ended: bool = False
-
-
-async def settle(turn: Turn, outcome: Outcome) -> None:
-    """Hands the finished answer to `Turn.answered`, after the client has it all. A failure is
-    logged, not raised into a complete answer: it only costs the alias that finds the thread
-    on the next turn, and that request falls back to its first-message thread and registers
-    every pair it resends."""
-    if not outcome.ended:
-        return
-    try:
-        await turn.answered(outcome.text, outcome.done)
-    except Exception:
-        logger.bind(job_id=turn.job_id).exception("openai.answer_not_recorded")
-
-
 async def _parts(
-    broker: Redis, turn: Turn, limit_s: float, outcome: Outcome
+    broker: Redis, turn: Turn, limit_s: float, recording: list[asyncio.Task[None]]
 ) -> AsyncIterator[Part]:
-    """Every part of the answer after the role delta, keep-alives included."""
+    """Every part of the answer after the role delta, keep-alives included. Once the outcome is
+    known, before its closing parts are yielded, the answer is recorded (`settle`)."""
     deadline = asyncio.get_running_loop().time() + limit_s
-    state = State()
+    state, sent = State(), ""
     if turn.behind:
         yield WAITING
     read = events.read(broker, turn.job_id, deadline=deadline)
@@ -123,8 +100,9 @@ async def _parts(
             yield KEEPALIVE
             continue
         parts, state = map_event(state, event.type, json.loads(event.data))
-        outcome.text += "".join(part.delta.get("content", "") for part in parts)
-        outcome.done, outcome.ended = event.type == "done", state.finished
+        sent += "".join(part.delta.get("content", "") for part in parts)
+        if state.finished:
+            recording.append(settle.start(turn.job_id, turn.answered, sent, event.type == "done"))
         for part in parts:
             yield part
         if state.finished:
@@ -132,27 +110,27 @@ async def _parts(
     # The read ended without an outcome: at the deadline, or because the job's records are gone.
     gone = not await broker.exists(keys.job(turn.job_id))
     parts = map_event(state, *(("error", LOST) if gone else ("timeout", {})))[0]
-    outcome.text += "".join(part.delta.get("content", "") for part in parts)
-    outcome.ended = True
+    sent += "".join(part.delta.get("content", "") for part in parts)
+    recording.append(settle.start(turn.job_id, turn.answered, sent, False))
     for part in parts:
         yield part
 
 
 async def stream(broker: Redis, turn: Turn, limit_s: float) -> AsyncIterator[str]:
-    outcome = Outcome()
+    recording: list[asyncio.Task[None]] = []
     yield frame(turn.meta, ROLE)
-    async for part in _parts(broker, turn, limit_s, outcome):
+    async for part in _parts(broker, turn, limit_s, recording):
         yield frame(turn.meta, part)
     yield DONE_FRAME
-    await settle(turn, outcome)
+    await settle.finish(recording)
 
 
 async def wait(broker: Redis, turn: Turn, limit_s: float) -> JSONResponse:
     """The whole answer if the job finishes within `limit_s`, else the still-working note."""
-    outcome = Outcome()
     content: list[str] = []
     reasoning: list[str] = []
-    async for part in _parts(broker, turn, limit_s, outcome):
+    recording: list[asyncio.Task[None]] = []
+    async for part in _parts(broker, turn, limit_s, recording):
         if part.error is not None:
             message, code = part.error["message"], part.error["code"]
             raise OpenAIError(500, message, code, kind="server_error", headers=NO_RETRY)
@@ -169,4 +147,5 @@ async def wait(broker: Redis, turn: Turn, limit_s: float) -> JSONResponse:
         "choices": [{"index": 0, "message": message, "finish_reason": "stop"}],
         "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
     }
-    return JSONResponse(body, background=BackgroundTask(settle, turn, outcome))
+    await settle.finish(recording)
+    return JSONResponse(body)
