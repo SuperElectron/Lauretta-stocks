@@ -34,7 +34,7 @@ secrets:
 
 x-app: &app
   build:
-    context: ./agent
+    context: ./services/agent
   image: lauretta-stocks-agent:latest
   restart: unless-stopped
   networks: [court]
@@ -86,7 +86,7 @@ services:
       POSTGRES_DB: ${DB_NAME}
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./db/init:/docker-entrypoint-initdb.d:ro
+      - ./services/db/init:/docker-entrypoint-initdb.d:ro
     mem_limit: 1g
     networks: [court]
     healthcheck:
@@ -181,7 +181,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./ops/gateway:/etc/agentgateway:ro
+      - ./services/gateway:/etc/agentgateway:ro
       # The image is distroless, so a static busybox is mounted to run the healthcheck.
       - type: image
         source: busybox:1.37.0-musl
@@ -231,7 +231,7 @@ services:
       PGDATABASE: ${DB_NAME}
       BACKUP_KEEP: ${BACKUP_KEEP:-14}
     volumes:
-      - ./ops/backup/backup.sh:/ops/backup.sh:ro
+      - ./services/backup/backup.sh:/ops/backup.sh:ro
       - ./backups:/backups
       - anythingllm:/anythingllm:ro
     mem_limit: 256m
@@ -248,9 +248,9 @@ services:
 
   # The tailnet's only way in: this node (lauretta-host, tag:lauretta) hosts the Tailscale Service
   # svc:lauretta, HTTPS on 443 at https://lauretta.tailae2b1.ts.net, proxied to the gateway
-  # (ops/tailscale/serve.json). containerboot (v1.96+) advertises the Services in TS_SERVE_CONFIG
-  # itself. Funnel is off; the tailnet policy decides who may connect. Userspace networking needs
-  # no capabilities or tun device: netstack accepts connections to Service IPs.
+  # (services/tailscale/serve.json). containerboot (v1.96+) advertises the Services in
+  # TS_SERVE_CONFIG itself. Funnel is off; the tailnet policy decides who may connect. Userspace
+  # networking needs no capabilities or tun device: netstack accepts connections to Service IPs.
   # The Service withdraws when this container stops and returns about 20 s after it starts.
   tailscale:
     image: tailscale/tailscale:v1.102.3
@@ -270,7 +270,7 @@ services:
     volumes:
       - tsstate:/var/lib/tailscale
       # A directory mount, so containerboot sees changes to serve.json.
-      - ./ops/tailscale:/config:ro
+      - ./services/tailscale:/config:ro
     mem_limit: 128m
     networks: [court]
     healthcheck:

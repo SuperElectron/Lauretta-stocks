@@ -136,7 +136,7 @@ just logs worker        # what the worker is muttering (omit the name for everyo
 just backup             # a database dump now, into backups/ on the Spark
 ```
 
-- **The door:** AgentGateway (`ops/gateway/config.yaml`). `/v1` and everything under it need
+- **The door:** AgentGateway (`services/gateway/config.yaml`). `/v1` and everything under it need
   `Authorization: Bearer $GATEWAY_API_KEY`; `/healthz` is open; every other path goes to
   AnythingLLM, which keeps its own login. It strips the key (for the api) and any claimed identity
   (including Tailscale's and forwarding headers), rate limits, and never buffers, so streams and
