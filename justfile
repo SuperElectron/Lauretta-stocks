@@ -84,4 +84,4 @@ _spark cmd:
 
 # Refuses where the full stack runs (its api container exists): up/down would act on its database.
 _local-only:
-    @if docker ps -a --format '{{{{.Names}}}}' | grep -qx 'lauretta-stocks-api-1'; then echo "this host runs the stack; use just deploy/ps/logs instead" >&2; exit 1; fi
+    @if docker ps -a --format '{{{{.Names}}' | grep -qx 'lauretta-stocks-api-1'; then echo "this host runs the stack; use just deploy/ps/logs instead" >&2; exit 1; fi
