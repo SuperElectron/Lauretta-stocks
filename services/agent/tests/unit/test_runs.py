@@ -67,24 +67,26 @@ async def test_a_finished_run_is_reported_once_and_then_forgotten(broker):
     run = await runs.start("mat", "MSFT")
     await broker.hset(keys.job(run["job_id"]), keys.STATUS, keys.DONE)
 
-    block, reported = await research_block(runs, "mat", [])
+    block, reported = await research_block(runs, "mat")
 
     assert "MSFT" in block and "get_thesis" in block
-    assert reported == ["MSFT"]
+    assert reported == [["MSFT", run["job_id"]]]
     # Still there until the reply it was reported in exists: a turn that died says it again.
-    assert (await research_block(runs, "mat", []))[0] == block
-    assert await research_block(runs, "mat", reported) == ("", [])
+    assert (await research_block(runs, "mat"))[0] == block
+    # The notice node forgets what the reply reported.
+    await runs.clear("mat", reported)
+    assert await research_block(runs, "mat") == ("", [])
 
 
 async def test_a_running_run_stays_in_the_block(broker):
     runs = QueuedRuns(broker, TTL)
     await runs.start("mat", "MSFT")
 
-    block, reported = await research_block(runs, "mat", [])
+    block, reported = await research_block(runs, "mat")
 
     assert "still on it" in block
     assert reported == []
-    assert "still on it" in (await research_block(runs, "mat", []))[0]
+    assert "still on it" in (await research_block(runs, "mat"))[0]
 
 
 async def test_a_failed_run_is_reported_as_failed(broker):
@@ -92,10 +94,10 @@ async def test_a_failed_run_is_reported_as_failed(broker):
     run = await runs.start("mat", "MSFT")
     await broker.hset(keys.job(run["job_id"]), keys.STATUS, keys.FAILED)
 
-    block, reported = await research_block(runs, "mat", [])
+    block, reported = await research_block(runs, "mat")
 
     assert "failed" in block
-    assert reported == ["MSFT"]
+    assert reported == [["MSFT", run["job_id"]]]
 
 
 async def test_a_run_whose_record_is_gone_is_never_claimed_to_have_finished(broker):
@@ -103,11 +105,11 @@ async def test_a_run_whose_record_is_gone_is_never_claimed_to_have_finished(brok
     run = await runs.start("mat", "MSFT")
     await broker.delete(keys.job(run["job_id"]))
 
-    block, reported = await research_block(runs, "mat", [])
+    block, reported = await research_block(runs, "mat")
 
     assert "lost track" in block
     assert "finished since your last reply" not in block
-    assert reported == ["MSFT"]
+    assert reported == [["MSFT", run["job_id"]]]
     # The ticker is free again, so the investor can have it run for real.
     again = await runs.start("mat", "MSFT")
     assert again["status"] == keys.QUEUED
@@ -115,7 +117,7 @@ async def test_a_run_whose_record_is_gone_is_never_claimed_to_have_finished(brok
 
 
 async def test_the_desk_reports_nothing_when_it_started_nothing(broker):
-    assert await research_block(QueuedRuns(broker, TTL), "mat", []) == ("", [])
+    assert await research_block(QueuedRuns(broker, TTL), "mat") == ("", [])
 
 
 async def test_the_start_tool_never_waits_for_the_run(broker):
@@ -157,7 +159,7 @@ async def test_the_cli_keeps_every_run_it_started():
     runs = LocalRuns(research)
     first = await runs.start("mat", "AAA")
     await runs.start("mat", "BBB")
-    await runs.clear("mat", [first["ticker"]])
+    await runs.clear("mat", [[first["ticker"], first["job_id"]]])
     await runs.start("mat", "CCC")
 
     assert sorted(run["ticker"] for run in await runs.active("mat")) == ["BBB", "CCC"]
@@ -179,7 +181,7 @@ async def test_the_cli_runs_research_in_its_own_process():
     await started.wait()
     await asyncio.sleep(0)
     assert (await runs.active("mat"))[0]["status"] == keys.DONE
-    await runs.clear("mat", [run["ticker"]])
+    await runs.clear("mat", [[run["ticker"], run["job_id"]]])
     assert await runs.active("mat") == []
 
 
@@ -221,3 +223,36 @@ async def test_the_desk_is_told_about_a_finished_run_on_the_next_message(broker)
     assert "<research>\nMSFT" in told
     # Reported once: the thesis itself stays in <theses>.
     assert "<research>\n" not in later
+
+
+@pytest.mark.usefixtures("no_investor")
+async def test_a_reported_run_is_not_reported_again_in_a_new_conversation(broker):
+    runs = QueuedRuns(broker, TTL)
+    run = await runs.start("mat", "MSFT")
+    await broker.hset(keys.job(run["job_id"]), keys.STATUS, keys.DONE)
+    model = Recording(messages=iter([AIMessage("Here it is."), AIMessage("Hello.")]), prompts=[])
+    graph = build_chat(None, InMemorySaver(), [], model, 20, runs)
+
+    for thread in ("first", "second"):
+        await graph.ainvoke(
+            {"messages": [HumanMessage("any news?")]},
+            {"configurable": {"thread_id": thread}},
+            context=Ctx("mat"),
+        )
+
+    told, other_thread = model.prompts
+    assert "<research>\nMSFT" in told
+    assert "<research>\n" not in other_thread
+
+
+async def test_a_ticker_started_again_in_the_same_turn_keeps_its_new_run(broker):
+    runs = QueuedRuns(broker, TTL)
+    failed = await runs.start("mat", "MSFT")
+    await broker.hset(keys.job(failed["job_id"]), keys.STATUS, keys.FAILED)
+    _block, reported = await research_block(runs, "mat")
+
+    # The investor says "try again" in the same turn, before the reply forgets the failed run.
+    again = await runs.start("mat", "MSFT")
+    await runs.clear("mat", reported)
+
+    assert [run["job_id"] for run in await runs.active("mat")] == [again["job_id"]]

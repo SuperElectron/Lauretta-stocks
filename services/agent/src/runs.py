@@ -25,6 +25,18 @@ from src.tools.research import RunResearch
 LOST = "lost"
 GOING = (keys.QUEUED, keys.RUNNING)
 
+# Runs a turn reported, as `[ticker, job_id]` pairs (plain JSON, so they keep in a checkpoint).
+Reported = list[list[str]]
+
+# Forgets each reported run whose job is still the one the hash holds.
+_FORGET = """
+for i = 1, #ARGV, 2 do
+  if redis.call('HGET', KEYS[1], ARGV[i]) == ARGV[i + 1] then
+    redis.call('HDEL', KEYS[1], ARGV[i])
+  end
+end
+"""
+
 
 class Runs(Protocol):
     """Whether a run was started here or queued for a worker, a caller sees the same three."""
@@ -38,8 +50,9 @@ class Runs(Protocol):
     async def active(self, user: str) -> list[dict[str, str]]:
         """Every run started for `user` and not yet cleared, each with its current status."""
 
-    async def clear(self, user: str, tickers: list[str]) -> None:
-        """Forgets runs already reported to the investor."""
+    async def clear(self, user: str, reported: Reported) -> None:
+        """Forgets the runs already reported, each named by its ticker and job id: a ticker the
+        desk has since started again keeps its new run."""
 
 
 def started(ticker: str, job_id: str, status: str) -> dict[str, str]:
@@ -81,9 +94,10 @@ class QueuedRuns:
             started(ticker, job_id, await self._status(job_id)) for ticker, job_id in found.items()
         ]
 
-    async def clear(self, user: str, tickers: list[str]) -> None:
-        if tickers:
-            await self._broker.hdel(keys.runs(user), *tickers)
+    async def clear(self, user: str, reported: Reported) -> None:
+        if reported:
+            args = [value for pair in reported for value in pair]
+            await self._broker.eval(_FORGET, 1, keys.runs(user), *args)
 
     async def _status(self, job_id: str) -> str:
         """The job's status, or `LOST` once its record is gone: it may have finished before the
@@ -128,9 +142,10 @@ class LocalRuns:
             runs.append(started(ticker, job_id, status))
         return runs
 
-    async def clear(self, user: str, tickers: list[str]) -> None:
-        for ticker in tickers:
-            self._tasks.pop((user, ticker), None)
+    async def clear(self, user: str, reported: Reported) -> None:
+        for ticker, job_id in reported:
+            if (self._tasks.get((user, ticker)) or (None,))[0] == job_id:
+                del self._tasks[(user, ticker)]
 
     async def drain(self) -> None:
         """Waits for every run still going, so leaving does not abandon one mid-flight."""

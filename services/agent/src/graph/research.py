@@ -10,7 +10,7 @@ from loguru import logger
 
 from src.prompts import research as wording
 from src.queue import keys
-from src.runs import GOING, LOST, Runs
+from src.runs import GOING, LOST, Reported, Runs
 
 LINES = {
     keys.QUEUED: wording.RUNNING,
@@ -21,22 +21,21 @@ LINES = {
 }
 
 
-async def research_block(runs: Runs, user: str, reported: list[str]) -> tuple[str, list[str]]:
-    """The block for this turn, and the tickers it reports as over.
+async def research_block(runs: Runs, user: str) -> tuple[str, Reported]:
+    """The block for this turn, and the runs it reports as over, each with its job id.
 
-    `reported` is what the previous message's block already said was over: forgotten now, so a
-    finished run is reported once, and a turn that died before its reply reports it again. A
-    broker that cannot be read leaves both untouched and the turn carries on.
+    Those are forgotten by the notice node once this turn has a reply, so a finished run is
+    reported once, in one thread, and a turn that died before its reply reports it again. A
+    broker that cannot be read leaves everything untouched and the turn carries on.
     """
     try:
-        await runs.clear(user, reported)
         active = await runs.active(user)
     except Exception:
         # The desk cannot say what it is researching; the turn is about something else.
         logger.exception("chat.research_unreadable")
-        return "", reported
+        return "", []
     if not active:
         return "", []
     lines = [LINES[run["status"]].format(ticker=run["ticker"]) for run in active]
-    over = [run["ticker"] for run in active if run["status"] not in GOING]
+    over = [[run["ticker"], run["job_id"]] for run in active if run["status"] not in GOING]
     return "<research>\n" + "\n".join(lines) + "\n</research>", over
