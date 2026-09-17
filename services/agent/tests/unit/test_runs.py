@@ -67,18 +67,24 @@ async def test_a_finished_run_is_reported_once_and_then_forgotten(broker):
     run = await runs.start("mat", "MSFT")
     await broker.hset(keys.job(run["job_id"]), keys.STATUS, keys.DONE)
 
-    block = await research_block(runs, "mat")
+    block, reported = await research_block(runs, "mat", [])
 
     assert "MSFT" in block and "get_thesis" in block
-    assert await research_block(runs, "mat") == ""
+    assert reported == ["MSFT"]
+    # Still there until the reply it was reported in exists: a turn that died says it again.
+    assert (await research_block(runs, "mat", []))[0] == block
+    assert await research_block(runs, "mat", reported) == ("", [])
 
 
 async def test_a_running_run_stays_in_the_block(broker):
     runs = QueuedRuns(broker, TTL)
     await runs.start("mat", "MSFT")
 
-    assert "still on it" in await research_block(runs, "mat")
-    assert "still on it" in await research_block(runs, "mat")
+    block, reported = await research_block(runs, "mat", [])
+
+    assert "still on it" in block
+    assert reported == []
+    assert "still on it" in (await research_block(runs, "mat", []))[0]
 
 
 async def test_a_failed_run_is_reported_as_failed(broker):
@@ -86,20 +92,30 @@ async def test_a_failed_run_is_reported_as_failed(broker):
     run = await runs.start("mat", "MSFT")
     await broker.hset(keys.job(run["job_id"]), keys.STATUS, keys.FAILED)
 
-    assert "failed" in await research_block(runs, "mat")
+    block, reported = await research_block(runs, "mat", [])
+
+    assert "failed" in block
+    assert reported == ["MSFT"]
 
 
-async def test_a_run_whose_record_expired_is_treated_as_finished(broker):
+async def test_a_run_whose_record_is_gone_is_never_claimed_to_have_finished(broker):
     runs = QueuedRuns(broker, TTL)
     run = await runs.start("mat", "MSFT")
     await broker.delete(keys.job(run["job_id"]))
 
-    assert "get_thesis" in await research_block(runs, "mat")
-    assert await research_block(runs, "mat") == ""
+    block, reported = await research_block(runs, "mat", [])
+
+    assert "lost track" in block
+    assert "finished since your last reply" not in block
+    assert reported == ["MSFT"]
+    # The ticker is free again, so the investor can have it run for real.
+    again = await runs.start("mat", "MSFT")
+    assert again["status"] == keys.QUEUED
+    assert again["job_id"] != run["job_id"]
 
 
 async def test_the_desk_reports_nothing_when_it_started_nothing(broker):
-    assert await research_block(QueuedRuns(broker, TTL), "mat") == ""
+    assert await research_block(QueuedRuns(broker, TTL), "mat", []) == ("", [])
 
 
 async def test_the_start_tool_never_waits_for_the_run(broker):
@@ -111,6 +127,16 @@ async def test_the_start_tool_never_waits_for_the_run(broker):
     assert answer["status"] == keys.QUEUED
 
 
+async def test_a_second_run_of_a_ticker_never_starts_while_one_is_going(broker):
+    runs = QueuedRuns(broker, TTL)
+
+    first, second = await asyncio.gather(runs.start("mat", "MSFT"), runs.start("mat", "MSFT"))
+
+    assert first["job_id"] == second["job_id"]
+    queued = [job["job_id"] for job in await queued_jobs(broker)]
+    assert queued == [first["job_id"]]
+
+
 async def test_check_research_answers_with_every_run_of_that_user(broker):
     runs = QueuedRuns(broker, TTL)
     await runs.start("mat", "MSFT")
@@ -119,6 +145,23 @@ async def test_check_research_answers_with_every_run_of_that_user(broker):
     answer = await build_check_research(runs).ainvoke({"runtime": runtime_for("mat")})
 
     assert [run["ticker"] for run in answer["runs"]] == ["MSFT"]
+
+
+async def test_the_cli_keeps_every_run_it_started(broker):  # noqa: ARG001
+    running = asyncio.Event()
+
+    async def research(ticker, _context):
+        await running.wait()
+        return {"ticker": ticker}
+
+    runs = LocalRuns(research)
+    first = await runs.start("mat", "AAA")
+    await runs.start("mat", "BBB")
+    await runs.clear("mat", [first["ticker"]])
+    await runs.start("mat", "CCC")
+
+    assert sorted(run["ticker"] for run in await runs.active("mat")) == ["BBB", "CCC"]
+    running.set()
 
 
 async def test_the_cli_runs_research_in_its_own_process():
@@ -135,7 +178,7 @@ async def test_the_cli_runs_research_in_its_own_process():
     await started.wait()
     await asyncio.sleep(0)
     assert (await runs.active("mat"))[0]["status"] == keys.DONE
-    await runs.clear("mat", [run["job_id"]])
+    await runs.clear("mat", [run["ticker"]])
     assert await runs.active("mat") == []
 
 

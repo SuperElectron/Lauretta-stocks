@@ -9,3 +9,7 @@ DONE = (
     "suggestion, then the why. Say once that it is a suggestion, not financial advice."
 )
 FAILED = "{ticker}: the run failed. Say so plainly and offer to put the team on it again."
+LOST = (
+    "{ticker}: we lost track of this run, so it may never have finished. Say so plainly, check "
+    "with get_thesis, and offer to put the team on it again."
+)

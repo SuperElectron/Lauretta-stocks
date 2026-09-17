@@ -29,7 +29,7 @@ USER_FIELDS = {"user", "user_id", "runtime", "context", "owner", "login"}
 
 async def finished(runs: LocalRuns) -> None:
     """Waits for the research the desk started in this test."""
-    await asyncio.gather(*(task for _user, _ticker, task in runs._tasks.values()))
+    await asyncio.gather(*(task for _job_id, task in runs._tasks.values()))
 
 
 def desk(model):

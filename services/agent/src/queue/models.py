@@ -19,6 +19,9 @@ RESEARCH_JOB_FIELDS = "a research job needs a ticker and no message"
 
 JobKind = Literal["chat", "research"]
 
+# The `client` of a job the desk queued for itself (`src/runs.py`): no investor reached us.
+DESK = "desk"
+
 
 class ClientInfo(BaseModel):
     """Which app sent the request, from the headers the gateway forwards; `unknown` when it

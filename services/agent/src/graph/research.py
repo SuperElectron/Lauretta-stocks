@@ -8,18 +8,27 @@ its thesis is saved and listed in `<theses>`.
 
 from src.prompts import research as wording
 from src.queue import keys
-from src.runs import Runs
+from src.runs import GOING, LOST, Runs
 
-LINES = {keys.QUEUED: wording.RUNNING, keys.RUNNING: wording.RUNNING, keys.FAILED: wording.FAILED}
+LINES = {
+    keys.QUEUED: wording.RUNNING,
+    keys.RUNNING: wording.RUNNING,
+    keys.FAILED: wording.FAILED,
+    keys.DONE: wording.DONE,
+    LOST: wording.LOST,
+}
 
 
-async def research_block(runs: Runs, user: str) -> str:
-    """The block for this turn, empty when the desk has nothing to report, and the finished and
-    failed runs in it are cleared: they are reported in this turn and not again."""
+async def research_block(runs: Runs, user: str, reported: list[str]) -> tuple[str, list[str]]:
+    """The block for this turn, and the tickers it reports as over.
+
+    `reported` is what the previous message's block already said was over: forgotten now, so a
+    finished run is reported once, and a turn that died before its reply reports it again.
+    """
+    await runs.clear(user, reported)
     active = await runs.active(user)
     if not active:
-        return ""
-    lines = [LINES.get(run["status"], wording.DONE).format(ticker=run["ticker"]) for run in active]
-    reported = [run["job_id"] for run in active if run["status"] not in (keys.QUEUED, keys.RUNNING)]
-    await runs.clear(user, reported)
-    return "<research>\n" + "\n".join(lines) + "\n</research>"
+        return "", []
+    lines = [LINES[run["status"]].format(ticker=run["ticker"]) for run in active]
+    over = [run["ticker"] for run in active if run["status"] not in GOING]
+    return "<research>\n" + "\n".join(lines) + "\n</research>", over

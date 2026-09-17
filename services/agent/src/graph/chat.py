@@ -71,7 +71,11 @@ def build_chat(
             update["soul_change"] = soul_change_block(**decision) if decision else ""
             # Asked once per message: a finished run is reported for the whole turn, tool
             # steps included, and only then forgotten.
-            update["research"] = await research_block(runs, user_id) if runs else ""
+            update["research"], update["reported_runs"] = (
+                await research_block(runs, user_id, state.get("reported_runs", []))
+                if runs
+                else ("", [])
+            )
         known = await load_known(pool, user_id)
         setup = setup_of(known)
         return {
