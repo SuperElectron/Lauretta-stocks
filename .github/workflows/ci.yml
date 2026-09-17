@@ -1,10 +1,9 @@
 name: CI
 
+# Disabled in GitHub for now (owner: no CI runs yet). When re-enabled it runs only on PRs into main.
 on:
   pull_request:
-    branches: [staging, main]
-  push:
-    branches: [staging, main]
+    branches: [main]
 
 permissions:
   contents: read
