@@ -50,6 +50,8 @@ class Job(JobRequest):
     user: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,31}$")
     job_id: str = Field(default_factory=lambda: uuid4().hex)
     client: ClientInfo = ClientInfo()
+    # How the user reached the desk, recorded as their `channel` signal; set by the API.
+    channel: Literal["api", "voice"] = "api"
     submitted_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 

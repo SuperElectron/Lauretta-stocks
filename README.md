@@ -143,6 +143,38 @@ web app with threads, where the desk answers.
 - **What it fetches from the internet:** at boot, LiteLLM's model map (GitHub) and model prices
   (models.dev); on the first document, its embedding model, once. None of it carries user data.
 
+## MCP clients (Goose and kin)
+
+The desk is also an MCP server (streamable HTTP) at `https://lauretta.tailae2b1.ts.net/mcp/`, for
+Goose and other MCP clients on the tailnet. It takes the owner's key only (`GATEWAY_API_KEY`, as
+`Authorization: Bearer <key>`) and acts as `mat`; AnythingLLM's key is refused.
+
+- **Tools:** `ask_assistant(message, thread_id="mcp")`, `research_stock(ticker)` (waits, with
+  MCP progress notifications per step), `start_research(ticker)` and `get_job(job_id)` (without
+  waiting), `get_thesis(ticker)`, `holdings()`.
+- **Goose:** add a remote extension of type *Streamable HTTP* with that URL and the header
+  `Authorization: Bearer <GATEWAY_API_KEY>`.
+- **How it runs:** inside api (`src/api/mcpserver/`), stateless, over the same jobs, queue and
+  reads as `/v1`; the gateway names the user exactly as for `/v1`.
+
+## Voice
+
+Speech runs on the Spark's CPU in the `speech` service ([speaches](https://speaches.ai):
+faster-whisper `small` to transcribe, Kokoro-82M to speak; about 2 GB RAM, no GPU memory). Only
+api reaches it. The models download once, at its first start.
+
+- **AnythingLLM** reads replies aloud with it (the speaker button, or auto-play in Settings >
+  Voice & Speech), in the Director's voice `af_heart`. Its microphone uses the browser's own
+  speech recognition.
+- **`POST /v1/voice/turns`** (multipart `audio`, optional `thread_id`, default `voice`): a spoken
+  message in, the Director's spoken reply out. The answer is NDJSON, a line per step as it
+  happens: `transcript`, then `reply` (with `notices`), then `audio` (base64 mp3), or `error`.
+  The turn is an ordinary chat job for the gateway's user, recorded with channel `voice`; the
+  voice is the user's `tts_voice` identity fact when set, else `TTS_VOICE`.
+- **`POST /v1/audio/transcriptions`** and **`POST /v1/audio/speech`**: OpenAI-compatible, for
+  any client (`voice` is a Kokoro voice such as `af_heart` or `am_michael`; `model` is ignored).
+- **Limits:** recordings up to `VOICE_MAX_UPLOAD_BYTES` (10 MB). Speech down answers 503.
+
 ## Running on the Spark
 
 On the Mac the desk runs for development. On the DGX Spark it runs full time: the whole stack
@@ -160,6 +192,7 @@ Before the first deploy, see that:
 
 ```bash
 just deploy             # from the Mac: git pull on the Spark, build natively, migrate, start the stack
+just deploy staging     # the same for staging: deploy staging first, main once the phase is reviewed
 just ps                 # container status and health
 just logs worker        # follow the worker's logs (omit the name for every service)
 just backup             # a database dump now, into backups/ on the Spark

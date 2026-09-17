@@ -106,7 +106,7 @@ class JobHandler:
     async def _execute(self, job: Job) -> dict[str, Any]:
         user = job.user
         await self._app.record_signals(
-            user, {"client": job.client.client, "channel": "api"}, "gateway"
+            user, {"client": job.client.client, "channel": job.channel}, "gateway"
         )
 
         async def publish(event: Event) -> None:

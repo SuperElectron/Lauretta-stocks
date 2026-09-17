@@ -56,8 +56,16 @@ class Settings(BaseSettings):
     # The longest `POST /v1/jobs?wait=` may block before answering 202. The gateway's
     # requestTimeout (30s) bounds the time to response headers, so stay under it.
     API_MAX_WAIT_S: PositiveInt = 25
-    # An SSE stream ends with `error STREAM_TIMEOUT` after this long; the job carries on.
+    # An SSE stream ends with a `timeout` event (STREAM_TIMEOUT) after this long; the job goes on.
     API_MAX_STREAM_S: PositiveInt = 900
+    # Speech (speaches: faster-whisper and Kokoro on CPU), reached by the API only. Unset, the
+    # voice routes answer 503.
+    SPEECH_URL: str | None = None
+    STT_MODEL: str = "Systran/faster-whisper-small"
+    TTS_MODEL: str = "speaches-ai/Kokoro-82M-v1.0-ONNX"
+    # The Director's voice unless the user's `tts_voice` identity fact names another.
+    TTS_VOICE: str = "af_heart"
+    VOICE_MAX_UPLOAD_BYTES: PositiveInt = 10_000_000
 
     @model_validator(mode="after")
     def _sec_user_agent_names_a_contact(self) -> "Settings":

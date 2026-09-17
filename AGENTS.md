@@ -97,8 +97,11 @@ Paths below are relative to `services/`.
   graph. `POST /v1/jobs` (`?wait=`), `GET /v1/jobs/{id}`, `GET /v1/jobs/{id}/events` (SSE),
   `/v1/theses/{ticker}`, `/v1/holdings`, `/healthz`. `api/openai/`: `/v1/models` and
   `/v1/chat/completions` (OpenAI-compatible, streamed, model `lauretta-<user>`), a thin adapter
-  over the same jobs. The user comes from `deps.current_user` (the gateway's header, checked
-  against `ALLOWED_USERS`); another user's job is 404; threads are keyed by user in `threads`
+  over the same jobs. `api/mcpserver/`: the MCP server at `/mcp/` (streamable HTTP, stateless;
+  owner key only at the gateway), tools over the same jobs and reads. `api/voice/`:
+  `/v1/audio/transcriptions`, `/v1/audio/speech` and `/v1/voice/turns` over the `speech` service.
+  The user comes from `deps.current_user` (the gateway's header, checked against
+  `ALLOWED_USERS`); another user's job is 404; threads are keyed by user in `threads`
   and found again through `thread_aliases` (hashes of prompt and answer pairs the client resends).
 - `agent/src/queue/`: Valkey Streams: `jobs` (group `workers`, reclaim, `jobs:dead`), per-job
   status hash and `job:{id}:events` stream, per-thread lock. Event models in `queue/models.py`.
@@ -107,9 +110,10 @@ Paths below are relative to `services/`.
   `graph/emit.py` (a no-op under `ainvoke`, so the CLI is unchanged).
 - `agent/src/memory/`: fastembed embeddings (local CPU, 384 dims) for pgvector search.
 - `agent/Dockerfile`, `db/`, `gateway/`, `tailscale/`, `backup/` and the root `docker-compose.yaml`:
-  the Spark stack (gateway, api, worker, broker, db, anythingllm, vllm, backup, tailscale). The
-  gateway sends `/v1/*` and `/healthz` to api and every other path to AnythingLLM, the web and
-  Android client (`gateway/config.yaml`). Its internal `llm` listener, which the worker calls,
+  the Spark stack (gateway, api, worker, broker, db, anythingllm, vllm, speech, backup,
+  tailscale). The gateway sends `/v1/*`, `/mcp` and `/healthz` to api and every other path to
+  AnythingLLM, the web and Android client (`gateway/config.yaml`). Its internal `llm` listener,
+  which the worker calls,
   forwards to the `vllm` service (gpt-oss-120b on the Spark's GPU) on the private `llm` network.
   The tailscale container hosts the Service `svc:lauretta` (`tailscale/`). AnythingLLM is an
   image with settings in compose; it has no folder.
@@ -119,7 +123,8 @@ Paths below are relative to `services/`.
 
 - `langgraph-docs`, `context7`: current LangGraph/LangChain and library docs. Check them before
   changing graph, tool or checkpointer code; do not rely on memory of these APIs.
-- `postgres`: read-only (restricted) access to the local db on :5433 while `just up` runs. Use it
+- `postgres`: read-only (restricted) access to the local db on :5433 while `just up` runs; set
+  `LAURETTA_LOCAL_DB_URI` (the local `DATABASE_URL`) in your shell first. Use it
   to inspect facts, holdings, theses and checkpoints.
 - `fetch`: read a web page, for example an SEC filing linked in a thesis.
 
@@ -132,7 +137,7 @@ Paths below are relative to `services/`.
 - Prefer free data sources; a paid one needs the owner's approval first.
 - Keep Python files under 150 lines where it is logical.
 - Changing the schema means `just down clean=true` then `just up` (POC, no migrations).
-- Never read or commit `.env`; add new settings to `.env.example` and `src/settings.py`.
+- Never read or commit `.env`; add new settings to `.env.example` and `services/agent/src/settings.py`.
 
 ## Software development lifecycle
 
