@@ -108,7 +108,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME:?set DB_NAME}
       # Read once, by services/db/init/01-app-role.sh, when the volume is first created. Changing
-      # them later also needs `ALTER ROLE ... PASSWORD` (README, Users and isolation).
+      # them later also needs `ALTER ROLE ... PASSWORD` (AGENTS.md, Users).
       DB_APP_PASSWORD: ${DB_APP_PASSWORD:?set DB_APP_PASSWORD}
       DB_MIGRATOR_PASSWORD: ${DB_MIGRATOR_PASSWORD:?set DB_MIGRATOR_PASSWORD}
     volumes:
@@ -230,7 +230,7 @@ services:
       GENERIC_OPEN_AI_BASE_PATH: http://gateway:18400/v1
       # Its own key, not the owner's: the gateway lets it only list models and chat, and names
       # the user from the model. Each person's workspace sets its chat model to lauretta-<user>
-      # (README); this default model names nobody, so a chat outside those workspaces is refused.
+      # (AGENTS.md, Users); this default model names nobody, so a chat outside those workspaces is refused.
       GENERIC_OPEN_AI_API_KEY: ${ANYTHINGLLM_API_KEY:?set ANYTHINGLLM_API_KEY (random, e.g. openssl rand -hex 32)}
       GENERIC_OPEN_AI_MODEL_PREF: lauretta
       GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT: "128000"
