@@ -19,6 +19,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.runtime import Runtime
+from loguru import logger
 from psycopg_pool import AsyncConnectionPool
 
 from src.graph import compaction, emit, progress
@@ -112,7 +113,11 @@ def build_chat(
         notice. The runs this turn reported are forgotten here, where the reply exists: a turn
         that died before one never reported them, and says so again next time."""
         if runs and state.get("reported_runs"):
-            await runs.clear(user_of(runtime.context), state["reported_runs"])
+            try:
+                await runs.clear(user_of(runtime.context), state["reported_runs"])
+            except Exception:
+                # The reply stands; an unforgotten run is simply reported again next time.
+                logger.exception("chat.research_unclearable")
         decision = state.get("soul_decision")
         notices = [decision_notice(decision)] if decision else []
         notices.extend(proposal_notice(p) for p in proposals_in_turn(state["messages"]))
