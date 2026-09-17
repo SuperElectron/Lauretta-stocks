@@ -28,6 +28,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = Settings()
     logger.remove()
     logger.add(sys.stderr, level=settings.LOG_LEVEL)
+    if not settings.API_GATEWAY_SECRET:
+        logger.error("api.gateway_secret_unset")
     broker = connect(settings.broker_url())
     try:
         async with open_pool(

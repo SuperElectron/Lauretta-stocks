@@ -28,6 +28,12 @@ def speech_service(monkeypatch):
     monkeypatch.setattr(speech, "transcribe", transcribe)
     monkeypatch.setattr(speech, "speak", speak)
 
+    async def speak_pieces(_settings, text, voice):
+        calls["speak"].append((text, voice))
+        yield MP3
+
+    monkeypatch.setattr(speech, "speak_pieces", speak_pieces)
+
     async def no_facts(_pool, _user):
         return []
 

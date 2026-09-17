@@ -46,8 +46,9 @@ async def test_the_gateway_secret_lets_the_request_through(broker):  # noqa: F81
     assert response.status_code == 200
 
 
-async def test_mcp_without_a_slash_is_served_not_redirected(broker):  # noqa: F811
+async def test_mcp_without_a_slash_is_served_as_with_one(broker):  # noqa: F811
     headers = {"X-Lauretta-Gateway": SECRET}
     async with api(broker, headers) as http:
-        response = await http.post("/mcp", json={})
-    assert response.status_code != 307
+        bare = await http.post("/mcp", json={})
+        slashed = await http.post("/mcp/", json={})
+    assert bare.status_code == slashed.status_code != 307

@@ -4,6 +4,7 @@ Its failures surface as `SpeechUnavailable`, which the routes answer as 503; not
 """
 
 import re
+from collections.abc import AsyncIterator
 
 import httpx
 from loguru import logger
@@ -72,9 +73,8 @@ def pieces(text: str, limit: int = PIECE_CHARS) -> list[str]:
     return [part for part in parts if part]
 
 
-async def speak(settings: Settings, text: str, voice: str) -> bytes:
-    """`text` read aloud, as mp3, synthesised a piece at a time."""
-    audio = b""
+async def speak_pieces(settings: Settings, text: str, voice: str) -> AsyncIterator[bytes]:
+    """`text` read aloud, as mp3 audio for each piece as soon as it is synthesised."""
     for part in pieces(text):
         body = {
             "model": settings.TTS_MODEL,
@@ -82,5 +82,9 @@ async def speak(settings: Settings, text: str, voice: str) -> bytes:
             "input": part,
             "response_format": "mp3",
         }
-        audio += (await _post(settings, "/v1/audio/speech", json=body)).content
-    return audio
+        yield (await _post(settings, "/v1/audio/speech", json=body)).content
+
+
+async def speak(settings: Settings, text: str, voice: str) -> bytes:
+    """`text` read aloud, as one mp3."""
+    return b"".join([audio async for audio in speak_pieces(settings, text, voice)])

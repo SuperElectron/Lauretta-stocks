@@ -154,7 +154,7 @@ services:
       VOICE_MAX_UPLOAD_BYTES: ${VOICE_MAX_UPLOAD_BYTES:-10000000}
       # api refuses any request without this header, which only the gateway adds (api/edge.py):
       # the database, broker and speech containers share networks with api but cannot forge a user.
-      API_GATEWAY_SECRET: ${API_GATEWAY_SECRET:?set API_GATEWAY_SECRET (random, e.g. openssl rand -hex 32)}
+      API_GATEWAY_SECRET: ${API_GATEWAY_SECRET:?set API_GATEWAY_SECRET (hex only, e.g. openssl rand -hex 32)}
     mem_limit: 2g
     healthcheck:
       test: ["CMD", "python", "/app/healthcheck.py", "api"]
