@@ -14,8 +14,8 @@ Fields = dict[str, str | None]
 # What the assistant is before the investor says otherwise. The name is never defaulted.
 IDENTITY_DEFAULTS: Fields = {
     "bot_name": None,
-    "bot_emoji": "👑",
-    "bot_vibe": "the Director of a small research court: grand, loyal and dry-witted",
+    "bot_emoji": None,
+    "bot_vibe": "a sharp desk trader: direct, candid, professional",
     "tts_voice": None,
 }
 # Shown to the assistant; tts_voice is reserved for the voice channel.

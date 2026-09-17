@@ -4,19 +4,27 @@ By appointment to **His Excellency Max Lauretta**, Sovereign of the Portfolio, D
 the Dividend and Keeper of the Long Position, this humble establishment offers a research
 court for the running of his financial empire.
 
-A sovereign should not squint at 10-K filings by candlelight. Lauretta Stocks gives to whom it concerns a
-small, tireless court of advisers:
+Behind it sits a trading desk straight from the bullpen: cool, direct and professional, always
+working for the best risk-adjusted outcome for the portfolio and blunt about the downside.
 
-- **The Director** (chat assistant) remembers His Excellency's preferences, his appetite for
-  risk and every holding in the treasury, so nothing need be said twice.
-- **The Royal Analyst** reads the filings and the market, then writes a stock story: what the
-  company does, what could move it, what the market has missed, the date of reckoning, and
-  what would prove the whole thing wrong.
-- **The Inspector General** trusts nobody, re-checks every figure, and sends shoddy work back
-  to be done properly.
-- **The Privy Counsellor** weighs the story against the treasury and suggests whether to buy,
-  hold, trim or sell. It suggests; His Excellency decides. No trade is ever placed on his
-  behalf, and nothing here is financial advice.
+- **The desk** (chat assistant) remembers His Excellency's preferences, his appetite for risk
+  and every holding in the book, leads with the call and then the why, and says plainly what
+  would make it wrong.
+- **The Analyst** reads the filings and the market, then writes a stock story: what the company
+  does, what could move it, what the market has missed, the dated catalyst, and what would prove
+  the whole thing wrong.
+- **Risk** trusts nobody, re-checks every figure, and sends the story back until the numbers
+  hold up.
+- **The PM** sizes the story against the book and suggests whether to buy, add, hold, trim or
+  sell. It suggests; His Excellency decides. No trade is ever placed on his behalf, and nothing
+  here is financial advice.
+
+```
+Investor: should I sell my Shell?
+Desk:     Here's the read: hold, not sell. Risk approved the story but flagged refining margins
+          as the swing factor, and the PM would change the call if Q3 cash flow comes in under
+          dividend plus buybacks on 30 October. This is a suggestion, not financial advice.
+```
 
 All data comes from free sources (SEC EDGAR and Yahoo Finance), because an empire is built by
 not wasting the crown's money.
@@ -58,7 +66,7 @@ just research MSFT      # summon the full research team on one stock
 ## Chat apps (AnythingLLM and kin)
 
 His Excellency need not learn a new instrument: any chat app with a Generic OpenAI provider
-may petition the Director directly.
+may reach the desk directly.
 
 | Setting | Value |
 |---|---|
@@ -74,7 +82,7 @@ may petition the Director directly.
   Apps that can send `X-Thread-Id` may name their own.
 - **What is heard:** only the latest message. The app's own system prompt, attached documents
   and resent history are politely ignored; the court keeps its own minutes.
-- **What is shown:** the team's comings and goings ("The Royal Analyst drafting…") arrive as
+- **What is shown:** the team's comings and goings ("Analyst pulling the filings…", "Risk re-checking the numbers…") arrive as
   reasoning, which most apps fold into a thought block; the answer arrives token by token.
 - **Patience:** an app that retries a request within 15 minutes, as the OpenAI SDKs do, rejoins
   the answer already under way; no research is run twice. Once an answer has been delivered, or
@@ -91,7 +99,7 @@ may petition the Director directly.
 
 His Excellency need not learn `curl`. The court receives visitors through
 [AnythingLLM](https://anythingllm.com), a proper reception hall with chat threads, where the
-Director answers.
+desk answers.
 
 - **The hall:** open https://lauretta.tailae2b1.ts.net on any device on the tailnet. Any browser
   will do, the iPhone's included.
@@ -104,7 +112,7 @@ Director answers.
 - **The Android app:** install AnythingLLM from Google Play. In the hall (opened at the tailnet
   address, not `localhost`), go to Settings > AnythingLLM Mobile and scan its QR code with the
   app. The phone must be on the tailnet too. There is no iPhone app; the browser serves.
-- **Documents:** the hall accepts uploads (up to 100 MiB each), but **the Director does not read
+- **Documents:** the hall accepts uploads (up to 100 MiB each), but **the desk does not read
   them yet**: the court's endpoint ignores the context AnythingLLM retrieves from them.
 - **Behind the curtain:** the hall comes preset as the [chat app](#chat-apps-anythingllm-and-kin)
   described above: it asks the gateway's `/v1` for the model `lauretta`, with

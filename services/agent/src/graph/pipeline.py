@@ -43,9 +43,9 @@ def build_pipeline(
         ticker = state["ticker"]
         redraft = state.get("story") is not None
         previous = {"story": state["story"], "review": state["review"]} if redraft else None
-        emit.progress(
-            "analyst", f"redrafting (revision {state['revisions'] + 1})" if redraft else "drafting"
-        )
+        revision = state["revisions"] + 1
+        detail = f"redrafting (revision {revision})" if redraft else "pulling the filings"
+        emit.progress("analyst", detail)
         prompt = render_analyst_prompt(ticker, state["investor"], previous)
         story = await team.analyst(prompt, f"Research {ticker} and submit the stock story.")
         return {"story": story, "revisions": state["revisions"] + (1 if redraft else 0)}
@@ -54,7 +54,7 @@ def build_pipeline(
         ticker = state["ticker"]
         last_round = state["revisions"] >= max_revisions
         previous = state.get("review") if state["revisions"] else None
-        emit.progress("checker", "reviewing")
+        emit.progress("checker", "re-checking the numbers")
         prompt = render_checker_prompt(ticker, state["story"], previous, last_round)
         review = await team.checker(prompt, f"Check the {ticker} draft and submit your review.")
         emit.progress("checker", f"verdict: {review['verdict']}")
@@ -65,7 +65,7 @@ def build_pipeline(
 
     async def advisor(state: PipelineState) -> dict[str, object]:
         ticker = state["ticker"]
-        emit.progress("advisor", "weighing it against the portfolio")
+        emit.progress("advisor", "sizing it against your book")
         prompt = render_advisor_prompt(
             ticker,
             state["user"],
@@ -82,7 +82,7 @@ def build_pipeline(
             pool, user_id, state["ticker"], state["story"], state["review"],
             state["advice"], state["revisions"],
         )  # fmt: skip
-        emit.progress("save", "thesis saved")
+        emit.progress("save", "saving the thesis")
         return {"thesis_id": thesis_id}
 
     graph = StateGraph(PipelineState)

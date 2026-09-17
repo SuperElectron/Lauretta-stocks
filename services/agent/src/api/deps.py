@@ -50,7 +50,7 @@ async def existing_job(job_id: JobId, broker: BrokerDep) -> dict[str, str]:
 
 
 def current_user(request: Request) -> str:
-    """The user this request acts for: `USER_ID` while one investor uses the court.
+    """The user this request acts for: `USER_ID` while one investor uses the desk.
 
     Initiative 2 (multi-user identity) replaces this with the `X-Lauretta-User` header the
     gateway sets from the verified caller. Everything keyed per user goes through here.

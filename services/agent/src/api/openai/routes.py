@@ -1,4 +1,4 @@
-"""`GET /v1/models` and `POST /v1/chat/completions`: the court for OpenAI-compatible chat apps.
+"""`GET /v1/models` and `POST /v1/chat/completions`: the desk for OpenAI-compatible chat apps.
 
 A thin adapter over the job queue. Only the last user message enters the graph; the client's
 system prompt, retrieved context and resent history are ignored, because the thread's

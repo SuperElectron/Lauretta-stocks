@@ -6,7 +6,7 @@ from src.queue import keys
 from tests.unit.openai.conftest import body
 
 
-async def test_models_lists_the_director(client):
+async def test_models_lists_the_desk(client):
     response = await client.get("/v1/models")
     assert [m["id"] for m in response.json()["data"]] == ["lauretta"]
 

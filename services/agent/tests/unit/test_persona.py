@@ -1,6 +1,9 @@
+import re
+
 import pytest
 from pydantic import ValidationError
 
+from src.api.openai.chunks import TIMED_OUT, TITLES, WAITING, State, map_event
 from src.errors import PersonaInvalid
 from src.graph.prompts.assistant import render_assistant_prompt
 from src.graph.state import stage
@@ -37,20 +40,39 @@ def test_defaults_leave_both_names_unset_and_stored_facts_win():
 
     stored = build_persona(
         [
-            keyed("identity", "bot_name", "Lord Director"),
-            keyed("profile", "preferred_name", "Your Excellency"),
+            keyed("identity", "bot_name", "Ace"),
+            keyed("profile", "preferred_name", "Boss"),
             {"kind": "soul", "key": None, "value": None, "content": "Terse.", "created": "x"},
         ]
     )
-    assert stored.soul == "Terse." and stored.identity["bot_emoji"] == "👑"
+    assert stored.soul == "Terse." and stored.identity["bot_emoji"] is None
     assert unnamed(stored) == []
-    assert "bot_name: Lord Director" in render_persona(stored)
+    assert "bot_name: Ace" in render_persona(stored)
+
+
+COURT = re.compile(
+    r"royal|court|inspector|privy|counsellor|chamberlain|sovereign|excellency|treasury|"
+    r"grand entrance|sayings|director",
+    re.IGNORECASE,
+)
+
+
+def test_no_court_theme_in_the_assistant_prompt_or_the_notes():
+    persona = build_persona([])
+    for current in ("bootstrap", "onboard", "ready"):
+        prompt = render_assistant_prompt(render_persona(persona), "", [], unnamed(persona), current)
+        assert not COURT.search(prompt), COURT.search(prompt)
+    error, _ = map_event(State(), "error", {"code": "X", "message": "busy"})
+    waiting = WAITING.delta["reasoning_content"]
+    notes = [*TITLES.values(), TIMED_OUT, waiting, error[0].delta["content"]]
+    assert not [note for note in notes if COURT.search(note)]
+    assert set(TITLES.values()) >= {"Analyst", "Risk", "PM"}
 
 
 def test_advisor_user_block_has_no_nickname():
-    persona = build_persona([keyed("profile", "preferred_name", "Sire")])
+    persona = build_persona([keyed("profile", "preferred_name", "Chief")])
     block = render_fields("user", persona.user, ("name", "country", "currency"))
-    assert "Sire" not in block and "currency: not set" in block
+    assert "Chief" not in block and "currency: not set" in block
 
 
 @pytest.mark.parametrize(

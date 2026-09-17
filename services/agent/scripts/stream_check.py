@@ -103,7 +103,7 @@ def check_openai(http: httpx.Client, message: str) -> int:
             elif delta.get("reasoning_content"):
                 print(f"{now:7.3f}s reasoning: {delta['reasoning_content'].strip()[:160]}")
                 first_reasoning = now if first_reasoning is None else first_reasoning
-                if model_start is None and delta["reasoning_content"].startswith("The Director"):
+                if model_start is None and delta["reasoning_content"].startswith("Desk "):
                     model_start = now
     if first_reasoning is None:
         print("FAIL: no reasoning delta was streamed")

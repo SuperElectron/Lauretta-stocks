@@ -61,7 +61,7 @@ async def test_conversations_that_open_alike_get_their_own_threads(client, worke
 
 async def test_a_forked_conversation_keeps_its_thread_after_a_tool_call_mid_answer(client, worker):
     worker.reply = lambda _job, n: [
-        Progress(stage="assistant", detail="replying"),
+        Progress(stage="assistant", detail="working it"),
         Token(text="Let me check."),
         MessageEnd(),
         Tool(name="research_stock", status="started"),

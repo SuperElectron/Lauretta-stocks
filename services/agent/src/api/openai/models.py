@@ -1,6 +1,6 @@
 """What an OpenAI Chat Completions client sends, and the errors it understands.
 
-Clients send more than the court uses (temperature, max_tokens, their own system prompt and
+Clients send more than the desk uses (temperature, max_tokens, their own system prompt and
 history); extra fields are accepted and ignored.
 """
 
@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-# The Director: the only model this API serves.
+# The desk: the only model this API serves.
 MODEL = "lauretta"
 
 

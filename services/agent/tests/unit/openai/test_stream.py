@@ -11,7 +11,7 @@ from tests.unit.openai.conftest import body, chunks, client_for, content
 
 async def test_a_stream_opens_with_the_role_and_ends_with_done(client, worker):
     worker.reply = lambda _job, _n: [
-        Progress(stage="assistant", detail="replying"),
+        Progress(stage="assistant", detail="working it"),
         Token(text="Hi"),
         Notice(text="N."),
         Done(result={}),
@@ -23,7 +23,7 @@ async def test_a_stream_opens_with_the_role_and_ends_with_done(client, worker):
     assert frames[-1] == "[DONE]"
     assert [f["choices"][0]["delta"] for f in frames[:-1]] == [
         {"role": "assistant"},
-        {"reasoning_content": "The Director replying…\n"},
+        {"reasoning_content": "Desk working it…\n"},
         {"content": "Hi"},
         {"content": "\n\nN.\n\n"},
         {},
@@ -58,7 +58,7 @@ async def test_non_stream_returns_the_whole_answer(client, worker):
     assert answer["choices"][0]["message"] == {
         "role": "assistant",
         "content": "Hold MSFT.",
-        "reasoning_content": "The Royal Analyst drafting…\n",
+        "reasoning_content": "Analyst drafting…\n",
     }
 
 

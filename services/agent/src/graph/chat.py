@@ -64,7 +64,7 @@ def build_chat(
             state["soul_change"],
         )
         history = recent(answered(state["messages"]), HISTORY_MESSAGES)
-        emit.progress("assistant", "replying")
+        emit.progress("assistant", "working it")
         reply = await bound.ainvoke([SystemMessage(content=prompt), *history])
         return {"messages": [complete(reply)]}
 
