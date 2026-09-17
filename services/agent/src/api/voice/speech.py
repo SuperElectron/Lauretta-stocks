@@ -3,6 +3,8 @@
 Its failures surface as `SpeechUnavailable`, which the routes answer as 503; nothing is guessed.
 """
 
+import re
+
 import httpx
 from loguru import logger
 
@@ -45,8 +47,40 @@ async def transcribe(settings: Settings, audio: bytes, filename: str, content_ty
     return str(response.json().get("text", "")).strip()
 
 
+# Kokoro reads a long reply best in pieces; mp3 frames join by simple concatenation.
+PIECE_CHARS = 800
+
+
+def pieces(text: str, limit: int = PIECE_CHARS) -> list[str]:
+    """`text` split at sentence ends (or spaces, for a very long sentence) into parts of at most
+    `limit` characters, in order."""
+    parts: list[str] = []
+    current = ""
+    for sentence in re.split(r"(?<=[.!?\n])\s+", text.strip()):
+        while len(sentence) > limit:
+            cut = sentence.rfind(" ", 0, limit)
+            cut = cut if cut > 0 else limit
+            parts.append(sentence[:cut].strip())
+            sentence = sentence[cut:].strip()
+        if current and len(current) + 1 + len(sentence) > limit:
+            parts.append(current)
+            current = sentence
+        else:
+            current = f"{current} {sentence}".strip()
+    if current:
+        parts.append(current)
+    return [part for part in parts if part]
+
+
 async def speak(settings: Settings, text: str, voice: str) -> bytes:
-    """`text` read aloud, as mp3."""
-    body = {"model": settings.TTS_MODEL, "voice": voice, "input": text, "response_format": "mp3"}
-    response = await _post(settings, "/v1/audio/speech", json=body)
-    return response.content
+    """`text` read aloud, as mp3, synthesised a piece at a time."""
+    audio = b""
+    for part in pieces(text):
+        body = {
+            "model": settings.TTS_MODEL,
+            "voice": voice,
+            "input": part,
+            "response_format": "mp3",
+        }
+        audio += (await _post(settings, "/v1/audio/speech", json=body)).content
+    return audio

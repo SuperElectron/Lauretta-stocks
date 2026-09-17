@@ -54,7 +54,11 @@ jobs:
       # Dummy values so `docker compose config` can render the required `${VAR:?...}`
       # interpolations; nothing here is a real secret or is used to run anything.
       LOG_LEVEL: info
-      USER_ID: dummy
+      ALLOWED_USERS: mat,max
+      API_GATEWAY_SECRET: dummy
+      ANYTHINGLLM_API_KEY: dummy
+      DB_APP_PASSWORD: dummy
+      DB_MIGRATOR_PASSWORD: dummy
       DB_USER: dummy
       DB_PASSWORD: dummy
       DB_NAME: dummy

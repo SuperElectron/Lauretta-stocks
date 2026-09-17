@@ -3,9 +3,9 @@
 #
 #   lauretta_app       what api and worker query as: reads and writes rows, nothing else. No
 #                      superuser and no BYPASSRLS, so row-level security holds for it.
-#   lauretta_migrator  creates and owns LangGraph's checkpoint tables (the worker's
-#                      DATABASE_SETUP_URL, at startup). No superuser, no BYPASSRLS and no rights on
-#                      the user tables, so the worker never holds a superuser password.
+#   lauretta_migrator  creates and owns LangGraph's checkpoint tables, from the one-shot compose
+#                      `migrate` service (DATABASE_SETUP_URL) only. No superuser, no BYPASSRLS and
+#                      no rights on the user tables; the long-running worker never holds it.
 #
 # Passwords are read inside psql (\getenv), so they never show in the process list. They are set
 # here once: to change one later, run `ALTER ROLE <role> PASSWORD '...'` as the owner too.

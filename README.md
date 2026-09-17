@@ -1,8 +1,8 @@
 # Lauretta Stocks
 
-By appointment to **His Excellency Max Lauretta**, Sovereign of the Portfolio, Defender of
-the Dividend and Keeper of the Long Position, this humble establishment offers a research
-court for the running of his financial empire.
+A research desk for Max Lauretta's book: it learns how he invests, keeps every position on the
+sheet, runs a three-person research team on any ticker he names, and calls it straight. It
+never places a trade. It suggests; he pulls the trigger.
 
 Behind it sits a trading desk straight from the bullpen: cool, direct and professional, always
 working for the best risk-adjusted outcome for the portfolio and blunt about the downside.
@@ -173,7 +173,9 @@ api reaches it. The models download once, at its first start.
   voice is the user's `tts_voice` identity fact when set, else `TTS_VOICE`.
 - **`POST /v1/audio/transcriptions`** and **`POST /v1/audio/speech`**: OpenAI-compatible, for
   any client (`voice` is a Kokoro voice such as `af_heart` or `am_michael`; `model` is ignored).
-- **Limits:** recordings up to `VOICE_MAX_UPLOAD_BYTES` (10 MB). Speech down answers 503.
+- **Limits:** recordings up to `VOICE_MAX_UPLOAD_BYTES` (10 MB); long replies are read in
+  sentence pieces. Speech down answers 503. AnythingLLM's read-aloud counts against the owner's
+  rate bucket (120 requests a minute), which is ample for one reply at a time.
 
 ## Running on the Spark
 
@@ -199,7 +201,8 @@ just backup             # a database dump now, into backups/ on the Spark
 ```
 
 - **The gateway:** AgentGateway (`services/gateway/config.yaml`). `/v1` and everything under it need
-  `Authorization: Bearer` with `GATEWAY_API_KEY` (the owner) or `ANYTHINGLLM_API_KEY`; `/healthz`
+  `Authorization: Bearer` with `GATEWAY_API_KEY` (the owner) or `ANYTHINGLLM_API_KEY`, and so does
+  `/mcp` (the owner's key only); `/healthz`
   is open; every other path goes to AnythingLLM, which keeps its own login. It names the user in
   `X-Lauretta-User` (see [Users and isolation](#users-and-isolation)), strips the key and any
   claimed identity (including Tailscale's and forwarding headers), rate limits per user, and
@@ -251,7 +254,7 @@ just backup             # a database dump now, into backups/ on the Spark
 | 443 on `lauretta.tailae2b1.ts.net` | tailnet only (`svc:lauretta`) | HTTPS to the gateway |
 | 18400, 3000 | compose networks `edge`, `app`, `models`, `web` and `llm` | gateway ingress and `llm` |
 | 3001 | compose network `web` only | anythingllm |
-| 8000 | compose network `app` only (the gateway) | api |
+| 8000 | `app` (the gateway), `api-data` (db, broker), `speech`; refuses requests without the gateway secret | api |
 | 5432, 6379 | `api-data` (api), `worker-data` (worker); 5432 also `dump` (backup) | db, broker |
 | 8000 | compose network `llm` only | vllm |
 
@@ -265,7 +268,7 @@ on its own:
 | Layer | What holds |
 |---|---|
 | gateway | Names the user in `X-Lauretta-User` and removes any client copy. The owner's key is always `mat`. AnythingLLM's key names the user from the model its workspace chats with (`lauretta-mat`, `lauretta-max`) and may only list models and chat; any other model names nobody. |
-| networks | Only the gateway shares a network with api, so nothing else can send it that header. |
+| networks, api edge | api shares networks with the gateway, the database, the broker and speech, so networks alone are not trusted: the gateway adds `X-Lauretta-Gateway` with a secret only it and api hold, and api refuses every request without it (`api/edge.py`; `/healthz` stays open). |
 | api | Acts only for a user in `ALLOWED_USERS` (else 401). Another user's job, status or events is 404. A chat model must be the caller's own (`lauretta-<user>`, else 404). Threads are keyed `{user}:{thread}` on the server. |
 | queue, worker | A job carries its user; locks, checkpoints and signals are keyed by it. |
 | graphs | The user is LangGraph runtime context (`graph/ctx.py`). Tools read it through `ToolRuntime`, which is not in any schema the model sees, so the model can neither read nor set it. |

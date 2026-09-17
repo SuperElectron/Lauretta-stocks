@@ -55,7 +55,7 @@ async def read_audio(upload: UploadFile, settings: Settings) -> bytes:
 
 class SpeechRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    input: str = Field(min_length=1, max_length=4_000)
+    input: str = Field(min_length=1, max_length=40_000)
     voice: str | None = Field(None, pattern=r"^[a-z]{2}_[a-z]{1,20}$")
 
 

@@ -113,3 +113,13 @@ async def test_a_voice_turn_needs_a_user(broker, speech_service):  # noqa: ARG00
         http.headers["X-Lauretta-Caller"] = "anythingllm"
         response = await http.post("/v1/voice/turns", files=audio_file())
     assert response.status_code == 401
+
+
+def test_a_long_reply_is_read_in_sentence_pieces():
+    text = " ".join(f"Sentence number {n} is here." for n in range(100))
+    parts = speech.pieces(text, 200)
+    assert all(len(part) <= 200 for part in parts)
+    assert " ".join(parts) == text
+    assert all(part.endswith(".") for part in parts)
+    word = "x" * 450
+    assert [len(p) for p in speech.pieces(word, 200)] == [200, 200, 50]

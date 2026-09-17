@@ -131,6 +131,8 @@ routes:
         request:
           set:
             X-Lauretta-Caller: 'apiKey.caller'
+            # Proof for api that the gateway sent this (`api/edge.py`); no other container has it.
+            X-Lauretta-Gateway: '"${API_GATEWAY_SECRET}"'
             X-Lauretta-User: >-
               apiKey.caller == "anythingllm"
               ? {"lauretta-mat": "mat", "lauretta-max": "max"}[json(request.body).model]
