@@ -79,7 +79,8 @@ may petition the Director directly.
 - **Patience:** an app that retries a request within 15 minutes, as the OpenAI SDKs do, rejoins
   the answer already under way; no research is run twice. Once an answer has been delivered, or
   if the turn failed, the same request is a new turn (a regenerate or a resend). A message sent
-  while the previous one is still being answered waits its turn, and says so at once. Without
+  while the previous one is still being answered says at once that it is waiting; if the court
+  is still busy after half a minute it gives up, so send it again once the answer has arrived. Without
   streaming the court waits up to `API_MAX_WAIT_S`, then says it is still working: wait a
   minute, then ask for the result.
 - **Check it:** `just stream-check --openai` (see above) times the first reasoning and the first

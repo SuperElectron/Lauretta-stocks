@@ -15,8 +15,9 @@ import re
 from src.api.openai.models import ChatRequest
 
 THREAD_PREFIX = "oa-"
-# A reasoning block some clients store in front of the answer they resend.
-_THINK = re.compile(r"^\s*<think>.*?</think>", re.DOTALL)
+# Reasoning some clients store inside the answer they resend: AnythingLLM wraps every run of
+# reasoning that is followed by content, so blocks appear mid-answer too.
+_THINK = re.compile(r"<think>.*?</think>", re.DOTALL)
 
 
 def _digest(*parts: str) -> str:
@@ -39,8 +40,8 @@ def header_thread(user_id: str, header: str) -> str:
 
 
 def answer_text(answer: str) -> str:
-    """The answer as the court sent it: without a stored reasoning block or outer whitespace."""
-    return _THINK.sub("", answer, count=1).strip()
+    """The answer as the court sent it: without stored reasoning blocks or outer whitespace."""
+    return _THINK.sub("", answer).strip()
 
 
 def pair_alias(user_id: str, prompt: str, answer: str) -> str:

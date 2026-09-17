@@ -6,8 +6,9 @@ import pytest
 
 from src.api.openai import digests
 from src.api.openai.models import ChatRequest
+from src.queue import events
 from src.queue.models import Done, Error, Token
-from tests.unit.openai.conftest import body, client_for, content
+from tests.unit.openai.conftest import body, chunks, client_for, content
 
 
 @pytest.mark.usefixtures("db")
@@ -88,3 +89,24 @@ def test_the_system_prompt_does_not_change_the_request_key():
         for b in (plain, prompted)
     }
     assert len(keys) == 1
+
+
+@pytest.fixture
+def short_reads(monkeypatch):
+    monkeypatch.setattr(events, "READ_BLOCK_MS", 50)
+
+
+@pytest.mark.usefixtures("short_reads")
+@pytest.mark.usefixtures("db")
+async def test_a_turn_behind_a_running_one_says_it_is_waiting_at_once(broker, worker):
+    worker.reply = lambda _job, n: [] if n == 1 else [Token(text="later"), Done(result={})]
+    async with client_for(broker, API_MAX_WAIT_S=1) as client:
+        first = await client.post("/v1/chat/completions", json=body("research MSFT", stream_=False))
+        note = first.json()["choices"][0]["message"]["content"]
+        second = await client.post(
+            "/v1/chat/completions", json=body("research MSFT", note, "and AAPL?")
+        )
+
+    assert worker.jobs[0].thread_id == worker.jobs[1].thread_id
+    deltas = [f["choices"][0]["delta"] for f in chunks(second.text)[:-1]]
+    assert deltas[1]["reasoning_content"].startswith("Waiting for the court to finish")

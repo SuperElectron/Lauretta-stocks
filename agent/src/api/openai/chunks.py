@@ -48,7 +48,12 @@ class State:
 
 ROLE = Part({"role": "assistant"})
 # Sent at once when the turn is queued behind another on its thread, before the lock is free.
-WAITING = Part({"reasoning_content": "Waiting for the court to finish the previous request…\n"})
+WAITING = Part(
+    {
+        "reasoning_content": "Waiting for the court to finish the previous request; if it is "
+        "still busy after half a minute, send again once it has answered.\n"
+    }
+)
 # Clients built on the OpenAI SDKs ignore SSE comments, so a quiet stream sends this instead.
 KEEPALIVE = Part({"reasoning_content": ""})
 

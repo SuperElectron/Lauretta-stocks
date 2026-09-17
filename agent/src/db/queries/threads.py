@@ -22,13 +22,17 @@ async def owner(pool: AsyncConnectionPool, thread_id: str) -> str | None:
     return found[0]["user_id"] if found else None
 
 
-async def find_alias(pool: AsyncConnectionPool, user_id: str, alias_hash: str) -> str | None:
+async def find_aliases(
+    pool: AsyncConnectionPool, user_id: str, alias_hashes: list[str]
+) -> dict[str, str]:
+    """The thread of each alias found among `alias_hashes`, by alias."""
     found = await rows(
         pool,
-        "SELECT thread_id FROM thread_aliases WHERE alias_hash = %s AND user_id = %s",
-        (alias_hash, user_id),
+        """SELECT alias_hash, thread_id FROM thread_aliases
+           WHERE alias_hash = ANY(%s) AND user_id = %s""",
+        (alias_hashes, user_id),
     )
-    return found[0]["thread_id"] if found else None
+    return {row["alias_hash"]: row["thread_id"] for row in found}
 
 
 async def add_aliases(

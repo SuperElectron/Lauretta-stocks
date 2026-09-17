@@ -88,4 +88,4 @@ async def chat_completions(
     if request.stream:
         body = stream.stream(broker, turn, settings.API_MAX_STREAM_S)
         return StreamingResponse(body, media_type="text/event-stream", headers=SSE_HEADERS)
-    return JSONResponse(await stream.wait(broker, turn, settings.API_MAX_WAIT_S))
+    return await stream.wait(broker, turn, settings.API_MAX_WAIT_S)

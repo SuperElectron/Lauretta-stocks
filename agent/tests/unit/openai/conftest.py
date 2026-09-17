@@ -38,9 +38,9 @@ class FakeThreads:
     async def owner(self, _pool, thread_id):
         return self.owners.get(thread_id)
 
-    async def find_alias(self, _pool, user_id, alias_hash):
-        thread_id, owner = self.aliases.get(alias_hash, (None, None))
-        return thread_id if owner == user_id else None
+    async def find_aliases(self, _pool, user_id, alias_hashes):
+        found = {alias: self.aliases.get(alias, (None, None)) for alias in alias_hashes}
+        return {alias: thread for alias, (thread, owner) in found.items() if owner == user_id}
 
     async def add_aliases(self, _pool, user_id, thread_id, alias_hashes):
         for alias in alias_hashes:
@@ -50,7 +50,7 @@ class FakeThreads:
 @pytest.fixture
 def db(monkeypatch) -> FakeThreads:
     fake = FakeThreads()
-    for name in ("create", "owner", "find_alias", "add_aliases"):
+    for name in ("create", "owner", "find_aliases", "add_aliases"):
         monkeypatch.setattr(threads.threads, name, getattr(fake, name))
     return fake
 

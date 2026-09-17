@@ -1,16 +1,19 @@
 """Which thread a chat app's request lands on, as AnythingLLM sends them."""
 
 from src.api.openai import digests
+from src.api.openai.chunks import TIMED_OUT
 from src.api.openai.models import ChatRequest
-from src.queue.models import Done, Token
-from tests.unit.openai.conftest import body, content
+from src.api.openai.threads import remember_answer
+from src.queue.models import Done, MessageEnd, Progress, Token, Tool
+from tests.unit.openai.conftest import body, chunks
 
 RECORDS_SENT = 20
 
 
 class ChatApp:
-    """A client like AnythingLLM: resends its last 20 prompt and answer records, stores the
-    streamed answer behind a reasoning block, and saves a turn only when the answer has text."""
+    """A client like AnythingLLM: resends its last 20 prompt and answer records, stores each run
+    of reasoning followed by content as a `<think>` block inside the answer, and saves a turn
+    only when the answer has text."""
 
     def __init__(self, client) -> None:
         self.client = client
@@ -19,10 +22,17 @@ class ChatApp:
     async def say(self, prompt: str) -> str:
         texts = [t for record in self.records[-RECORDS_SENT:] for t in record]
         response = await self.client.post("/v1/chat/completions", json=body(*texts, prompt))
-        answer = content(response.text)
-        if answer:
-            self.records.append((prompt, f"<think>thinking</think>{answer}"))
-        return answer
+        stored, reasoning, answered = "", "", False
+        for frame in chunks(response.text)[:-1]:
+            delta = frame["choices"][0]["delta"]
+            reasoning += delta.get("reasoning_content", "")
+            if delta.get("content"):
+                if reasoning:
+                    stored, reasoning = f"{stored}<think>{reasoning}</think>", ""
+                stored, answered = stored + delta["content"], True
+        if answered:
+            self.records.append((prompt, stored))
+        return stored
 
 
 async def test_a_long_conversation_stays_on_one_thread_as_its_window_slides(client, worker):
@@ -49,6 +59,44 @@ async def test_conversations_that_open_alike_get_their_own_threads(client, worke
     assert threads[3] == threads[0]
 
 
+async def test_a_forked_conversation_keeps_its_thread_after_a_tool_call_mid_answer(client, worker):
+    worker.reply = lambda _job, n: [
+        Progress(stage="assistant", detail="replying"),
+        Token(text="Let me check."),
+        MessageEnd(),
+        Tool(name="research_stock", status="started"),
+        Tool(name="research_stock", status="done"),
+        Token(text=f"Answer {n}."),
+        Done(result={}),
+    ]
+    older, forked = ChatApp(client), ChatApp(client)
+    await older.say("Research MSFT")
+    await forked.say("Research MSFT")
+    assert "Consulting research stock" in forked.records[0][1].split("</think>")[1]
+    await forked.say("And the risks?")
+    await forked.say("Thanks")
+
+    threads = [job.thread_id for job in worker.jobs]
+    assert threads[0] != threads[1] == threads[2] == threads[3]
+
+
+async def test_any_known_pair_beats_the_first_message(client, worker, db):
+    request = body("hello", "unknown answer", "hi again", "known answer", "next")
+    parsed = ChatRequest.model_validate(request)
+    db.owners["oa-fork"] = "friend"
+    db.aliases[digests.pair_alias("friend", "hi again", "known answer")] = ("oa-fork", "friend")
+
+    await client.post("/v1/chat/completions", json=request)
+
+    assert worker.jobs[0].thread_id == "oa-fork" != digests.first_message_thread("friend", parsed)
+
+
+async def test_a_fixed_note_alone_is_not_an_alias(db):
+    await remember_answer(None, "friend", "oa-t", "hello", f"<think>x</think>{TIMED_OUT}")
+    await remember_answer(None, "friend", "oa-t", "hello", "A real answer.")
+    assert len(db.aliases) == 1
+
+
 async def test_a_thread_header_names_the_thread(client, worker):
     headers = {"X-Thread-Id": "phone"}
     await client.post("/v1/chat/completions", json=body("hello"), headers=headers)
@@ -65,6 +113,8 @@ def test_thread_ids_are_namespaced_by_user():
     assert digests.header_thread("friend", "phone") != digests.header_thread("someone", "phone")
 
 
-def test_an_alias_ignores_a_stored_reasoning_block_and_outer_space():
-    stored = digests.pair_alias("friend", "hi", "<think>\nhmm\n</think>\n\nHello there. ")
-    assert stored == digests.pair_alias("friend", "hi", "Hello there.")
+def test_an_alias_ignores_every_stored_reasoning_block_and_outer_space():
+    stored = "<think>\nhmm\n</think>\n\nHello. Checking.\n\n<think>Consulting x…\n</think>Done. "
+    assert digests.pair_alias("friend", "hi", stored) == digests.pair_alias(
+        "friend", "hi", "Hello. Checking.\n\nDone."
+    )

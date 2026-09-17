@@ -6,6 +6,7 @@ after its latest event.
 """
 
 import asyncio
+import math
 import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -60,7 +61,8 @@ async def read(
     while True:
         block_ms = READ_BLOCK_MS
         if deadline is not None:
-            left_ms = int((deadline - loop.time()) * 1000)
+            # Rounded up, so a read never gives up before the deadline itself.
+            left_ms = math.ceil((deadline - loop.time()) * 1000)
             if left_ms <= 0:
                 return
             block_ms = min(block_ms, left_ms)
