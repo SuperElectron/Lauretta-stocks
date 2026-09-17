@@ -9,8 +9,10 @@ from psycopg_pool import AsyncConnectionPool
 from src.db.queries import facts, soul
 from src.graph.ctx import Ctx, user_of
 from src.memory.embedder import Embedder
-from src.memory.keys import SETUP_SKIPS, SKIPPED, SkippableStep
-from src.persona.approval import SHORT_ID_CHARS
+from src.memory.keys import ANSWERED, SETUP_SKIPS, SKIPPED, SkippableStep
+from src.persona.approval import MAX_PENDING_PROPOSALS, PROPOSAL_MAX_AGE, SHORT_ID_CHARS
+from src.persona.layers import NAME_KEYS
+from src.prompts import tools as wording
 from src.tools.scoped import (
     ScopedProposeSoulArgs,
     ScopedSetIdentityArgs,
@@ -33,7 +35,7 @@ def build_set_identity(pool: AsyncConnectionPool, embedder: Embedder) -> BaseToo
         """Set how the desk presents itself: your name, emoji or vibe, and the names of the
         Analyst, the Checker and the Strategist. Only save names the investor chose or
         confirmed, never invented ones; one call can rename several agents. Fields you leave
-        out stay as they are.
+        out stay as they are. Saving any name answers the team names setup step.
         """
         values = {
             "bot_name": name,
@@ -43,9 +45,14 @@ def build_set_identity(pool: AsyncConnectionPool, embedder: Embedder) -> BaseToo
             "checker_name": checker_name,
             "strategist_name": strategist_name,
         }
-        saved = await facts.set_many(
-            pool, embedder, user_of(runtime.context), "identity", values, "chat"
-        )
+        user_id = user_of(runtime.context)
+        saved = await facts.set_many(pool, embedder, user_id, "identity", values, "chat")
+        # Any rename answers the team step, the Director's alone included, so it is not offered
+        # again whatever the model does next.
+        if any(key in saved for key in NAME_KEYS):
+            await facts.set_keyed(
+                pool, embedder, user_id, SETUP_SKIPS["team_names"], ANSWERED, "chat"
+            )
         return {"saved": True, **saved}
 
     return set_identity
@@ -104,13 +111,18 @@ def build_propose_soul_change(pool: AsyncConnectionPool, embedder: Embedder) -> 
         under your reply, and only their reply applies it. Never say it has been applied.
         """
         user_id = user_of(runtime.context)
-        proposal_id = await soul.propose(pool, embedder, user_id, content, reason)
+        saved = await soul.propose(
+            pool, embedder, user_id, content, reason, MAX_PENDING_PROPOSALS, PROPOSAL_MAX_AGE
+        )
+        if saved is None:
+            note = wording.TOO_MANY_PROPOSALS.format(cap=MAX_PENDING_PROPOSALS)
+            return {"proposed": False, "applied": False, "note": note}
         return {
             "proposed": True,
             "applied": False,
-            "proposal_id": proposal_id[:SHORT_ID_CHARS],
+            "proposal_id": saved["id"][:SHORT_ID_CHARS],
             "reason": reason,
-            "content": content,
+            "content": saved["content"],
         }
 
     return propose_soul_change

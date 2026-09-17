@@ -18,8 +18,8 @@ NEXT_STEP = {
     "investor_name": "Ask what they'd like to be called, then save it with set_user_details.",
     "team_names": (
         "Offer to rename the team ({analyst_name}, {checker_name}, {strategist_name} and you, "
-        "{bot_name}); they can keep the defaults. Save new names with set_identity. If they "
-        "keep the names, call skip_setup_step with team_names."
+        "{bot_name}); they can keep the defaults. Save new names with set_identity, which closes "
+        "this step. If they keep the names, call skip_setup_step with team_names."
     ),
     "core_profile": (
         "Ask about their {topic}, in plain words, and save the answer with remember. No examples "

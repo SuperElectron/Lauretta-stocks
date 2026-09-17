@@ -29,6 +29,7 @@ ROLE_STOPPED = "the {role} stopped without submitting its work"
 NO_USER = "the run has no user to act for"
 SOUL_EMPTY = "the soul is empty"
 SOUL_TOO_LONG = "the soul is {chars} chars; the cap is {cap}"
+SOUL_ANGLE_BRACKETS = "the soul contains < or >"
 
 # API errors (`HTTPException` details and OpenAI-style errors).
 NO_SUCH_JOB = "no such job"

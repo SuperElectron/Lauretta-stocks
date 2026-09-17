@@ -62,9 +62,9 @@ class TwoUsers:
         self.holdings[user_id] = [h for h in self.holdings[user_id] if h["ticker"] != ticker]
         return len(self.holdings[user_id]) < before
 
-    async def search(self, _pool, _embedder, user_id, _query, limit):
+    async def search(self, _pool, _embedder, user_id, _query, limit, kinds):
         self.seen(user_id)
-        return self.memories[user_id][:limit]
+        return [m for m in self.memories[user_id] if m["kind"] in kinds][:limit]
 
     async def by_topic(self, _pool, user_id, _per_topic):
         self.seen(user_id)
@@ -108,6 +108,7 @@ class TwoUsers:
     async def approve(self, _pool, user_id, proposal_id):
         self.seen(user_id)
         self.decided.append((user_id, proposal_id))
+        return True
 
     reject = approve
 

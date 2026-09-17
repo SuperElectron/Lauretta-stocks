@@ -4,6 +4,7 @@ from langchain_core.tools import BaseTool
 from psycopg_pool import AsyncConnectionPool
 
 from src.data.sec import SecClient
+from src.db.queries import memories
 from src.memory.embedder import Embedder
 from src.tools.filings import build_get_financials, build_get_recent_filings
 from src.tools.market import build_get_market_snapshot, build_get_news, build_get_upcoming_events
@@ -39,11 +40,12 @@ def checker_tools(sec: SecClient) -> list[BaseTool]:
 
 
 def advisor_tools(pool: AsyncConnectionPool, embedder: Embedder) -> list[BaseTool]:
-    """Scoped to the run's user through its context, like the assistant's."""
+    """Scoped to the run's user through its context, like the assistant's. Recall reaches the
+    investor's memories only: the Strategist sees no profile beyond its `<user>` block."""
     return [
         build_get_portfolio(pool),
         build_get_market_snapshot(),
-        build_recall(pool, embedder),
+        build_recall(pool, embedder, memories.MEMORIES),
         build_submit_advice(),
     ]
 

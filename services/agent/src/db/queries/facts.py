@@ -2,10 +2,12 @@
 
 A keyed fact has one active row per (user, subject, key); setting a different value supersedes
 the old row and keeps it. Setting the same value writes nothing, so per-request signals stay cheap.
+Every write runs under the investor's persona lock (`lock_persona`), which soul writes take too.
 """
 
 from typing import Any
 
+from psycopg import AsyncConnection
 from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
 
@@ -31,6 +33,45 @@ async def persona_rows(pool: AsyncConnectionPool, user_id: str) -> list[dict[str
     )
 
 
+_LOCK = "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))"
+
+
+async def lock_persona(conn: AsyncConnection, user_id: str) -> None:
+    """Holds the investor's persona lock until the transaction ends, so two writes (parallel tool
+    calls, two jobs, a signal and a rename) never both read the old row and both supersede it."""
+    await conn.execute(_LOCK, (f"persona:{user_id}",))
+
+
+async def _write_keyed(
+    conn: AsyncConnection, embedder: Embedder, user_id: str, key: str, value: str, source: Source
+) -> dict[str, Any]:
+    """Within a locked transaction: supersedes the active row of `key` unless it holds `value`."""
+    spec = KEYS[key]
+    current = await (
+        await conn.execute(
+            """SELECT id, value FROM facts
+               WHERE user_id = %s AND subject = %s AND key = %s AND status = 'active'
+               FOR UPDATE""",
+            (user_id, spec.subject, key),
+        )
+    ).fetchall()
+    if current and current[0]["value"] == value:
+        return {"id": str(current[0]["id"]), "changed": False}
+    content = spec.sentence.format(value)
+    vector = vector_literal(await embedder.embed(content))
+    previous = current[0]["id"] if current else None
+    if previous is not None:
+        await conn.execute("UPDATE facts SET status = 'superseded' WHERE id = %s", (previous,))
+    cursor = await conn.execute(
+        """INSERT INTO facts (user_id, subject, kind, key, content, value, embedding, source,
+                              supersedes)
+           VALUES (%s, %s, %s, %s, %s, %s, %s::vector, %s, %s) RETURNING id::text""",
+        (user_id, spec.subject, spec.kind, key, content, Jsonb(value), vector, source, previous),
+    )
+    (saved,) = await cursor.fetchall()
+    return {"id": saved["id"], "changed": True}
+
+
 async def set_keyed(
     pool: AsyncConnectionPool,
     embedder: Embedder,
@@ -40,31 +81,9 @@ async def set_keyed(
     source: Source,
 ) -> dict[str, Any]:
     """Makes `value` the active value of `key`. Unchanged values write nothing."""
-    spec = KEYS[key]
-    current = await rows(
-        pool,
-        user_id,
-        """SELECT id, value FROM facts
-           WHERE user_id = %s AND subject = %s AND key = %s AND status = 'active'""",
-        (user_id, spec.subject, key),
-    )
-    if current and current[0]["value"] == value:
-        return {"id": str(current[0]["id"]), "changed": False}
-    content = spec.sentence.format(value)
-    vector = vector_literal(await embedder.embed(content))
-    previous = current[0]["id"] if current else None
     async with scoped(pool, user_id) as conn:
-        if previous is not None:
-            await conn.execute("UPDATE facts SET status = 'superseded' WHERE id = %s", (previous,))
-        cursor = await conn.execute(
-            """INSERT INTO facts (user_id, subject, kind, key, content, value, embedding, source,
-                                  supersedes)
-               VALUES (%s, %s, %s, %s, %s, %s, %s::vector, %s, %s) RETURNING id::text""",
-            (user_id, spec.subject, spec.kind, key, content, Jsonb(value), vector, source,
-             previous),
-        )  # fmt: skip
-        (saved,) = await cursor.fetchall()
-    return {"id": saved["id"], "changed": True}
+        await lock_persona(conn, user_id)
+        return await _write_keyed(conn, embedder, user_id, key, value, source)
 
 
 async def set_many(
@@ -75,13 +94,16 @@ async def set_many(
     values: dict[str, str | None],
     source: Source,
 ) -> dict[str, str]:
-    """Sets every non-None value; each key must be of `kind`. Returns what was given."""
+    """Sets every non-None value in one transaction; each key must be of `kind`. Returns what
+    was given."""
     given = {key: value for key, value in values.items() if value is not None}
     wrong = [key for key in given if key not in KEYS or KEYS[key].kind != kind]
     if wrong:
         raise PersonaInvalid(wording.NOT_KEYS_OF_KIND.format(kind=kind, keys=", ".join(wrong)))
-    for key, value in given.items():
-        await set_keyed(pool, embedder, user_id, key, value, source)
+    async with scoped(pool, user_id) as conn:
+        await lock_persona(conn, user_id)
+        for key, value in given.items():
+            await _write_keyed(conn, embedder, user_id, key, value, source)
     return given
 
 
