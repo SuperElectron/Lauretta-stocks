@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     EMBED_MODEL: str
     EMBED_DIMS: PositiveInt
     SEC_USER_AGENT: str
-    # The job queue (Valkey/Redis Streams), used by the API and the worker, never the CLI.
+    # The job queue (Valkey/Redis Streams), used by the worker, never the CLI.
     BROKER_URL: str | None = None
     # A job pending this long belonged to a worker that died, and is taken over.
     BROKER_MIN_IDLE_MS: PositiveInt = 60_000
@@ -53,22 +53,6 @@ class Settings(BaseSettings):
     AGENT_LOCK_TTL_MS: PositiveInt = 30_000
     # How long a job's status and events are kept for polling and resuming.
     EVENTS_TTL_S: PositiveInt = 86_400
-    # The longest `POST /v1/jobs?wait=` may block before answering 202. The gateway's
-    # requestTimeout (30s) bounds the time to response headers, so stay under it.
-    API_MAX_WAIT_S: PositiveInt = 25
-    # An SSE stream ends with a `timeout` event (STREAM_TIMEOUT) after this long; the job goes on.
-    API_MAX_STREAM_S: PositiveInt = 900
-    # The secret the gateway adds as `X-Lauretta-Gateway` (`api/edge.py`); api refuses anything
-    # without it. Unset (tests, local runs) nothing is checked; compose always sets it.
-    API_GATEWAY_SECRET: str | None = None
-    # Speech (speaches: faster-whisper and Kokoro on CPU), reached by the API only. Unset, the
-    # voice routes answer 503.
-    SPEECH_URL: str | None = None
-    STT_MODEL: str = "Systran/faster-whisper-small"
-    TTS_MODEL: str = "speaches-ai/Kokoro-82M-v1.0-ONNX"
-    # The Director's voice unless the user's `tts_voice` identity fact names another.
-    TTS_VOICE: str = "af_heart"
-    VOICE_MAX_UPLOAD_BYTES: PositiveInt = 10_000_000
 
     @model_validator(mode="after")
     def _sec_user_agent_names_a_contact(self) -> "Settings":
@@ -106,7 +90,7 @@ class Settings(BaseSettings):
         return self.allowed_users()[0]
 
     def broker_url(self) -> str:
-        """BROKER_URL, required by the API and the worker."""
+        """BROKER_URL, required by the worker."""
         if not self.BROKER_URL:
-            raise ValueError("BROKER_URL is required to run the API or the worker")
+            raise ValueError("BROKER_URL is required to run the worker")
         return self.BROKER_URL

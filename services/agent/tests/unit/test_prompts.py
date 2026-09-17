@@ -27,8 +27,6 @@ NAMES = set(NAME_KEYS)
 SRC = Path(__file__).resolve().parents[2] / "src"
 # `file:symbol` (top-level def, class or assignment) whose strings are not wording, and why.
 ALLOWED = {
-    "api/app.py:create_app": "the FastAPI app title, a product name",
-    "api/openai/stream.py:DONE_FRAME": "the SSE end-of-stream frame, protocol",
     "db/checkpointer.py:_VERSION": "SQL: the checkpoint tables' migration version",
     "db/pool.py:_SCOPE": "SQL: the transaction's user scope for row-level security",
     "graph/render.py:_today": "a strftime pattern",
@@ -74,15 +72,11 @@ def fields(template: str) -> set[str]:
         (progress.ROLE_LINE, {"name", "role", "detail"}),
         (progress.ANALYST_REDRAFTING, {"revision"}),
         (progress.CHECKER_VERDICT, {"verdict"}),
-        (notes.ERROR, {"message"}),
         (notes.SOUL_PROPOSAL, {"short_id", "reason", "content"}),
         (blocks.SIGNAL_LINE, {"key", "value", "since"}),
         (blocks.INVESTOR_LINE, {"topic", "content", "created", "id"}),
         (blocks.THESIS_LINE, {"ticker", "action", "verdict", "created"}),
         (report.TARGET_WEIGHT, {"weight"}),
-        (errors.NO_RESEARCH, {"ticker"}),
-        (errors.NO_SUCH_MODEL, {"model"}),
-        (errors.INVALID_FIELDS, {"fields"}),
         (errors.EMBEDDER_DIMS, {"model", "dims", "expected"}),
         (errors.DEAD_UNFINISHED, {"deliveries"}),
         (errors.ROLE_STOPPED, {"role"}),

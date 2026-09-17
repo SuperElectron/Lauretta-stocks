@@ -6,7 +6,7 @@ from fakeredis import FakeAsyncRedis
 from src.queue import keys, reclaim
 from src.queue.consumer import Consumer
 from src.queue.models import Job
-from src.queue.submit import submit
+from tests.api_side import submit
 
 
 class RecordingHandler:
@@ -175,9 +175,9 @@ async def test_a_job_read_as_stop_is_set_is_left_pending_for_redelivery(broker, 
 
 
 def test_the_broker_socket_timeout_outlasts_every_blocking_read():
-    from src.queue import broker, events
+    from src.queue import broker
     from src.queue.consumer import BLOCK_MS
 
     client = broker.connect("redis://127.0.0.1:1/0")
     timeout = client.connection_pool.connection_kwargs["socket_timeout"]
-    assert timeout > events.READ_BLOCK_MS / 1000 and timeout > BLOCK_MS / 1000
+    assert timeout > BLOCK_MS / 1000

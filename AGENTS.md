@@ -67,15 +67,40 @@ research pipeline (LangGraph)                                                   
 
 ## Layout
 
-Every service has its own folder under `services/` (`agent`, `db`, `gateway`, `tailscale`,
-`backup`); the repo root keeps the compose files, `justfile`, docs, `reports/` and `backups/`.
-Paths below are relative to `services/`.
+Microservices: every service has its own folder under `services/` (`api`, `agent`, `db`,
+`gateway`, `tailscale`, `backup`). `api` and `agent` each have their own `Dockerfile`,
+`pyproject.toml`, `src/` and `tests/`, and neither imports the other. What crosses between them
+(the job payload, job events, queue and key names, default agent names) is pinned in
+`contracts/` at the repo root; each service mirrors it in its own code and its tests load those
+fixtures. Change a contract and both mirrors in the same PR. The repo root keeps `contracts/`,
+the compose files, `justfile`, docs, `reports/` and `backups/`. Paths below are relative to
+`services/`.
 
-- `agent/src/prompts/`: all prompts and user-facing wording live here, and nowhere else: rules,
+**`api/`** (FastAPI, `src.api.app:app`; no LangGraph): queues jobs and reads results, never runs
+a graph.
+- `api/src/api/`: `POST /v1/jobs` (`?wait=`), `GET /v1/jobs/{id}`, `GET /v1/jobs/{id}/events`
+  (SSE), `/v1/theses/{ticker}`, `/v1/holdings`, `/healthz`. `openai/`: `/v1/models` and
+  `/v1/chat/completions` (OpenAI-compatible, streamed, model `lauretta-<user>`), a thin adapter
+  over the same jobs. `mcpserver/`: the MCP server at `/mcp/` (streamable HTTP, stateless; owner
+  key only at the gateway). `voice/`: `/v1/audio/transcriptions`, `/v1/audio/speech` and
+  `/v1/voice/turns` over the `speech` service. `edge.py` refuses any request without the
+  gateway's secret. The user comes from `deps.current_user` (the gateway's header, checked
+  against `ALLOWED_USERS`); another user's job is 404; threads are keyed by user in `threads` and
+  found again through `thread_aliases` (hashes of prompt and answer pairs the client resends).
+- `api/src/queue/`: the API side of the queue (submit, status, reading events).
+- `api/src/db/`: the same pool and `scoped()` row-level security; the API's own queries
+  (threads and aliases, reading holdings, theses and the `tts_voice` fact).
+- `api/src/prompts/`: the API's wording (errors, chat notes, progress lines, default names), with
+  its own wording guard test. `api/scripts/`: `stream_check` and `stream_report`.
+
+**`agent/`** (LangGraph; no FastAPI): the worker (`python -m src.worker`), the CLI and the
+one-shot checkpoint `migrate`.
+
+- `agent/src/prompts/`: all of the agent's prompts and wording live here, and nowhere else: rules,
   default soul and desk lines, identity defaults, each agent's system prompt (`assistant`,
   `analyst`, `checker`, `strategist`), block empty states, progress labels, client notes, error
   text (`errors`), tool notes (`tools`), fact sentences (`facts`), the setup checklist (`setup`)
-  and the report. It imports nothing.
+  and the report. It imports nothing. (The API's wording lives in `api/src/prompts/`.)
   Templates use `str.format` fields; `tests/unit/test_prompts.py` checks their fields and fails
   on wording found elsewhere (explicit `file:symbol` allowlist, each with a reason). Tool
   descriptions stay as docstrings and `Field` descriptions on the tools.
@@ -94,23 +119,15 @@ Paths below are relative to `services/`.
   as `lauretta_app`). Schema is `db/init/00-schema.sql` and the roles (`lauretta_app`,
   `lauretta_migrator` for the checkpoint tables) `db/init/01-app-role.sh`, applied when the volume
   is first created. `db/reset-and-restore.sh` is the one-off deploy of #25.
-- `agent/src/api/`: FastAPI (`src.api.app:app`). Queues jobs and reads results; never runs a
-  graph. `POST /v1/jobs` (`?wait=`), `GET /v1/jobs/{id}`, `GET /v1/jobs/{id}/events` (SSE),
-  `/v1/theses/{ticker}`, `/v1/holdings`, `/healthz`. `api/openai/`: `/v1/models` and
-  `/v1/chat/completions` (OpenAI-compatible, streamed, model `lauretta-<user>`), a thin adapter
-  over the same jobs. `api/mcpserver/`: the MCP server at `/mcp/` (streamable HTTP, stateless;
-  owner key only at the gateway), tools over the same jobs and reads. `api/voice/`:
-  `/v1/audio/transcriptions`, `/v1/audio/speech` and `/v1/voice/turns` over the `speech` service.
-  The user comes from `deps.current_user` (the gateway's header, checked against
-  `ALLOWED_USERS`); another user's job is 404; threads are keyed by user in `threads`
-  and found again through `thread_aliases` (hashes of prompt and answer pairs the client resends).
-- `agent/src/queue/`: Valkey Streams: `jobs` (group `workers`, reclaim, `jobs:dead`), per-job
-  status hash and `job:{id}:events` stream, per-thread lock. Event models in `queue/models.py`.
+- `agent/src/queue/`: the worker side of Valkey Streams: consuming `jobs` (group `workers`,
+  reclaim, `jobs:dead`), marking the per-job status hash, publishing `job:{id}:events`, and the
+  per-thread lock. Event models in `queue/models.py`.
 - `agent/src/worker/`: `python -m src.worker` runs jobs through `open_app`; `stream.py` maps
   LangGraph stream parts to events. Nodes report progress, notices and retries through
   `graph/emit.py` (a no-op under `ainvoke`, so the CLI is unchanged).
 - `agent/src/memory/`: fastembed embeddings (local CPU, 384 dims) for pgvector search.
-- `agent/Dockerfile`, `db/`, `gateway/`, `tailscale/`, `backup/` and the root `docker-compose.yaml`:
+- `api/Dockerfile`, `agent/Dockerfile`, `db/`, `gateway/`, `tailscale/`, `backup/` and the root
+  `docker-compose.yaml`:
   the Spark stack (gateway, api, worker, broker, db, anythingllm, vllm, speech, backup,
   tailscale). The gateway sends `/v1/*`, `/mcp` and `/healthz` to api and every other path to
   AnythingLLM, the web and Android client (`gateway/config.yaml`). Its internal `llm` listener,

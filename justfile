@@ -83,6 +83,7 @@ _spark cmd:
     target=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]))["spark"]; print(d["username"] + "@" + d["host"])' "{{ justfile_directory() }}/.claude/secrets/devices.json")
     ssh -t -o BatchMode=yes "$target" {{ quote(cmd) }}
 
-# Refuses where the full stack runs (its api container exists): up/down would act on its database.
+# Refuses where the full stack runs or has run: its api container, or a volume only the stack
+# creates, exists. up/down would act on its database (clean=true would delete every user's data).
 _local-only:
-    @if docker ps -a --format '{{{{.Names}}' | grep -qx 'lauretta-stocks-api-1'; then echo "this host runs the stack; use just deploy/ps/logs instead" >&2; exit 1; fi
+    @if docker ps -a --format '{{{{.Names}}' | grep -qx 'lauretta-stocks-api-1' || docker volume ls -q | grep -qxE 'lauretta-stocks_(anythingllm|tsstate|brokerdata|speechmodels)'; then echo "this host runs the stack; use just deploy/ps/logs instead" >&2; exit 1; fi

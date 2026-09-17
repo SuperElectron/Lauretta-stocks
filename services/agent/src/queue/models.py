@@ -119,7 +119,8 @@ class Error(Event):
 
 
 class Timeout(Event):
-    """Sent by the API, not the worker: this stream hit `API_MAX_STREAM_S`, the job goes on."""
+    """Sent by the API, never the worker: an API stream hit its time cap and the job goes on.
+    Mirrored here because `contracts/job_events.v1.json` pins every event type."""
 
     type = "timeout"
     code: str
