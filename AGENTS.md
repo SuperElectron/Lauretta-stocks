@@ -58,8 +58,10 @@ research pipeline (LangGraph)                                                   
   `graph/emit.py` (a no-op under `ainvoke`, so the CLI is unchanged).
 - `agent/src/memory/`: fastembed embeddings (local CPU, 384 dims) for pgvector search.
 - `agent/Dockerfile`, `docker-compose.yaml`, `ops/`: the Spark stack (gateway, api, worker, broker,
-  db, backup, tailscale). The tailscale container hosts the Service `svc:lauretta`
-  (`ops/tailscale/`). `docker-compose.dev.yaml` is the local db only, used by `just up`.
+  db, anythingllm, backup, tailscale). The gateway sends `/v1/*` and `/healthz` to api and every
+  other path to AnythingLLM, the web and Android client (`ops/gateway/config.yaml`). The
+  tailscale container hosts the Service `svc:lauretta` (`ops/tailscale/`).
+  `docker-compose.dev.yaml` is the local db only, used by `just up`.
 
 ## MCP servers (`.mcp.json`)
 
