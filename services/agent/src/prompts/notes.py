@@ -17,6 +17,22 @@ JOB_FAILED = "the job failed; the worker log has the details"
 JOB_ABANDONED = "the job did not finish"
 JOB_LOST = "its record expired before it finished; ask again"
 
+# Each `AgentError`'s message, shown after `ERROR`.
+AGENT_FAILED = "the agent failed"
+DATABASE_UNAVAILABLE = "the database is unavailable; is `just up` running?"
+EMBEDDER_MISMATCH = "the embedding model's size does not match EMBED_DIMS and the facts table"
+ROLE_DID_NOT_SUBMIT = "a research role finished without submitting its result"
+REPLY_TRUNCATED = (
+    "the model hit AGENT_MAX_TOKENS mid-reply (reasoning counts too); raise it in .env"
+)
+PERSONA_INVALID = "the persona is invalid"
+THREAD_BUSY = "another message on this thread is still being answered; send it again after"
+LOCK_LOST = "the thread lock was lost while the job ran"
+JOB_INTERRUPTED = "the job was interrupted before it finished; send it again if still needed"
+ROLE_STOPPED = "the {role} stopped without submitting its work"
+SOUL_EMPTY = "the soul is empty"
+SOUL_TOO_LONG = "the soul is {chars} chars; the cap is {cap}"
+
 SOUL_PROPOSAL = """---
 Proposed change to my soul (id {short_id})
 Reason: {reason}

@@ -10,11 +10,11 @@ import pytest
 from src.prompts import analyst, assistant, blocks, notes, pm, progress, report, risk
 
 SRC = Path(__file__).resolve().parents[2] / "src"
-# A string this long with a space in it reads as wording, not an identifier or a key.
+# A string this long with a space in it, or text over several lines, reads as wording rather
+# than an identifier or a key. Stricter than it needs to be on purpose.
 MIN_CHARS = 40
 # Text that is not persona wording: SQL and Lua, tool descriptions and tool results (which
-# LangChain and the model read beside the tool), settings and API validation, and the error
-# catalogue.
+# LangChain and the model read beside the tool), and settings and API validation.
 ALLOWED = (
     "prompts/",
     "db/queries/",
@@ -22,7 +22,6 @@ ALLOWED = (
     "tools/",
     "graph/outputs.py",
     "settings.py",
-    "errors.py",
     "queue/models.py",
     "api/events.py",
     "api/openai/models.py",
@@ -88,7 +87,7 @@ def _wording(path: Path) -> list[str]:
         if isinstance(node, ast.Constant)
         and isinstance(node.value, str)
         and id(node) not in docstrings
-        and (len(node.value) >= MIN_CHARS and " " in node.value)
+        and ((len(node.value) >= MIN_CHARS and " " in node.value) or "\n" in node.value.strip())
     ]
 
 
