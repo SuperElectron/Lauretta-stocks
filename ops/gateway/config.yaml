@@ -5,11 +5,12 @@
 #   18400  ingress  -> api:8000 (/v1/*, /healthz) and anythingllm:3001 (everything else).
 #                      Not published to the host; the tailscale container terminates TLS for
 #                      svc:lauretta and proxies here.
+#   3000   llm      -> vLLM on the Spark, or OpenRouter. Compose networks only, never published;
+#                      needs the internal key that only api and worker hold.
 #
 # Route choice is by match, not list order: an exact path beats a prefix, and a longer prefix
 # beats a shorter one, so /healthz and /v1/ always reach api and `/` takes only the rest.
 # AnythingLLM serves its APIs under /api/ and has no /v1 or /healthz of its own.
-#   3000   llm      -> vLLM on the Spark, or OpenRouter. Compose network only, never published.
 #
 # Environment variables in dollar-brace form are expanded when the config loads, comments
 # included, so an unset one (even in a comment) stops the gateway at start.
@@ -45,6 +46,8 @@ routes:
           - X-Forwarded-For
           - X-Real-IP
           - Forwarded
+          - X-Forwarded-Host
+          - X-Forwarded-Proto
       localRateLimit:
         - maxTokens: 60
           tokensPerFill: 60
@@ -92,6 +95,8 @@ routes:
           - X-Forwarded-For
           - X-Real-IP
           - Forwarded
+          - X-Forwarded-Host
+          - X-Forwarded-Proto
       localRateLimit:
         - maxTokens: 120
           tokensPerFill: 120
@@ -130,6 +135,8 @@ routes:
           - X-Forwarded-For
           - X-Real-IP
           - Forwarded
+          - X-Forwarded-Host
+          - X-Forwarded-Proto
       authorization:
         rules:
           - require: >-
@@ -149,14 +156,24 @@ routes:
     backends:
       - host: anythingllm:3001
 
-# Model egress. api and worker call http://gateway:3000/v1 with a placeholder key; the gateway
-# attaches the real one. Clients pick the provider by model name:
+# Model egress. api and worker call http://gateway:3000/v1 with the internal key, which apiKey
+# checks and removes; the gateway then attaches the provider's own key. The listener is reachable
+# from every network the gateway joins (including AnythingLLM's `web`), so it is never open.
+# Clients pick the provider by model name:
 #   gpt-oss-120b          -> vLLM on the Spark (host port 8000)
 #   openai/gpt-oss-120b   -> OpenRouter
 # Failover from vLLM to OpenRouter is issue #4; this only makes both addressable.
 llm:
   gateways: [llm]
   policies:
+    apiKey:
+      mode: strict
+      location:
+        header:
+          name: Authorization
+          prefix: "Bearer "
+      keys:
+        - key: ${LLM_INTERNAL_KEY}
     # Guards OpenRouter spend only (vLLM on the Spark costs nothing per call); a research run
     # makes many calls, so it is set well above normal use.
     localRateLimit:

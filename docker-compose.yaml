@@ -13,6 +13,9 @@ name: lauretta-stocks
 networks:
   court:
     driver: bridge
+  # AnythingLLM and the gateway only: the web app reaches nothing else in the stack.
+  web:
+    driver: bridge
 
 volumes:
   pgdata:
@@ -44,10 +47,11 @@ x-app: &app
     BROKER_URL: redis://:${BROKER_PASSWORD:?set BROKER_PASSWORD}@broker:6379/0
     DB_POOL_MIN: ${DB_POOL_MIN}
     DB_POOL_MAX: ${DB_POOL_MAX}
-    # Models go through the gateway, which holds the keys; the placeholder satisfies the client.
+    # Models go through the gateway, which holds the provider keys. This internal key only opens
+    # the gateway's llm listener; the gateway swaps it for the provider's key.
     AGENT_PROVIDER: openai
     AGENT_BASE_URL: http://gateway:3000/v1
-    OPENAI_API_KEY: held-by-gateway
+    OPENAI_API_KEY: ${LLM_INTERNAL_KEY:?set LLM_INTERNAL_KEY (random, e.g. openssl rand -hex 32)}
     AGENT_MODEL: ${STACK_AGENT_MODEL:-gpt-oss-120b}
     AGENT_TEMPERATURE: ${AGENT_TEMPERATURE}
     AGENT_MAX_TOKENS: ${AGENT_MAX_TOKENS}
@@ -149,13 +153,15 @@ services:
       GENERIC_OPEN_AI_MODEL_PREF: lauretta
       GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT: "128000"
       GENERIC_OPEN_AI_MAX_TOKENS: "8192"
+      # Plain chats take the streaming chat path, not the agent loop that sends tools.
+      PROVIDER_DISABLE_NATIVE_TOOL_CALLING: generic-openai
       # Built-in embedder (downloads its small model once into storage) and LanceDB in the volume.
       EMBEDDING_ENGINE: native
       VECTOR_DB: lancedb
     volumes:
       - anythingllm:/app/server/storage
     mem_limit: 3g
-    networks: [court]
+    networks: [web]
     healthcheck:
       # The image's own check: GET /api/ping on its port.
       test: ["CMD", "/bin/bash", "/usr/local/bin/docker-healthcheck.sh"]
@@ -170,6 +176,7 @@ services:
     command: ["-f", "/etc/agentgateway/config.yaml"]
     environment:
       GATEWAY_API_KEY: ${GATEWAY_API_KEY:?set GATEWAY_API_KEY (clients send it as a Bearer token)}
+      LLM_INTERNAL_KEY: ${LLM_INTERNAL_KEY:?set LLM_INTERNAL_KEY (api and worker send it to the llm listener)}
     # Linux Docker has no host.docker.internal by default; vLLM listens on the Spark host.
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -186,7 +193,7 @@ services:
       - openrouter_api_key
       - spark_vllm_api_key
     mem_limit: 256m
-    networks: [court]
+    networks: [court, web]
     healthcheck:
       # agentgateway's readiness endpoint: ready once the config is loaded and listeners are up.
       test: ["CMD", "/hc/busybox", "wget", "-qO-", "http://127.0.0.1:15021/healthz/ready"]
@@ -198,8 +205,10 @@ services:
       api:
         condition: service_healthy
         restart: true
+      # Started, not healthy: the API never waits on the web app. Recreating anythingllm still
+      # restarts the gateway (it resolves backends at start), which cuts in-flight streams.
       anythingllm:
-        condition: service_healthy
+        condition: service_started
         restart: true
 
   # pg_dump and a tar of AnythingLLM's storage, at start and nightly into ./backups (git-ignored).

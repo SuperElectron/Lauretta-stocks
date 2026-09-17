@@ -90,22 +90,27 @@ may petition the Director directly.
 ## Talking to the court
 
 His Excellency need not learn `curl`. The court receives visitors through
-[AnythingLLM](https://anythingllm.com), a proper reception hall with chat threads and document
-uploads, whose every question is carried to the Director.
+[AnythingLLM](https://anythingllm.com), a proper reception hall with chat threads, where the
+Director answers.
 
 - **The hall:** open https://lauretta.tailae2b1.ts.net on any device on the tailnet. Any browser
   will do, the iPhone's included.
 - **The first visit** (the owner, straight after the first deploy): the hall asks for a password,
   which is `ANYTHINGLLM_AUTH_TOKEN` from the Spark's `.env`. Then, in Settings > Security, turn on
   multi-user mode and create the admin account, and in Settings > Users (under Admin) create
-  His Excellency's. From then on everyone signs in with their own account and the password is no
+  His Excellency's with the role **Default** (not Admin or Manager). From then on everyone signs in with their own account and the password is no
   longer used. Until this is done, whoever holds the password holds the hall, so do it at once.
 - **The Android app:** install AnythingLLM from Google Play. In the hall (opened at the tailnet
   address, not `localhost`), go to Settings > AnythingLLM Mobile and scan its QR code with the
   app. The phone must be on the tailnet too. There is no iPhone app; the browser serves.
+- **Documents:** the hall accepts uploads (up to 100 MiB each), but **the Director does not read
+  them yet**: the court's endpoint ignores the context AnythingLLM retrieves from them.
 - **Behind the curtain:** AnythingLLM asks the gateway's `/v1` for the model `lauretta`, with
-  `GATEWAY_API_KEY`, like any other client. It embeds documents on the Spark with its built-in
-  model (fetched once on first use) and keeps them, and its chats, in the `anythingllm` volume.
+  `GATEWAY_API_KEY`, like any other client, and takes the plain streaming chat path (no agent
+  tools). It sits on its own `web` network with the gateway alone and can reach nothing else in
+  the stack. It keeps its chats, accounts and documents in the `anythingllm` volume.
+- **What it fetches from the internet:** at boot, LiteLLM's model map (GitHub) and model prices
+  (models.dev); on the first document, its embedding model, once. None of it carries user data.
 
 ## Running on the Spark
 
@@ -133,8 +138,9 @@ just backup             # a database dump now, into backups/ on the Spark
   `Authorization: Bearer $GATEWAY_API_KEY`; `/healthz` is open; every other path goes to
   AnythingLLM, which keeps its own login. It strips the key (for the api) and any claimed identity
   (including Tailscale's and forwarding headers), rate limits, and never buffers, so streams and
-  WebSockets arrive as they are written. Bodies over 100 MiB are refused. It alone holds the
-  provider keys.
+  WebSockets arrive as they are written. On `/` (AnythingLLM) only, bodies over 100 MiB are
+  refused. It alone holds the provider keys, and its internal `llm` listener needs
+  `LLM_INTERNAL_KEY`, which only api and worker hold.
 - **The tailnet:** the court lives at `https://lauretta.tailae2b1.ts.net`. The `tailscale`
   container joins the tailnet as `lauretta-host` (`tag:lauretta`) and hosts the Tailscale Service
   `svc:lauretta`, with a real certificate, straight to the gateway. There is nothing to expose by
@@ -148,7 +154,10 @@ just backup             # a database dump now, into backups/ on the Spark
 - **Backups:** the `backup` service dumps the database and tars AnythingLLM's storage when it
   starts and at 03:00 UTC into `backups/`, keeps the newest `BACKUP_KEEP` of each, and turns
   unhealthy after 26 hours without either. Restore with `pg_restore`, and untar the storage into
-  an empty `anythingllm` volume while AnythingLLM is stopped.
+  an empty `anythingllm` volume while AnythingLLM is stopped. The tars hold AnythingLLM's accounts
+  and keys, so keep `backups/` private.
+- **Restarts:** the gateway starts once AnythingLLM has started (it never waits for its health),
+  but recreating `anythingllm` restarts the gateway, which cuts any stream in flight.
 - **Gotchas:** the gateway's `requestTimeout` bounds only the time to response headers, not a
   stream; `csrf` is not authentication; and the gateway expands `${...}` even in config comments.
 

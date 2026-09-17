@@ -60,7 +60,8 @@ research pipeline (LangGraph)                                                   
 - `agent/Dockerfile`, `docker-compose.yaml`, `ops/`: the Spark stack (gateway, api, worker, broker,
   db, anythingllm, backup, tailscale). The gateway sends `/v1/*` and `/healthz` to api and every
   other path to AnythingLLM, the web and Android client (`ops/gateway/config.yaml`). The
-  tailscale container hosts the Service `svc:lauretta` (`ops/tailscale/`). `docker-compose.dev.yaml` is the local db only, used by `just up`.
+  tailscale container hosts the Service `svc:lauretta` (`ops/tailscale/`).
+  `docker-compose.dev.yaml` is the local db only, used by `just up`.
 
 ## MCP servers (`.mcp.json`)
 
