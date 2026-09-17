@@ -1,5 +1,5 @@
-# The database integration tests (row-level security as `lauretta_app`), in a throwaway project
-# of their own: `just test-db` runs them and removes everything, volume included. The database
+# The database integration tests of both services (row-level security as `lauretta_app`), in a
+# throwaway project of their own: `just test-db` runs them and removes everything, volume included. The database
 # is built from services/db/init like the stack's, never published, and its passwords are fixed
 # test values that guard nothing else.
 name: lauretta-rlstest
@@ -41,6 +41,24 @@ services:
       PYTHONDONTWRITEBYTECODE: "1"
     volumes:
       - ./services/agent:/agent:ro
+    command: ["uv", "run", "--frozen", "pytest", "-q", "-p", "no:cacheprovider", "-m", "integration", "tests/integration"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # The API's queries, from services/api, against the same throwaway database.
+  api-tests:
+    image: lauretta-rlstest-tests:latest
+    working_dir: /api
+    environment:
+      RLS_TEST_OWNER_URL: postgresql://owner:owner-test@db:5432/rlstest
+      RLS_TEST_APP_URL: postgresql://lauretta_app:app-test@db:5432/rlstest
+      UV_PROJECT_ENVIRONMENT: /venv-api
+      UV_LINK_MODE: copy
+      UV_PYTHON_DOWNLOADS: never
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - ./services/api:/api:ro
     command: ["uv", "run", "--frozen", "pytest", "-q", "-p", "no:cacheprovider", "-m", "integration", "tests/integration"]
     depends_on:
       db:
