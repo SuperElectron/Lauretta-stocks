@@ -65,8 +65,9 @@ research pipeline (LangGraph)                                                   
   `DB_APP_PASSWORD` or `DB_MIGRATOR_PASSWORD` also needs `ALTER ROLE ... PASSWORD` as the owner.
 - **Names**: every agent's name (Director, Analyst, Checker, Strategist) is an identity fact
   (`bot_name`, `analyst_name`, `checker_name`, `strategist_name`) with its default in
-  `prompts/identity.py`; `set_identity` renames them. The pipeline loads the names once per run,
-  tells each role its name, and sends it on every progress event (`name`, optional).
+  `IDENTITY_DEFAULTS` (`persona/layers.py`); `set_identity` renames them. The pipeline loads the
+  names once per run, tells each role its name, and sends it on every progress event (`name`,
+  optional).
 
 ## Layout
 
@@ -99,15 +100,17 @@ a graph.
 **`agent/`** (LangGraph; no FastAPI): the worker (`python -m src.worker`), the CLI and the
 one-shot checkpoint `migrate`.
 
-- `agent/src/prompts/`: all of the agent's prompts and wording live here, and nowhere else: rules,
-  default soul and desk lines, identity defaults, each agent's system prompt (`assistant`,
-  `analyst`, `checker`, `strategist`), block empty states, progress labels, client notes, error
-  text (`errors`), tool notes (`tools`), fact sentences (`facts`), the setup checklist (`setup`)
-  and the report. It imports nothing. (The API's wording lives in `api/src/prompts/`.)
-  Templates use `str.format` fields; `tests/unit/test_prompts.py` checks their fields and fails
-  on wording found elsewhere (explicit `file:symbol` allowlist, each with a reason). Tool
-  descriptions stay as docstrings and `Field` descriptions on the tools.
-- `agent/src/graph/render.py`: stitches each system prompt from that wording: a head, then data
+- `agent/src/prompts/`: only prompts, the text the model is given as instructions: the rules,
+  the default soul and desk lines, each agent's system prompt and task (`assistant`, `analyst`,
+  `checker`, `strategist`), the setup checklist (`setup`), the compaction prompts (`compaction`)
+  and mid-run reminders (`reminders`). It imports nothing. Any other text lives as a constant
+  beside the code that uses it: tool results in `tools/`, error messages in `errors.py` and at
+  their raise site, progress labels in `graph/progress.py`, block empty states in
+  `graph/context.py` and `persona/layers.py` (with `IDENTITY_DEFAULTS`), fact sentences in
+  `memory/keys.py`, soul notices in `persona/approval.py`, the CLI in `main.py` and the report in
+  `report.py`. Templates use `str.format` fields; `tests/unit/test_prompts.py` checks their
+  fields. Tool descriptions stay as docstrings and `Field` descriptions on the tools.
+- `agent/src/graph/render.py`: stitches each system prompt from those prompts: a head, then data
   blocks (`<investor>`, `<holdings>`, `<setup>`, `<unknown>`, `<draft>`, `<review>`), then the
   stage.
 - `agent/src/tools/`: one `build_*` factory per tool; argument schemas in `tools/models.py` and

@@ -18,9 +18,9 @@ import re
 from collections.abc import Iterable
 from typing import Any
 
-from src.prompts import notes
+# Put in place of an identifying value (IP address, place) in the model's streamed reasoning.
+REDACTED = "[redacted]"
 
-REDACTED = notes.REDACTED
 # The signal keys whose values identify the investor.
 IDENTIFYING_SIGNALS = ("ip", "last_seen_city")
 BLOCK_TAGS = (

@@ -12,7 +12,8 @@ from typing import Any
 import yfinance as yf
 
 from src.errors import UpstreamUnavailable
-from src.prompts import errors as wording
+
+YAHOO_FAILED = "Yahoo Finance failed: {error}"
 
 SNAPSHOT_FIELDS = (
     "longName", "quoteType", "sector", "industry", "country", "currency", "exchange",
@@ -99,4 +100,4 @@ async def _call[T](load: Callable[[], T]) -> T:
     try:
         return await asyncio.to_thread(load)
     except Exception as exc:
-        raise UpstreamUnavailable(wording.YAHOO_FAILED.format(error=type(exc).__name__)) from exc
+        raise UpstreamUnavailable(YAHOO_FAILED.format(error=type(exc).__name__)) from exc

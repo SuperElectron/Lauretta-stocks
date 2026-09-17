@@ -9,9 +9,8 @@ from src.graph.render import render_assistant_prompt
 from src.graph.setup import compute_setup, render_setup
 from src.memory.keys import KEYS, keys_of
 from src.persona.layers import build_persona, desk_names, render_fields, render_persona
-from src.persona.soul import check_soul
-from src.prompts.progress import ROLES
-from src.prompts.soul import DEFAULT_SOUL, SOUL_MAX_CHARS
+from src.persona.soul import SOUL_MAX_CHARS, check_soul
+from src.prompts.soul import DEFAULT_SOUL
 from src.tools.persona_args import ProposeSoulArgs, SetIdentityArgs, SetUserDetailsArgs
 
 
@@ -61,24 +60,21 @@ NETWORK = re.compile(r"`court`|\bcourt:|\[court\b|\bcourt\]")
 README_INTRO = range(3, 6)
 
 
-def test_no_court_theme_in_the_assistant_prompt_or_the_notes():
+def test_no_court_theme_in_the_assistant_prompt():
     persona = build_persona([])
     names = desk_names(persona)
     for current in ("setup", "ready"):
         setup = render_setup(compute_setup(persona, ["goals"], 0), names)
         prompt = render_assistant_prompt(render_persona(persona), "", setup, current, names)
         assert not COURT.search(prompt), COURT.search(prompt)
-    notes = [*ROLES.values()]
-    assert not [note for note in notes if COURT.search(note)]
-    assert set(ROLES.values()) == {"Analyst", "Checker", "Strategist"}
 
 
-def test_no_court_theme_in_the_wording_readme_or_compose():
-    prompts = [
-        *(ROOT / "services/agent/src/prompts").glob("*.py"),
-        *(ROOT / "services/api/src/prompts").glob("*.py"),
+def test_no_court_theme_in_the_code_readme_or_compose():
+    code = [
+        *(ROOT / "services/agent/src").rglob("*.py"),
+        *(ROOT / "services/api/src").rglob("*.py"),
     ]
-    files = [*sorted(prompts), ROOT / "README.md"]
+    files = [*sorted(code), ROOT / "README.md"]
     files.append(ROOT / "docker-compose.yaml")
     hits = [
         f"{path.name}:{number}: {line.strip()}"

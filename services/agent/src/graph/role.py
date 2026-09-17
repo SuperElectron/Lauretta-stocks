@@ -13,8 +13,9 @@ from src.errors import RoleDidNotSubmit
 from src.graph.ctx import Ctx, user_of
 from src.graph.llm import complete, with_backoff
 from src.graph.state import RoleState
-from src.prompts import errors
-from src.prompts.tools import SUBMIT_REMINDER
+from src.prompts.reminders import SUBMIT_REMINDER
+
+ROLE_STOPPED = "the {role} stopped without submitting its work"
 
 # Reminders to submit before a role that keeps answering in text fails hard.
 MAX_REMINDERS = 2
@@ -74,7 +75,7 @@ def build_role(
             context=Ctx(user_id=user_of(context)),
         )
         if final.get("result") is None:
-            raise RoleDidNotSubmit(errors.ROLE_STOPPED.format(role=name))
+            raise RoleDidNotSubmit(ROLE_STOPPED.format(role=name))
         return final["result"]
 
     return run

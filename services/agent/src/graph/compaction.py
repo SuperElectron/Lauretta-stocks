@@ -14,17 +14,24 @@ from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, ToolMes
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from src.graph import emit
+from src.graph import emit, progress
 from src.graph.ctx import user_of
 from src.graph.state import ChatState
 from src.memory.topics import Topic
 from src.prompts import compaction as wording
-from src.prompts import progress
 
 # Compact once this many messages have left the window since the last summary.
 BATCH = 20
 SUMMARY_WORDS = 300
 RESULT_CHARS = 400
+# Filled into the flush and summary prompts when there is nothing yet.
+NO_PREVIOUS = "none"
+NOTHING_REMEMBERED = "nothing yet"
+# Transcript lines.
+INVESTOR = "Investor: {text}"
+DESK = "Desk: {text}"
+CALLED = "Desk called {name}."
+RESULT = "{name} returned: {text}"
 
 # Saves one memory: user id, topic, content (deduplicated by the memories table).
 Remember = Callable[[str, str, str], Awaitable[Any]]
@@ -67,14 +74,14 @@ def transcript(messages: list[AnyMessage], with_results: bool = True) -> str:
     lines = []
     for message in messages:
         if isinstance(message, HumanMessage):
-            lines.append(wording.INVESTOR.format(text=message.text))
+            lines.append(INVESTOR.format(text=message.text))
         elif isinstance(message, AIMessage):
             if message.text:
-                lines.append(wording.DESK.format(text=message.text))
-            lines.extend(wording.CALLED.format(name=call["name"]) for call in message.tool_calls)
+                lines.append(DESK.format(text=message.text))
+            lines.extend(CALLED.format(name=call["name"]) for call in message.tool_calls)
         elif isinstance(message, ToolMessage) and with_results:
             text = str(message.content)[:RESULT_CHARS]
-            lines.append(wording.RESULT.format(name=message.name or "tool", text=text))
+            lines.append(RESULT.format(name=message.name or "tool", text=text))
     return "\n".join(lines)
 
 
@@ -107,13 +114,13 @@ def build_compact(
         emit.progress("compact", progress.COMPACTING, state["names"]["bot_name"])
         try:
             # The `<investor>` block of this turn: what memory already holds, newest per topic.
-            known = state.get("context") or wording.NOTHING_REMEMBERED
+            known = state.get("context") or NOTHING_REMEMBERED
             flush = await _required(
                 flush_model, wording.FLUSH.format(remembered=known, transcript=said)
             )
             for fact in flush.facts:
                 await remember(user_id, fact.topic, fact.content)
-            previous = state.get("summary") or wording.NO_PREVIOUS
+            previous = state.get("summary") or NO_PREVIOUS
             prompt = wording.SUMMARY.format(
                 previous=previous, transcript=text, max_words=SUMMARY_WORDS
             )

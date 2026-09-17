@@ -13,7 +13,9 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from src.prompts import errors as wording
+# Job fields (the payload the API queues; `contracts/job.v1.json`).
+CHAT_JOB_FIELDS = "a chat job needs a message and no ticker"
+RESEARCH_JOB_FIELDS = "a research job needs a ticker and no message"
 
 JobKind = Literal["chat", "research"]
 
@@ -37,9 +39,9 @@ class JobRequest(BaseModel):
     @model_validator(mode="after")
     def _fields_match_kind(self) -> "JobRequest":
         if self.kind == "chat" and (self.message is None or self.ticker is not None):
-            raise ValueError(wording.CHAT_JOB_FIELDS)
+            raise ValueError(CHAT_JOB_FIELDS)
         if self.kind == "research" and (self.ticker is None or self.message is not None):
-            raise ValueError(wording.RESEARCH_JOB_FIELDS)
+            raise ValueError(RESEARCH_JOB_FIELDS)
         return self
 
 

@@ -10,9 +10,11 @@ from src.data import market
 from src.db.queries import holdings
 from src.errors import UpstreamUnavailable
 from src.graph.ctx import Ctx, user_of
-from src.prompts import tools as wording
 from src.tools.market import unavailable
 from src.tools.scoped import ScopedSetHoldingArgs, ScopedTickerArgs
+
+NO_HOLDINGS = "No holdings recorded yet."
+MIXED_CURRENCIES = "Values are in each listing's own currency; weights assume one currency."
 
 
 def valued(positions: list[dict[str, Any]], prices: dict[str, float | None]) -> dict[str, Any]:
@@ -30,7 +32,7 @@ def valued(positions: list[dict[str, Any]], prices: dict[str, float | None]) -> 
         "positions": sorted(rows, key=lambda row: row["value"] or 0, reverse=True),
         "total_value": round(total, 2),
         "unpriced": [row["ticker"] for row in rows if row["value"] is None],
-        "note": wording.MIXED_CURRENCIES,
+        "note": MIXED_CURRENCIES,
     }
 
 
@@ -42,7 +44,7 @@ def build_get_portfolio(pool: AsyncConnectionPool) -> BaseTool:
         """
         positions = await holdings.all_of(pool, user_of(runtime.context))
         if not positions:
-            return {"positions": [], "total_value": 0, "note": wording.NO_HOLDINGS}
+            return {"positions": [], "total_value": 0, "note": NO_HOLDINGS}
         try:
             prices = await market.prices([p["ticker"] for p in positions])
         except UpstreamUnavailable as exc:

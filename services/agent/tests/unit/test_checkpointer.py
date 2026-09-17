@@ -5,8 +5,8 @@ from contextlib import asynccontextmanager
 import pytest
 
 from src.db import checkpointer
+from src.db.checkpointer import CHECKPOINTS_NOT_MIGRATED
 from src.errors import DatabaseUnavailable
-from src.prompts import errors
 
 
 class Pool:
@@ -35,7 +35,7 @@ LATEST = len(checkpointer.AsyncPostgresSaver.MIGRATIONS) - 1
 async def test_missing_or_stale_tables_stop_with_both_ways_to_create_them(pool):
     with pytest.raises(DatabaseUnavailable) as raised:
         await checkpointer.build_checkpointer(pool)
-    assert raised.value.message == errors.CHECKPOINTS_NOT_MIGRATED
+    assert raised.value.message == CHECKPOINTS_NOT_MIGRATED
     assert "just migrate" in raised.value.message and "DATABASE_SETUP_URL" in raised.value.message
 
 

@@ -12,7 +12,7 @@ from langgraph.runtime import Runtime
 from psycopg_pool import AsyncConnectionPool
 
 from src.db.queries import theses
-from src.graph import emit
+from src.graph import emit, progress
 from src.graph.context import advisor_user_block, investor_blocks, load_known
 from src.graph.ctx import Ctx, user_of
 from src.graph.render import render_advisor_prompt, render_analyst_prompt, render_checker_prompt
@@ -22,7 +22,6 @@ from src.graph.state import PipelineState
 from src.persona.layers import desk_names
 from src.prompts import analyst as analyst_text
 from src.prompts import checker as checker_text
-from src.prompts import progress
 from src.prompts import strategist as strategist_text
 
 

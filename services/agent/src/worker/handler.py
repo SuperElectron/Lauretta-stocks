@@ -25,7 +25,6 @@ from redis.asyncio import Redis
 
 from src.app import App
 from src.errors import AgentError, JobInterrupted
-from src.prompts import errors as wording
 from src.queue import events, keys, submit
 from src.queue.lock import ThreadLock
 from src.queue.models import Done, Error, Event, Job
@@ -33,7 +32,10 @@ from src.settings import Settings
 from src.worker.research import run_research
 from src.worker.stream import run_chat
 
-INTERNAL = Error(code="INTERNAL", message=wording.JOB_FAILED)
+JOB_FAILED = "the job failed; the worker log has the details"
+JOB_ABANDONED = "the job did not finish"
+
+INTERNAL = Error(code="INTERNAL", message=JOB_FAILED)
 
 
 def error_event(exc: Exception) -> Error:
@@ -83,7 +85,7 @@ class JobHandler:
     async def dead(self, job: Job, reason: str) -> None:
         """The job was delivered too often without finishing; the reason stays in the log."""
         logger.bind(job_id=job.job_id, reason=reason).error("job.dead")
-        await self.finish(job, Error(code="JOB_ABANDONED", message=wording.JOB_ABANDONED))
+        await self.finish(job, Error(code="JOB_ABANDONED", message=JOB_ABANDONED))
 
     async def finish(self, job: Job, outcome: Done | Error) -> None:
         await self.publish(job.job_id, outcome)

@@ -1,6 +1,6 @@
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from src.graph.history import UNFINISHED, answered, recent
+from src.graph.history import UNFINISHED_TOOL_CALL, answered, recent
 
 
 def tool_call(call_id: str) -> AIMessage:
@@ -11,7 +11,7 @@ def test_failed_turn_gets_a_result_for_each_unanswered_call():
     messages = [HumanMessage("hi"), tool_call("c1"), HumanMessage("again")]
     shown = answered(messages)
     assert isinstance(shown[2], ToolMessage)
-    assert shown[2].tool_call_id == "c1" and shown[2].content == UNFINISHED
+    assert shown[2].tool_call_id == "c1" and shown[2].content == UNFINISHED_TOOL_CALL
     assert shown[3].content == "again"
 
 

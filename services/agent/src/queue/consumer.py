@@ -19,10 +19,13 @@ from pydantic import ValidationError
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from src.prompts import errors as wording
 from src.queue import keys, reclaim
 from src.queue.models import Job
 from src.queue.reclaim import Delivery
+
+# Why a delivery was dead-lettered (the dead-letter stream and the worker log).
+DEAD_INVALID_PAYLOAD = "invalid payload"
+DEAD_UNFINISHED = "not finished in {deliveries} deliveries"
 
 BLOCK_MS = 2000
 RETRY_PAUSE_SECONDS = 1.0
@@ -120,10 +123,10 @@ class Consumer:
         try:
             job = Job.model_validate_json(delivery.raw or "")
         except ValidationError:
-            await reclaim.dead_letter(self._broker, delivery, wording.DEAD_INVALID_PAYLOAD)
+            await reclaim.dead_letter(self._broker, delivery, DEAD_INVALID_PAYLOAD)
             return
         if delivery.count > self._max_deliveries:
-            reason = wording.DEAD_UNFINISHED.format(deliveries=self._max_deliveries)
+            reason = DEAD_UNFINISHED.format(deliveries=self._max_deliveries)
             # The client hears first: a failed dead-letter redelivers it and it is told again.
             await self._handler.dead(job, reason)
             await reclaim.dead_letter(self._broker, delivery, reason)
