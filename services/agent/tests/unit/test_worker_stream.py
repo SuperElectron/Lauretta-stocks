@@ -13,7 +13,8 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 
 from src.graph import llm
 from src.graph.pipeline import Team, build_pipeline
-from src.worker.stream import ChatRelay, run_chat, run_research
+from src.worker.research import run_research
+from src.worker.stream import ChatRelay, run_chat
 from tests.utils import ADVICE, REVIEW, STORY, Recorder
 
 

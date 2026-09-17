@@ -16,7 +16,7 @@ from src.graph.ctx import Ctx
 from src.graph.pipeline import Team, build_pipeline
 from src.persona.approval import soul_change_block
 from src.queue import keys
-from tests.unit.two_users import MATS_MEMORY, MATS_PROPOSAL, two_users  # noqa: F401
+from tests.unit.isolation.two_users import MATS_MEMORY, MATS_PROPOSAL
 from tests.utils import ADVICE, REVIEW, STORY, Recorder, call, scripted
 
 MAX = Ctx(user_id="max")
@@ -64,7 +64,7 @@ INJECTION = [
 ]
 
 
-async def test_prompt_injection_as_max_reaches_only_maxs_data(two_users):  # noqa: F811
+async def test_prompt_injection_as_max_reaches_only_maxs_data(two_users):
     mats_before = copy.deepcopy(two_users.mats_data())
     chat, team = desk(scripted(*INJECTION))
     config = {"configurable": {"thread_id": keys.thread("max", "main")}}
@@ -90,7 +90,7 @@ async def test_prompt_injection_as_max_reaches_only_maxs_data(two_users):  # noq
     assert team.advisor.contexts == team.analyst.contexts == [MAX]
 
 
-async def test_max_cannot_approve_mats_soul_proposal(two_users):  # noqa: F811
+async def test_max_cannot_approve_mats_soul_proposal(two_users):
     chat, _team = desk(scripted(AIMessage("Done.")))
     config = {"configurable": {"thread_id": keys.thread("max", "main")}}
 
@@ -104,7 +104,7 @@ async def test_max_cannot_approve_mats_soul_proposal(two_users):  # noqa: F811
     assert two_users.proposals["mat"][0]["status"] == "proposed"
 
 
-async def test_a_run_without_a_user_fails_before_reading_anything(two_users):  # noqa: F811
+async def test_a_run_without_a_user_fails_before_reading_anything(two_users):
     from src.errors import NoUser
 
     chat, _team = desk(scripted(AIMessage("never")))

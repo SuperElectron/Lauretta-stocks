@@ -30,7 +30,8 @@ from src.queue import events, submit
 from src.queue.lock import ThreadLock
 from src.queue.models import Done, Error, Event, Job
 from src.settings import Settings
-from src.worker.stream import run_chat, run_research
+from src.worker.research import run_research
+from src.worker.stream import run_chat
 
 INTERNAL = Error(code="INTERNAL", message=wording.JOB_FAILED)
 

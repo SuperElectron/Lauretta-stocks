@@ -78,8 +78,9 @@ Paths below are relative to `services/`.
 - `agent/src/db/`: pool, checkpointer, and `queries/` for facts (memories, profile, identity,
   signals, soul), holdings, theses and threads. Signals are written by code
   (`facts.record_signals`). Every query runs in `db/pool.scoped(pool, user)` (row-level security
-  as `lauretta_app`). Schema is `db/init/00-schema.sql` and the app role `db/init/01-app-role.sh`
-  (applied when the volume is first created).
+  as `lauretta_app`). Schema is `db/init/00-schema.sql` and the roles (`lauretta_app`,
+  `lauretta_migrator` for the checkpoint tables) `db/init/01-app-role.sh`, applied when the volume
+  is first created. `db/reset-and-restore.sh` is the one-off deploy of #25.
 - `agent/src/api/`: FastAPI (`src.api.app:app`). Queues jobs and reads results; never runs a
   graph. `POST /v1/jobs` (`?wait=`), `GET /v1/jobs/{id}`, `GET /v1/jobs/{id}/events` (SSE),
   `/v1/theses/{ticker}`, `/v1/holdings`, `/healthz`. `api/openai/`: `/v1/models` and

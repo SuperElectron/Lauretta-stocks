@@ -67,9 +67,11 @@ routes:
   #   ANYTHINGLLM_API_KEY  AnythingLLM's key. It sends no user, so the user comes from the model
   #                        its workspace chats with: lauretta-mat -> mat, lauretta-max -> max.
   #                        It may only list models and chat.
-  # The gateway sets X-Lauretta-User and X-Lauretta-Caller itself (overwriting any client copy).
-  # When the user cannot be named (another model, no model, a body too big to buffer) the
-  # expression fails and the header is left out, so api answers 401: never a default user.
+  # The gateway sets X-Lauretta-User and X-Lauretta-Caller itself. A client's copy never reaches
+  # api: `set` replaces it, and when the expression cannot name a user (another model, no body,
+  # a body too big to buffer) the header is removed and left out, so api answers 401. Tested on
+  # v1.5.0. They are not in requestHeaderModifier.remove below: that runs after `set` and would
+  # strip the gateway's own value.
   # To add a user: a model here, their id in ALLOWED_USERS, and an AnythingLLM workspace.
   # Authorization, cookies and the other identity and forwarding headers are then removed.
   # tailscale serve's Tailscale-User-* headers are not trusted: AnythingLLM's calls carry none.
@@ -93,11 +95,14 @@ routes:
             metadata: {caller: owner, user: mat}
           - key: ${ANYTHINGLLM_API_KEY}
             metadata: {caller: anythingllm}
+      # AnythingLLM may list models, and chat only as a user the map below names: any other
+      # model, or a body that cannot be read, is refused here (403) rather than sent on.
       authorization:
         rules:
           - require: >-
-              apiKey.caller != "anythingllm"
-              || request.path in ["/v1/models", "/v1/chat/completions"]
+              apiKey.caller != "anythingllm" || request.path == "/v1/models"
+              || (request.path == "/v1/chat/completions"
+                  && json(request.body).model in ["lauretta-mat", "lauretta-max"])
       requestHeaderModifier:
         remove:
           - Authorization
@@ -167,6 +172,8 @@ routes:
           - Tailscale-User-Name
           - Tailscale-User-Profile-Pic
           - Tailscale-Headers-Info
+          - X-Lauretta-User
+          - X-Lauretta-Caller
           - X-Forwarded-For
           - X-Real-IP
           - Forwarded

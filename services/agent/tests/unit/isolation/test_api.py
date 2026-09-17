@@ -4,44 +4,15 @@ events, reads, threads and models are never another's."""
 import asyncio
 
 import pytest
-from fakeredis import FakeAsyncRedis
 
 from src.api import reads
-from src.api.openai import threads
 from src.queue import events, keys
-from src.queue.models import Done, Job, Token
-from tests.unit.openai.conftest import FakeThreads, FakeWorker, body, client_for
+from src.queue.models import Done, Token
+from tests.unit.isolation.conftest import queued
+from tests.unit.openai.conftest import FakeWorker, body, client_for
 
 pytestmark = pytest.mark.usefixtures("db")
 UNKNOWN_JOB = "0" * 32
-
-
-@pytest.fixture
-def broker():
-    return FakeAsyncRedis(decode_responses=True)
-
-
-@pytest.fixture
-def db(monkeypatch) -> FakeThreads:
-    """The threads table in memory, for the OpenAI adapter and `POST /v1/jobs` alike."""
-    fake = FakeThreads()
-    for name in ("create", "find_aliases", "add_aliases"):
-        monkeypatch.setattr(threads.threads, name, getattr(fake, name))
-    return fake
-
-
-@pytest.fixture
-async def worker(broker):
-    fake = FakeWorker(broker)
-    task = asyncio.create_task(fake.run())
-    yield fake
-    task.cancel()
-
-
-async def queued(broker) -> list[Job]:
-    found = await broker.xread({keys.JOBS: "0-0"})
-    entries = found[0][1] if found else []
-    return [Job.model_validate_json(fields[keys.PAYLOAD]) for _, fields in entries]
 
 
 ROUTES = [
@@ -151,25 +122,3 @@ async def test_a_thread_id_cannot_reach_into_another_users_namespace():
     # Max naming the key Mat's thread lives under still lands in Max's own namespace.
     assert keys.thread("max", keys.thread("mat", "main")) == "max:mat:main"
     assert not keys.thread("max", "mat:main").startswith("mat:")
-
-
-async def test_chat_completions_serve_only_the_callers_own_model(broker, worker):
-    async with client_for(broker) as mat:
-        other = await mat.post("/v1/chat/completions", json=body("hi", model="lauretta-max"))
-        plain = await mat.post("/v1/chat/completions", json=body("hi", model="lauretta"))
-        own = await mat.post("/v1/chat/completions", json=body("hi"))
-    assert (other.status_code, other.json()["error"]["code"]) == (404, "model_not_found")
-    assert plain.status_code == 404
-    assert own.status_code == 200
-    assert [job.user for job in worker.jobs] == ["mat"]
-
-
-async def test_models_list_the_callers_model_or_every_users_for_anythingllm(broker):
-    async with client_for(broker, user="max") as max_:
-        own = await max_.get("/v1/models")
-    async with client_for(broker, user=None) as anythingllm:
-        every = await anythingllm.get("/v1/models", headers={"X-Lauretta-Caller": "anythingllm"})
-        owner_key = await anythingllm.get("/v1/models", headers={"X-Lauretta-Caller": "owner"})
-    assert [m["id"] for m in own.json()["data"]] == ["lauretta-max"]
-    assert [m["id"] for m in every.json()["data"]] == ["lauretta-mat", "lauretta-max"]
-    assert owner_key.status_code == 401

@@ -133,21 +133,3 @@ async def run_chat(
         # The thinking before a failure is still shown; the error follows it.
         await relay.flush()
     return {"thread_id": thread_id, "reply": relay.reply, "notices": relay.notices}
-
-
-async def run_research(
-    pipeline: CompiledStateGraph, user: str, ticker: str, publish: Publish
-) -> dict[str, Any]:
-    final: dict[str, Any] = {}
-    async for part in pipeline.astream(
-        {"ticker": ticker.upper()},
-        context=Ctx(user_id=user),
-        stream_mode=["custom", "values"],
-        version="v2",
-    ):
-        if part["type"] == "values":
-            final = part["data"]
-        elif part["data"].get("event") == "progress":
-            await publish(progress_event(part["data"]))
-    fields = ("ticker", "thesis_id", "revisions", "story", "review", "advice", "names")
-    return {field: final[field] for field in fields}

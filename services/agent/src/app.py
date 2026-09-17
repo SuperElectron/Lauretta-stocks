@@ -48,7 +48,7 @@ async def open_app(settings: Settings) -> AsyncGenerator[App]:
     async with open_pool(
         settings.DATABASE_URL, min_size=settings.DB_POOL_MIN, max_size=settings.DB_POOL_MAX
     ) as pool:
-        checkpointer = await build_checkpointer(pool, settings.DATABASE_OWNER_URL)
+        checkpointer = await build_checkpointer(pool, settings.DATABASE_SETUP_URL)
         embedder = Embedder(settings.EMBED_MODEL, settings.EMBED_DIMS)
         await embedder.start()
         sec = SecClient(settings.SEC_USER_AGENT)

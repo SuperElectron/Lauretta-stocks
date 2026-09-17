@@ -3,6 +3,7 @@
 They need a fresh database and two URLs, and are skipped without them:
     RLS_TEST_OWNER_URL  the owner (superuser) that created the schema: seeds rows, checks setup
     RLS_TEST_APP_URL    `lauretta_app`, which the app connects as
+    RLS_TEST_SETUP_URL  `lauretta_migrator`, which creates the checkpoint tables
 `just test-db` starts a throwaway database in its own compose project, runs them and removes it.
 """
 
@@ -17,6 +18,7 @@ from src.db.pool import open_pool
 
 OWNER_URL = os.environ.get("RLS_TEST_OWNER_URL")
 APP_URL = os.environ.get("RLS_TEST_APP_URL")
+SETUP_URL = os.environ.get("RLS_TEST_SETUP_URL")
 TABLES = ("facts", "holdings", "theses", "threads", "thread_aliases")
 DIMS = 384
 # The same content and vector for both users, so only row-level security tells them apart.
@@ -26,9 +28,9 @@ pytestmark = pytest.mark.integration
 
 
 def pytest_collection_modifyitems(items):
-    if OWNER_URL and APP_URL:
+    if OWNER_URL and APP_URL and SETUP_URL:
         return
-    skip = pytest.mark.skip(reason="set RLS_TEST_OWNER_URL and RLS_TEST_APP_URL (just test-db)")
+    skip = pytest.mark.skip(reason="set RLS_TEST_OWNER_URL, _APP_URL and _SETUP_URL (just test-db)")
     for item in items:
         if "tests/integration" in str(item.fspath):
             item.add_marker(skip)

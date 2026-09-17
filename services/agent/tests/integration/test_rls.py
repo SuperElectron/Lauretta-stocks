@@ -7,7 +7,7 @@ import pytest
 from src.db.checkpointer import build_checkpointer
 from src.db.pool import rows, scoped
 from src.db.queries import holdings, memories, theses, threads
-from tests.integration.conftest import OWNER_URL, TABLES, VECTOR
+from tests.integration.conftest import OWNER_URL, SETUP_URL, TABLES, VECTOR
 
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("mat_only")]
 
@@ -110,8 +110,24 @@ async def test_a_thread_id_mat_uses_is_a_separate_thread_for_max(pool):
     assert await threads.create(pool, "mat", "main", "test") is False
 
 
-async def test_checkpoint_tables_are_created_by_the_owner_and_used_by_the_app(pool):
-    await build_checkpointer(pool, OWNER_URL)
+async def test_checkpoint_tables_are_created_by_the_migrator_and_used_by_the_app(pool):
+    await build_checkpointer(pool, SETUP_URL)
     assert await rows(pool, "max", "SELECT thread_id FROM checkpoints LIMIT 1") == []
+    with psycopg.connect(OWNER_URL) as conn:
+        (owner,) = conn.execute(
+            "SELECT tableowner FROM pg_tables WHERE tablename = 'checkpoints'"
+        ).fetchone()
+    assert owner == "lauretta_migrator"
     with pytest.raises(psycopg.errors.InsufficientPrivilege):
         await rows(pool, "max", "CREATE TABLE sneaky (id int)")
+
+
+def test_the_migrator_is_no_superuser_and_reads_no_user_data():
+    with psycopg.connect(SETUP_URL, autocommit=True) as conn:
+        flags = conn.execute(
+            "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user"
+        ).fetchone()
+        assert flags == (False, False)
+        for table in TABLES:
+            with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                conn.execute(f"SELECT 1 FROM {table}")

@@ -66,12 +66,10 @@ x-app: &app
     BROKER_URL: redis://:${BROKER_PASSWORD:?set BROKER_PASSWORD}@broker:6379/0
     DB_POOL_MIN: ${DB_POOL_MIN}
     DB_POOL_MAX: ${DB_POOL_MAX}
-    # Models go through the gateway, which holds vLLM's key. This internal key only opens
-    # the gateway's llm listener; the gateway swaps it for the provider's key. The api never
-    # calls a model, but shares this environment.
+    # Models go through the gateway, which holds vLLM's key. Only the worker calls a model, so
+    # only it gets the gateway's internal key (below).
     AGENT_PROVIDER: openai
     AGENT_BASE_URL: http://gateway:3000/v1
-    OPENAI_API_KEY: ${LLM_INTERNAL_KEY:?set LLM_INTERNAL_KEY (random, e.g. openssl rand -hex 32)}
     # vLLM's served model name.
     AGENT_MODEL: gpt-oss-120b
     AGENT_TEMPERATURE: ${AGENT_TEMPERATURE}
@@ -106,8 +104,10 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
-      # Read once, by services/db/init/01-app-role.sh, when the volume is first created.
+      # Read once, by services/db/init/01-app-role.sh, when the volume is first created. Changing
+      # them later also needs `ALTER ROLE ... PASSWORD` (README, Users and isolation).
       DB_APP_PASSWORD: ${DB_APP_PASSWORD:?set DB_APP_PASSWORD}
+      DB_MIGRATOR_PASSWORD: ${DB_MIGRATOR_PASSWORD:?set DB_MIGRATOR_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./services/db/init:/docker-entrypoint-initdb.d:ro
@@ -152,8 +152,11 @@ services:
     networks: [worker-data, models]
     environment:
       <<: *app-env
-      # The owner role, only to create the checkpoint tables at startup; never used for queries.
-      DATABASE_OWNER_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+      # lauretta_migrator: creates the checkpoint tables at startup. No superuser, and no rights
+      # on the user tables; the worker never holds the owner's password.
+      DATABASE_SETUP_URL: postgresql://lauretta_migrator:${DB_MIGRATOR_PASSWORD:?set DB_MIGRATOR_PASSWORD (random, e.g. openssl rand -hex 32)}@db:5432/${DB_NAME}
+      # This internal key only opens the gateway's llm listener; the gateway swaps it for vLLM's.
+      OPENAI_API_KEY: ${LLM_INTERNAL_KEY:?set LLM_INTERNAL_KEY (random, e.g. openssl rand -hex 32)}
     # Covers the longest research run, so a deploy lets a job finish instead of killing it mid-run.
     stop_grace_period: 180s
     mem_limit: 3g

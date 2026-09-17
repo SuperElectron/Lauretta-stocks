@@ -12,6 +12,7 @@ services:
       POSTGRES_PASSWORD: owner-test
       POSTGRES_DB: rlstest
       DB_APP_PASSWORD: app-test
+      DB_MIGRATOR_PASSWORD: migrator-test
     volumes:
       - ./services/db/init:/docker-entrypoint-initdb.d:ro
     tmpfs:
@@ -33,6 +34,7 @@ services:
     environment:
       RLS_TEST_OWNER_URL: postgresql://owner:owner-test@db:5432/rlstest
       RLS_TEST_APP_URL: postgresql://lauretta_app:app-test@db:5432/rlstest
+      RLS_TEST_SETUP_URL: postgresql://lauretta_migrator:migrator-test@db:5432/rlstest
       UV_PROJECT_ENVIRONMENT: /venv
       UV_LINK_MODE: copy
       UV_PYTHON_DOWNLOADS: never

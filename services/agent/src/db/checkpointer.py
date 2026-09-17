@@ -12,22 +12,30 @@ from psycopg_pool import AsyncConnectionPool
 from src.errors import DatabaseUnavailable
 
 
-async def build_checkpointer(
-    pool: AsyncConnectionPool, owner_url: str | None = None
-) -> AsyncPostgresSaver:
-    """Creates the checkpoint tables if they are missing, then returns the saver over the pool.
+async def create_tables(setup_url: str) -> None:
+    """Creates the checkpoint tables if they are missing, on a connection of its own.
 
-    The app role may not create tables, so `owner_url` (the owner role) runs the setup on a
-    connection of its own, closed at once; without it the pool's role runs it.
+    `setup_url` is `lauretta_migrator` in the stack: the app role may not create tables.
     """
     try:
-        if owner_url is None:
-            await AsyncPostgresSaver(conn=pool).setup()
-        else:
-            async with await AsyncConnection.connect(
-                owner_url, autocommit=True, row_factory=dict_row
-            ) as conn:
-                await AsyncPostgresSaver(conn=conn).setup()
+        async with await AsyncConnection.connect(
+            setup_url, autocommit=True, row_factory=dict_row
+        ) as conn:
+            await AsyncPostgresSaver(conn=conn).setup()
     except Exception as exc:
         raise DatabaseUnavailable from exc
+
+
+async def build_checkpointer(
+    pool: AsyncConnectionPool, setup_url: str | None = None
+) -> AsyncPostgresSaver:
+    """The saver over the pool, once its tables exist (created as `setup_url`, if given, else
+    as the pool's role)."""
+    if setup_url is not None:
+        await create_tables(setup_url)
+    else:
+        try:
+            await AsyncPostgresSaver(conn=pool).setup()
+        except Exception as exc:
+            raise DatabaseUnavailable from exc
     return AsyncPostgresSaver(conn=pool)

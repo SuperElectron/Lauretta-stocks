@@ -228,25 +228,56 @@ on its own:
 | api | Acts only for a user in `ALLOWED_USERS` (else 401). Another user's job, status or events is 404. A chat model must be the caller's own (`lauretta-<user>`, else 404). Threads are keyed `{user}:{thread}` on the server. |
 | queue, worker | A job carries its user; locks, checkpoints and signals are keyed by it. |
 | graphs | The user is LangGraph runtime context (`graph/ctx.py`). Tools read it through `ToolRuntime`, which is not in any schema the model sees, so the model can neither read nor set it. |
-| Postgres | api and worker connect as `lauretta_app` (no superuser, no BYPASSRLS). Forced row-level security on `facts`, `holdings`, `theses`, `threads` and `thread_aliases` shows each transaction only the rows of its `app.user_id`; a query outside a user's scope sees nothing. |
+| Postgres | api and worker connect as `lauretta_app` (no superuser, no BYPASSRLS). Forced row-level security on `facts`, `holdings`, `theses`, `threads` and `thread_aliases` shows each transaction only the rows of its `app.user_id`; a query outside a user's scope sees nothing. The worker creates LangGraph's checkpoint tables as `lauretta_migrator` (no superuser, no rights on those five tables); no app container holds the owner's password. |
 
 Tests: `just test` covers the api, queue, worker and graphs (including prompt injection as Max);
 `just test-db` runs the row-level security tests against a throwaway database (on the Spark).
+
+**Passwords:** `DB_APP_PASSWORD` and `DB_MIGRATOR_PASSWORD` set the roles' passwords once, when
+the db volume is created. To rotate one, change it in `.env` and also run, as the owner,
+`ALTER ROLE lauretta_app PASSWORD '...'` (or `lauretta_migrator`), then restart api and worker.
+
+**Deploying this change** (the schema changed, so the database is recreated; the owner's data is
+carried over): on the Spark, check out the new code, add `DB_APP_PASSWORD`,
+`DB_MIGRATOR_PASSWORD` and `ANYTHINGLLM_API_KEY` to `.env` (URL-safe), remove `USER_ID`, rotate
+`GATEWAY_API_KEY`, and run `sh services/db/reset-and-restore.sh`. It stops api, worker and
+AnythingLLM before it dumps, refuses if any row belongs to someone other than `mat`, recreates only
+the database (vllm keeps running), restores table by table (`--exit-on-error`, threads before
+aliases), moves conversations to `mat:<thread>`, checks every count against the dump, and only
+then starts the stack. The dump stays in `backups/pre-isolation-*.dump`.
 
 **Setting up the people in AnythingLLM** (once per person, by an admin): create a workspace
 (e.g. "Mat", "Max"), set its chat model to `lauretta-<user>` (workspace settings, or the
 developer API `POST /api/v1/workspace/{slug}/update` with `{"chatProvider": "generic-openai",
 "chatModel": "lauretta-max"}`), and give only that person access to it (the workspace's members,
-or `POST /api/v1/admin/workspaces/{slug}/manage-users` with `{"userIds": [<id>], "reset": true}`). A chat anywhere else uses the
-default model `lauretta`, which the desk refuses.
+or `POST /api/v1/admin/workspaces/{slug}/manage-users` with `{"userIds": [<id>], "reset": true}`).
+A chat anywhere else uses the default model `lauretta`, which the desk refuses. Create no embed
+widgets on these workspaces.
 
 **Adding a user:** their id in `ALLOWED_USERS`, a model for them in the gateway's `ingress-api`
 route (`lauretta-<id>` in the user map, and a rate-limit bucket), and an AnythingLLM workspace.
 
-**What this does not cover:** AnythingLLM itself. Its admins can open any workspace, including
-another person's, and read those chats there. Both accounts are admins today; once each phone is
-paired, demote both to **Default** (a paired device stays linked to its user). Whoever holds
-`ANYTHINGLLM_API_KEY` or AnythingLLM's own storage can act as either person.
+**What this does not cover:**
+
+- **AnythingLLM itself.** Its admins can open any workspace, including another person's, and chat
+  there as that person. Both accounts are admins today; once each phone is paired, demote both to
+  **Default** (a paired device stays linked to its user), after checking that a Default user
+  cannot change a workspace's model.
+- **AnythingLLM's developer API key** reaches every workspace over the tailnet, so it can chat as
+  either person. Keep it in `.claude/secrets/` and revoke it when setup is done.
+- **Embed widgets** chat into a workspace without any login: one on Mat's workspace would let
+  anyone who finds it chat as mat. Do not create any.
+- **Agent mode** uses the workspace's agent model, which is `lauretta` by default and refused;
+  setting it to `lauretta-<user>` would act as that user too.
+- Whoever holds `ANYTHINGLLM_API_KEY` or AnythingLLM's storage can act as either person.
+- **db and broker share a network with api** (they must reach each other), so a compromised db
+  or broker container could send api a forged user header. api and worker hold `lauretta_app`
+  and can scope as any user: row-level security guards against bugs and prompt injection, not a
+  compromised app container.
+- **Checkpoint tables** (conversation history) have no user column and no row-level security;
+  they are kept apart by the server's `{user}:{thread}` keys, and no route reads them.
+- **Local development** connects as the owner, a superuser, so row-level security does not apply
+  there; `just test-db` checks the policies.
 
 The stack publishes no host ports at all, vLLM included, so the Spark's firewall needs no rule
 for it. For local development, `just up` still starts only the database, on loopback `DB_PORT`.

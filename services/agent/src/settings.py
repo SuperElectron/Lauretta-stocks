@@ -20,9 +20,9 @@ class Settings(BaseSettings):
     ALLOWED_USERS: str
     # The app role (`lauretta_app`), which row-level security applies to.
     DATABASE_URL: str
-    # The owner role, used once at startup to create the checkpoint tables; None uses
-    # DATABASE_URL (local development, where both are the owner).
-    DATABASE_OWNER_URL: str | None = None
+    # `lauretta_migrator`, which owns the checkpoint tables and may create tables but reads no
+    # user data; used at startup to create them. None uses DATABASE_URL (local development).
+    DATABASE_SETUP_URL: str | None = None
     DB_POOL_MIN: int
     DB_POOL_MAX: int
     AGENT_PROVIDER: Literal["anthropic", "openai"]
