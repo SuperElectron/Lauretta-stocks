@@ -70,6 +70,7 @@ x-app: &app
     EVENTS_TTL_S: ${EVENTS_TTL_S:-86400}
     API_MAX_WAIT_S: ${API_MAX_WAIT_S:-25}
     API_MAX_STREAM_S: ${API_MAX_STREAM_S:-900}
+    AGENT_STREAM_REASONING: ${AGENT_STREAM_REASONING:-true}
   depends_on:
     db:
       condition: service_healthy

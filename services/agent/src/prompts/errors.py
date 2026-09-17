@@ -17,6 +17,7 @@ ROLE_DID_NOT_SUBMIT = "a research role finished without submitting its result"
 REPLY_TRUNCATED = (
     "the model hit AGENT_MAX_TOKENS mid-reply (reasoning counts too); raise it in .env"
 )
+EMPTY_REPLY = "the model thought but gave no answer; send the message again"
 PERSONA_INVALID = "the persona is invalid"
 THREAD_BUSY = "another message on this thread is still being answered; send it again after"
 LOCK_LOST = "the thread lock was lost while the job ran"

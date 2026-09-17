@@ -5,12 +5,29 @@ from src.prompts.notes import RETRYING, TIMED_OUT
 
 FRESH = State()
 STARTED = State(content_sent=True)
+THINKING = State(mid_thought=True)
 
 
 @pytest.mark.parametrize(
     ("state", "event", "data", "parts", "after"),
     [
         (FRESH, "token", {"text": "Hel"}, [Part({"content": "Hel"})], STARTED),
+        (FRESH, "reasoning", {"text": " so"}, [Part({"reasoning_content": " so"})], THINKING),
+        (STARTED, "reasoning", {"text": "x\n"}, [Part({"reasoning_content": "x\n"})], STARTED),
+        (
+            THINKING,
+            "tool",
+            {"name": "get_thesis", "status": "started"},
+            [Part({"reasoning_content": "\nConsulting get thesis…\n"})],
+            FRESH,
+        ),
+        (
+            THINKING,
+            "progress",
+            {"stage": "assistant", "detail": "retrying"},
+            [Part({"reasoning_content": "\nDesk retrying…\n"})],
+            FRESH,
+        ),
         (
             FRESH,
             "progress",

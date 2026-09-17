@@ -1,9 +1,10 @@
 """The job payload on the queue and the events a job publishes, as JSON on both sides.
 
-Events, in the order a client may see them: `progress`, `tool`, `token`, `message_end` (text
-before a tool call is complete), `reset` (discard the partial message), `notice`, and last
-`done` or `error`. The API alone sends `timeout` when a stream reaches its cap; it is never
-stored, and the job carries on.
+Events, in the order a client may see them: `progress`, `tool`, `reasoning` (the assistant
+model's own thinking, never part of the reply), `token`, `message_end` (text before a tool call
+is complete), `reset` (discard the partial message), `notice`, and last `done` or `error`. The
+API alone sends `timeout` when a stream reaches its cap; it is never stored, and the job
+carries on.
 """
 
 from datetime import UTC, datetime
@@ -58,6 +59,13 @@ class Event(BaseModel):
 
 class Token(Event):
     type = "token"
+    text: str
+
+
+class Reasoning(Event):
+    """The assistant model's reasoning as it streams, before or between its answer tokens."""
+
+    type = "reasoning"
     text: str
 
 

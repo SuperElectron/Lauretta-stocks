@@ -2,10 +2,10 @@ import asyncio
 
 import pytest
 
-from src.api.openai import stream, threads
+from src.api.openai import digests, stream, threads
 from src.prompts.notes import STILL_WORKING
 from src.queue import events, keys
-from src.queue.models import Done, Error, Notice, Progress, Token
+from src.queue.models import Done, Error, Notice, Progress, Reasoning, Token
 from tests.unit.openai.conftest import body, chunks, client_for, content
 
 
@@ -31,6 +31,29 @@ async def test_a_stream_opens_with_the_role_and_ends_with_done(client, worker):
     assert frames[-2]["choices"][0]["finish_reason"] == "stop"
     assert {f["object"] for f in frames[:-1]} == {"chat.completion.chunk"}
     assert len({f["id"] for f in frames[:-1]}) == 1
+
+
+async def test_model_reasoning_streams_as_reasoning_and_stays_out_of_the_recorded_answer(
+    client, worker, db
+):
+    worker.reply = lambda _job, _n: [
+        Progress(stage="assistant", detail="replying"),
+        Reasoning(text="The investor"),
+        Reasoning(text=" greets me."),
+        Token(text="Hi"),
+        Done(result={}),
+    ]
+    response = await client.post("/v1/chat/completions", json=body("hello"))
+
+    deltas = [f["choices"][0]["delta"] for f in chunks(response.text)[:-1]]
+    assert deltas[2:] == [
+        {"reasoning_content": "The investor"},
+        {"reasoning_content": " greets me."},
+        {"content": "Hi"},
+        {},
+    ]
+    (thread_id,) = db.owners
+    assert db.aliases == {digests.pair_alias("friend", "hello", "Hi"): (thread_id, "friend")}
 
 
 async def test_only_the_last_user_message_enters_the_graph(client, worker):

@@ -10,6 +10,8 @@ WAITING = (
     "send again once it has answered.\n"
 )
 RETRYING = "\n\n_(retrying…)_\n\n"
+# Put in place of an identifying value (IP address, place) in the model's streamed reasoning.
+REDACTED = "[redacted]"
 ERROR = "The desk could not answer: {message}."
 
 SOUL_PROPOSAL = """---

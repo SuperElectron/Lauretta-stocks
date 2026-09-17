@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     AGENT_MAX_TOKENS: PositiveInt
     AGENT_TIMEOUT: float
     AGENT_RECURSION_LIMIT: PositiveInt
+    # Stream the assistant model's own reasoning (unverified thinking) to clients.
+    AGENT_STREAM_REASONING: bool = True
     PIPELINE_MAX_REVISIONS: int
     EMBED_MODEL: str
     EMBED_DIMS: PositiveInt

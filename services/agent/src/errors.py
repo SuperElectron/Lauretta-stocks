@@ -40,6 +40,13 @@ class ReplyTruncated(AgentError):
     message = wording.REPLY_TRUNCATED
 
 
+class EmptyReply(AgentError):
+    """The model reasoned, then stopped without an answer or a tool call."""
+
+    code = "EMPTY_REPLY"
+    message = wording.EMPTY_REPLY
+
+
 class UpstreamUnavailable(Exception):
     """A data source could not be read. Says nothing about the company."""
 

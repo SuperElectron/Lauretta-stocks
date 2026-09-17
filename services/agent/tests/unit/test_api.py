@@ -9,7 +9,7 @@ from fakeredis import FakeAsyncRedis
 
 from src.api.app import create_app
 from src.queue import events, keys
-from src.queue.models import Done, Error, Job, Progress, Token
+from src.queue.models import Done, Error, Job, Progress, Reasoning, Token
 from tests.utils import settings
 
 
@@ -145,6 +145,21 @@ async def test_sse_streams_named_events_with_stream_ids_and_ends_after_error(cli
     assert [f["event"] for f in frames] == ["progress", "error"]
     assert frames[0]["id"] == first
     assert json.loads(frames[0]["data"]) == {"stage": "analyst", "detail": "drafting"}
+
+
+async def test_sse_sends_model_reasoning_as_its_own_event(client, broker):
+    job_id = await submitted(client)
+    await events.publish(broker, job_id, Reasoning(text="Thinking"), 60)
+    await events.publish(broker, job_id, Token(text="Hi"), 60)
+    await events.publish(broker, job_id, Done(result={"reply": "Hi"}), 60)
+
+    frames = parse_sse((await client.get(f"/v1/jobs/{job_id}/events")).text)
+
+    assert [(f["event"], json.loads(f["data"])) for f in frames] == [
+        ("reasoning", {"text": "Thinking"}),
+        ("token", {"text": "Hi"}),
+        ("done", {"result": {"reply": "Hi"}}),
+    ]
 
 
 async def test_sse_resumes_after_last_event_id(client, broker):
