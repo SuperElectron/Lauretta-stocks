@@ -37,13 +37,13 @@ migrate:
     cd services/agent && uv run python -m src.db.migrate
 
 # docker: start the local database (loopback DB_PORT) for chat and research on this machine.
-up:
+up: _local-only
     docker compose -f docker-compose.dev.yaml up -d --wait db
 
-# docker: stop the local db (add clean=true to wipe memories, holdings and theses). No
-# --remove-orphans: the dev file shares the stack's project name, so on the Spark that would stop
-# every other container of the stack.
-down clean="false":
+# docker: stop the local db (add clean=true to wipe memories, holdings and theses). Local only:
+# the dev file shares the stack's project, `db` and `pgdata`, so both recipes refuse on a host
+# running the stack (clean=true there would delete every user's data).
+down clean="false": _local-only
     docker compose -f docker-compose.dev.yaml down {{ if clean == "true" { "-v" } else { "" } }}
 
 # test: unit tests and lint.
@@ -81,3 +81,7 @@ _spark cmd:
     set -euo pipefail
     target=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]))["spark"]; print(d["username"] + "@" + d["host"])' "{{ justfile_directory() }}/.claude/secrets/devices.json")
     ssh -t -o BatchMode=yes "$target" {{ quote(cmd) }}
+
+# Refuses where the full stack runs (its api container exists): up/down would act on its database.
+_local-only:
+    @if docker ps -a --format '{{{{.Names}}}}' | grep -qx 'lauretta-stocks-api-1'; then echo "this host runs the stack; use just deploy/ps/logs instead" >&2; exit 1; fi
