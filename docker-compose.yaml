@@ -123,7 +123,7 @@ services:
       start_period: 10s
 
   broker:
-    image: valkey/valkey:9.0.6-alpine
+    image: valkey/valkey:9.1.2-alpine
     restart: unless-stopped
     command: ["valkey-server", "--requirepass", "${BROKER_PASSWORD:?set BROKER_PASSWORD}", "--appendonly", "yes",
               "--maxmemory", "200mb", "--maxmemory-policy", "noeviction"]
