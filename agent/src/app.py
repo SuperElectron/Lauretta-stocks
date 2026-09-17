@@ -25,6 +25,8 @@ from src.tools.research import RunResearch
 class App:
     chat: CompiledStateGraph
     research: RunResearch
+    # The research team's graph itself, for callers that stream its progress.
+    pipeline: CompiledStateGraph
     # Records how the investor reached us (channel, client, ip...); only changes are stored.
     record_signals: Callable[[dict[str, str | None], facts.Source], Awaitable[None]]
 
@@ -58,4 +60,6 @@ async def open_app(settings: Settings) -> AsyncGenerator[App]:
 
         tools = toolsets.assistant_tools(pool, embedder, user, run_research)
         chat = build_chat(pool, user, checkpointer, tools, model, limit)
-        yield App(chat=chat, research=run_research, record_signals=record_signals)
+        yield App(
+            chat=chat, research=run_research, pipeline=pipeline, record_signals=record_signals
+        )

@@ -15,10 +15,14 @@ dependencies = [
     "yfinance",
     "fastembed",
     "loguru",
+    "fastapi>=0.141.1",
+    "uvicorn[standard]>=0.53.0",
+    "redis>=8.1.0",
 ]
 
 [dependency-groups]
 dev = [
+    "fakeredis[lua]>=2.38.0",
     "pytest",
     "pytest-asyncio",
     "ruff",

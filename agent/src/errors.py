@@ -44,3 +44,17 @@ class PersonaInvalid(AgentError):
 
     code = "PERSONA_INVALID"
     message = "the persona is invalid"
+
+
+class ThreadBusy(AgentError):
+    """Another job held the conversation for longer than a job may wait for it."""
+
+    code = "THREAD_BUSY"
+    message = "another message on this thread is still being answered; send it again after"
+
+
+class LockLost(AgentError):
+    """The thread lock expired, or another job took it, while this job ran."""
+
+    code = "LOCK_LOST"
+    message = "the thread lock was lost while the job ran"
