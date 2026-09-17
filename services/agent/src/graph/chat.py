@@ -44,7 +44,7 @@ def build_chat(
         if isinstance(latest, HumanMessage):
             decision = parse_decision(latest.text)
             update["soul_change"] = await decide(pool, user_id, *decision) if decision else ""
-        persona, unnamed = await persona_blocks(pool, user_id)
+        persona, unnamed, names = await persona_blocks(pool, user_id)
         investor, unknown = await investor_blocks(pool, user_id)
         return {
             **update,
@@ -52,6 +52,7 @@ def build_chat(
             "context": f"{investor}\n{await theses_block(pool, user_id)}",
             "unknown": unknown,
             "unnamed": unnamed,
+            "names": names,
         }
 
     async def agent(state: ChatState) -> dict[str, object]:
@@ -62,10 +63,11 @@ def build_chat(
             unknown,
             unnamed,
             stage(unknown, unnamed),
+            state["names"],
             state["soul_change"],
         )
         history = recent(answered(state["messages"]), HISTORY_MESSAGES)
-        emit.progress("assistant", progress.ASSISTANT_WORKING)
+        emit.progress("assistant", progress.ASSISTANT_WORKING, state["names"]["bot_name"])
         reply = await bound.ainvoke([SystemMessage(content=prompt), *history])
         return {"messages": [complete(reply)]}
 

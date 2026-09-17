@@ -9,10 +9,10 @@ from src.errors import PersonaInvalid
 from src.graph.render import render_assistant_prompt
 from src.graph.state import stage
 from src.memory.keys import KEYS, keys_of
-from src.persona.layers import build_persona, render_fields, render_persona, unnamed
+from src.persona.layers import build_persona, desk_names, render_fields, render_persona, unnamed
 from src.persona.soul import check_soul
 from src.prompts.notes import TIMED_OUT, WAITING
-from src.prompts.progress import TITLES
+from src.prompts.progress import ROLES
 from src.prompts.soul import DEFAULT_SOUL, SOUL_MAX_CHARS
 from src.tools.models import ProposeSoulArgs, SetIdentityArgs, SetUserDetailsArgs
 
@@ -27,7 +27,7 @@ def test_prompt_renders_layers_in_order():
     context = "<investor>\nnothing yet\n</investor>\n<holdings>\n</holdings>\n<theses>\n</theses>"
     prompt = render_assistant_prompt(
         render_persona(persona), context, ["goals"], unnamed(persona), "bootstrap",
-        "<soul_change>approved 3f2a1b9c: warmer. </soul_change>",
+        desk_names(persona), "<soul_change>approved 3f2a1b9c: warmer. </soul_change>",
     )  # fmt: skip
     tags = ["<rules>", "<soul>", "<identity>", "<user>", "<signals>", "<investor>", "<holdings>",
             "<theses>", "<soul_change>", "<unknown>", "<unnamed>", "<stage>bootstrap:"]  # fmt: skip
@@ -74,12 +74,14 @@ README_INTRO = range(3, 6)
 def test_no_court_theme_in_the_assistant_prompt_or_the_notes():
     persona = build_persona([])
     for current in ("bootstrap", "onboard", "ready"):
-        prompt = render_assistant_prompt(render_persona(persona), "", [], unnamed(persona), current)
+        prompt = render_assistant_prompt(
+            render_persona(persona), "", [], unnamed(persona), current, desk_names(persona)
+        )
         assert not COURT.search(prompt), COURT.search(prompt)
     error, _ = map_event(State(), "error", {"code": "X", "message": "busy"})
-    notes = [*TITLES.values(), TIMED_OUT, WAITING, error[0].delta["content"]]
+    notes = [*ROLES.values(), TIMED_OUT, WAITING, error[0].delta["content"]]
     assert not [note for note in notes if COURT.search(note)]
-    assert set(TITLES.values()) >= {"Analyst", "Risk", "PM"}
+    assert set(ROLES.values()) == {"Analyst", "Auditor", "Strategist"}
 
 
 def test_no_court_theme_in_the_wording_readme_or_compose():
@@ -95,12 +97,16 @@ def test_no_court_theme_in_the_wording_readme_or_compose():
     assert hits == []
 
 
-def test_bootstrap_intro_lists_the_desk_as_bullets():
-    persona = build_persona([])
-    prompt = render_assistant_prompt(render_persona(persona), "", [], unnamed(persona), "bootstrap")
-    for line in ("- **Analyst**:", "- **Risk**:", "- **PM**:", "the Director"):
+def test_bootstrap_intro_lists_the_desk_by_name_as_bullets():
+    persona = build_persona([keyed("identity", "auditor_name", "Sarah")])
+    prompt = render_assistant_prompt(
+        render_persona(persona), "", [], unnamed(persona), "bootstrap", desk_names(persona)
+    )
+    for line in ("- **Nate, Analyst**:", "- **Sarah, Auditor**:", "- **Marcus, Strategist**:",
+                 "I'm the Director, your research desk.", "Just say so."):  # fmt: skip
         assert line in prompt, line
     assert "markdown bullets are fine" in prompt and "what should I call you?" in prompt
+    assert "Vera" not in prompt and "Never ask them to name the desk" in prompt
 
 
 def test_advisor_user_block_has_no_nickname():

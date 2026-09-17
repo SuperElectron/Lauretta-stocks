@@ -9,4 +9,4 @@ NOTHING_UNKNOWN = "nothing"
 
 SIGNAL_LINE = "{key}: {value} (since {since})"
 INVESTOR_LINE = "{topic}: {content} ({created}, id {id})"
-THESIS_LINE = "{ticker}: {action} ({verdict} by Risk), {created}"
+THESIS_LINE = "{ticker}: {action} ({verdict} by the Auditor), {created}"

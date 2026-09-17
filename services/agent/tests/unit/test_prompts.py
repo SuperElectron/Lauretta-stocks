@@ -7,10 +7,22 @@ from string import Formatter
 import pytest
 
 from src.memory.keys import KEYS
-from src.prompts import analyst, assistant, blocks, errors, notes, pm, progress, report, risk
+from src.persona.layers import NAME_KEYS
+from src.prompts import (
+    analyst,
+    assistant,
+    auditor,
+    blocks,
+    errors,
+    notes,
+    progress,
+    report,
+    strategist,
+)
 from src.prompts.facts import SENTENCES
 from tests.unit.wording import wording
 
+NAMES = set(NAME_KEYS)
 SRC = Path(__file__).resolve().parents[2] / "src"
 # `file:symbol` (top-level def, class or assignment) whose strings are not wording, and why.
 ALLOWED = {
@@ -35,20 +47,25 @@ def fields(template: str) -> set[str]:
 @pytest.mark.parametrize(
     ("template", "expected"),
     [
-        (assistant.HEAD, {"today"}),
-        (analyst.HEAD, {"ticker", "today"}),
+        (assistant.HEAD, {"today", *NAMES}),
+        (assistant.STAGE_INSTRUCTION["bootstrap"], NAMES),
+        (analyst.HEAD, {"ticker", "today", "analyst_name", "auditor_name", "strategist_name"}),
         (analyst.REVISION, {"story", "changes", "issues"}),
         (analyst.TASK, {"ticker"}),
-        (risk.HEAD, {"ticker", "today", "last_round"}),
-        (risk.PREVIOUS, {"review"}),
-        (risk.LAST_ROUND, set()),
-        (risk.TASK, {"ticker"}),
-        (pm.HEAD, {"ticker", "today"}),
-        (pm.UNKNOWN, {"topics"}),
-        (pm.TASK, {"ticker"}),
-        (progress.LINE, {"title", "detail"}),
+        (
+            auditor.HEAD,
+            {"ticker", "today", "last_round", "analyst_name", "auditor_name", "strategist_name"},
+        ),
+        (auditor.PREVIOUS, {"review"}),
+        (auditor.LAST_ROUND, set()),
+        (auditor.TASK, {"ticker"}),
+        (strategist.HEAD, {"ticker", "today", "strategist_name"}),
+        (strategist.UNKNOWN, {"topics"}),
+        (strategist.TASK, {"ticker"}),
+        (progress.LINE, {"name", "detail"}),
+        (progress.ROLE_LINE, {"name", "role", "detail"}),
         (progress.ANALYST_REDRAFTING, {"revision"}),
-        (progress.RISK_VERDICT, {"verdict"}),
+        (progress.AUDITOR_VERDICT, {"verdict"}),
         (notes.ERROR, {"message"}),
         (notes.SOUL_PROPOSAL, {"short_id", "reason", "content"}),
         (blocks.SIGNAL_LINE, {"key", "value", "since"}),
@@ -78,8 +95,8 @@ def test_each_fact_sentence_takes_one_value_and_every_key_has_one():
     assert all(sentence.count("{}") == 1 for sentence in SENTENCES.values())
 
 
-def test_stage_instructions_have_no_fields():
-    assert all(not fields(text) for text in assistant.STAGE_INSTRUCTION.values())
+def test_stage_instructions_take_only_the_desk_names():
+    assert all(fields(text) <= NAMES for text in assistant.STAGE_INSTRUCTION.values())
 
 
 def test_no_wording_outside_the_prompts_package():

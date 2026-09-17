@@ -7,22 +7,26 @@ court for the running of his financial empire.
 Behind it sits a trading desk straight from the bullpen: cool, direct and professional, always
 working for the best risk-adjusted outcome for the portfolio and blunt about the downside.
 
-- **The Director** (the chat assistant, running the desk) remembers the investor's preferences, their appetite for risk
-  and every holding in the book, leads with the call and then the why, and says plainly what
-  would make it wrong.
-- **The Analyst** reads the filings and the market, then writes a stock story: what the company
-  does, what could move it, what the market has missed, the dated catalyst, and what would prove
-  the whole thing wrong.
-- **Risk** trusts nobody, re-checks every figure, and sends the story back until the numbers
-  hold up.
-- **The PM** sizes the story against the book and suggests whether to buy, add, hold, trim or
-  sell. It suggests; the investor decides. No trade is ever placed on their behalf, and nothing
-  here is financial advice.
+- **The Director** (the chat assistant) runs the desk: remembers the investor's preferences,
+  their appetite for risk and every holding in the book, leads with the call and then the why,
+  and says plainly what would make it wrong.
+- **Nate, the Analyst**, reads the filings and the market, then writes a stock story: what the
+  company does, what could move it, what the market has missed, the dated catalyst, and what
+  would prove the whole thing wrong.
+- **Vera, the Auditor**, trusts nobody, re-checks every figure, and sends the story back until
+  the numbers hold up.
+- **Marcus, the Strategist**, sizes the story against the book and suggests whether to buy, add,
+  hold, trim or sell. It suggests; the investor decides. No trade is ever placed on their
+  behalf, and nothing here is financial advice.
+
+Those are the default names. Any of them can be renamed in chat ("call the Analyst Sarah"); the
+new name is kept in the investor's memory and used from then on, in replies, progress lines and
+reports.
 
 ```
 Investor: should I sell my Shell?
-Desk:     Here's the read: hold, not sell. Risk approved the story but flagged refining margins
-          as the swing factor, and the PM would change the call if Q3 cash flow comes in under
+Director: Here's the read: hold, not sell. Vera approved the story but flagged refining margins
+          as the swing factor, and Marcus would change the call if Q3 cash flow comes in under
           dividend plus buybacks on 30 October. This is a suggestion, not financial advice.
 ```
 
@@ -86,10 +90,11 @@ No new app to learn: any chat app with a Generic OpenAI provider can reach the d
   Apps that can send `X-Thread-Id` may name their own.
 - **What is heard:** only the latest message. The app's own system prompt, attached documents
   and resent history are ignored; the desk keeps its own record.
-- **What is shown:** the team's comings and goings ("Analyst drafting the story…", "Risk re-checking the numbers…") and the
-  desk model's own thinking arrive as reasoning, which most apps fold into a thought block; the
-  answer arrives token by token. The thinking is unverified model thinking: figures there are
-  not sourced, and only the answer holds to the desk's rules.
+- **What is shown:** the team's comings and goings ("Nate (Analyst) drafting the story…", "Vera
+  (Auditor) re-checking the numbers…") and the desk model's own thinking arrive as reasoning,
+  which most apps fold into a thought block; the answer arrives token by token. The thinking is
+  unverified model thinking: figures there are not sourced, and only the answer holds to the
+  desk's rules.
 - **Patience:** an app that retries a request within 15 minutes, as the OpenAI SDKs do, rejoins
   the answer already under way; no research is run twice. Once an answer has been delivered, or
   if the turn failed, the same request is a new turn (a regenerate or a resend). A message sent

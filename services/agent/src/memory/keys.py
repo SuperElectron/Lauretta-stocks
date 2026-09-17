@@ -20,6 +20,9 @@ class Key:
 
 KEYS: dict[str, Key] = {
     "bot_name": Key("assistant", "identity", SENTENCES["bot_name"]),
+    "analyst_name": Key("assistant", "identity", SENTENCES["analyst_name"]),
+    "auditor_name": Key("assistant", "identity", SENTENCES["auditor_name"]),
+    "strategist_name": Key("assistant", "identity", SENTENCES["strategist_name"]),
     "bot_emoji": Key("assistant", "identity", SENTENCES["bot_emoji"]),
     "bot_vibe": Key("assistant", "identity", SENTENCES["bot_vibe"]),
     # Reserved for the voice channel; nothing sets it yet.

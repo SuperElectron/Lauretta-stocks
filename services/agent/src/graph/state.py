@@ -20,6 +20,8 @@ class PipelineState(TypedDict, total=False):
     # The investor's name, country and currency, for the advisor only.
     user: str
     unknown: list[str]
+    # Each desk agent's current name, by name key (`bot_name`, `analyst_name`, ...).
+    names: dict[str, str]
     story: dict[str, Any] | None
     review: dict[str, Any] | None
     advice: dict[str, Any] | None
@@ -34,8 +36,10 @@ class ChatState(MessagesState):
     # The soul, identity, user and signals blocks; rules are code and added at render.
     persona: str
     unknown: list[str]
-    # What the assistant and the investor do not yet know to call each other.
+    # What the desk does not yet know to call the investor.
     unnamed: list[str]
+    # Each desk agent's current name, by name key.
+    names: dict[str, str]
     # The `<soul_change>` block when this turn's message approved or rejected a proposal.
     soul_change: str
 

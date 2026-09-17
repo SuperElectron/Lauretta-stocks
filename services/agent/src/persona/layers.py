@@ -14,8 +14,18 @@ from src.prompts.soul import DEFAULT_SOUL
 
 Fields = dict[str, str | None]
 
+# Each desk agent's name key; every one has a default in `prompts/identity.py`.
+NAME_KEYS = ("bot_name", "analyst_name", "auditor_name", "strategist_name")
+# Whose name a progress line from each graph node carries.
+STAGE_NAME_KEYS = {
+    "assistant": "bot_name",
+    "save": "bot_name",
+    "analyst": "analyst_name",
+    "checker": "auditor_name",
+    "advisor": "strategist_name",
+}
 # Shown to the assistant; tts_voice is reserved for the voice channel.
-IDENTITY_SHOWN = ("bot_name", "bot_emoji", "bot_vibe")
+IDENTITY_SHOWN = (*NAME_KEYS, "bot_emoji", "bot_vibe")
 USER_KEYS = keys_of("profile")
 # The advisor sizes in the investor's currency and home market; it needs no nickname.
 ADVISOR_USER_KEYS = ("name", "country", "currency")
@@ -73,11 +83,18 @@ def render_persona(persona: Persona) -> str:
     )
 
 
+def desk_names(persona: Persona) -> dict[str, str]:
+    """Every desk agent's current name, by name key: the stored one, else the default."""
+    return {key: str(persona.identity[key]) for key in NAME_KEYS}
+
+
+def default_name(stage: str) -> str | None:
+    """The default name of the agent behind a graph node, for progress events sent without one."""
+    key = STAGE_NAME_KEYS.get(stage)
+    return naming.IDENTITY_DEFAULTS[key] if key else None
+
+
 def unnamed(persona: Persona) -> list[str]:
-    """What is missing before the assistant and the investor know what to call each other."""
-    missing = []
-    if not persona.identity.get("bot_name"):
-        missing.append(naming.UNNAMED_BOT)
-    if not persona.user.get("preferred_name"):
-        missing.append(naming.UNNAMED_USER)
-    return missing
+    """What is missing before the desk and the investor know what to call each other. Every
+    agent has a default name, so only the investor's can be."""
+    return [] if persona.user.get("preferred_name") else [naming.UNNAMED_USER]

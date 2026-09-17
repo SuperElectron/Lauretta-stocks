@@ -144,7 +144,7 @@ async def test_sse_streams_named_events_with_stream_ids_and_ends_after_error(cli
     frames = parse_sse(response.text)
     assert [f["event"] for f in frames] == ["progress", "error"]
     assert frames[0]["id"] == first
-    assert json.loads(frames[0]["data"]) == {"stage": "analyst", "detail": "drafting"}
+    assert json.loads(frames[0]["data"]) == {"stage": "analyst", "detail": "drafting", "name": None}
 
 
 async def test_sse_sends_model_reasoning_as_its_own_event(client, broker):

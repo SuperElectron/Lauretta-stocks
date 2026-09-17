@@ -14,13 +14,26 @@ from src.tools.models import ProposeSoulArgs, SetIdentityArgs, SetUserDetailsArg
 def build_set_identity(pool: AsyncConnectionPool, embedder: Embedder, user_id: str) -> BaseTool:
     @tool(args_schema=SetIdentityArgs)
     async def set_identity(
-        name: str | None = None, emoji: str | None = None, vibe: str | None = None
+        name: str | None = None,
+        emoji: str | None = None,
+        vibe: str | None = None,
+        analyst_name: str | None = None,
+        auditor_name: str | None = None,
+        strategist_name: str | None = None,
     ) -> dict[str, Any]:
-        """Set how you present yourself: your name, emoji or vibe. Keep your current name
-        unless the investor asks to rename you; only save a name they chose or confirmed.
-        Fields you leave out stay as they are.
+        """Set how the desk presents itself: your name, emoji or vibe, and the names of the
+        Analyst, the Auditor and the Strategist. Only save names the investor chose or
+        confirmed, never invented ones; one call can rename several agents. Fields you leave
+        out stay as they are.
         """
-        values = {"bot_name": name, "bot_emoji": emoji, "bot_vibe": vibe}
+        values = {
+            "bot_name": name,
+            "bot_emoji": emoji,
+            "bot_vibe": vibe,
+            "analyst_name": analyst_name,
+            "auditor_name": auditor_name,
+            "strategist_name": strategist_name,
+        }
         saved = await facts.set_many(pool, embedder, user_id, "identity", values, "chat")
         return {"saved": True, **saved}
 

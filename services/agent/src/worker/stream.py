@@ -24,6 +24,10 @@ Publish = Callable[[Event], Awaitable[None]]
 ASSISTANT_NODE = "agent"
 
 
+def progress_event(data: dict[str, Any]) -> Progress:
+    return Progress(stage=data["stage"], detail=data["detail"], name=data.get("name"))
+
+
 class ChatRelay:
     """Publishes one chat turn's events and keeps what the `done` result needs."""
 
@@ -57,7 +61,7 @@ class ChatRelay:
         event = data.get("event")
         await self.flush()
         if event == "progress":
-            await self._publish(Progress(stage=data["stage"], detail=data["detail"]))
+            await self._publish(progress_event(data))
         elif event == "notice" and not nested:
             self.notices.append(data["text"])
             await self._publish(Notice(text=data["text"]))
@@ -136,6 +140,6 @@ async def run_research(
         if part["type"] == "values":
             final = part["data"]
         elif part["data"].get("event") == "progress":
-            await publish(Progress(stage=part["data"]["stage"], detail=part["data"]["detail"]))
-    fields = ("ticker", "thesis_id", "revisions", "story", "review", "advice")
+            await publish(progress_event(part["data"]))
+    fields = ("ticker", "thesis_id", "revisions", "story", "review", "advice", "names")
     return {field: final[field] for field in fields}

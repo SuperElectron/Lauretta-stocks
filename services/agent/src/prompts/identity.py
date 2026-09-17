@@ -1,14 +1,15 @@
-"""What the assistant is before the investor says otherwise, and what naming is still missing."""
+"""What the desk is called before the investor says otherwise, and what naming is still missing."""
 
-# The assistant is the Director until the investor renames it. No emoji by default.
+# Every desk agent has a name the investor can change; the others are the defaults. No emoji.
 IDENTITY_DEFAULTS: dict[str, str | None] = {
     "bot_name": "the Director",
+    "analyst_name": "Nate",
+    "auditor_name": "Vera",
+    "strategist_name": "Marcus",
     "bot_emoji": None,
     "bot_vibe": "a sharp desk trader: direct, candid, professional",
     "tts_voice": None,
 }
 
-# The `<unnamed>` items, in the order the assistant asks about them. With the default name set,
-# only the investor's name is ever missing.
-UNNAMED_BOT = "what the investor wants to call you"
+# The `<unnamed>` item: every agent has a default name, so only the investor's can be missing.
 UNNAMED_USER = "what to call the investor"

@@ -22,17 +22,23 @@ research pipeline (LangGraph)                                                   
   when its submit tool writes a validated result (`graph/outputs.py`). No submit is a hard error.
 - **Analyst** writes the stock story: business, driver, market gap, catalyst (dated), falsifier,
   risks, a sourced data snapshot, data gaps.
-- **Risk** (the `checker` node) re-pulls the figures with the same tools and approves or sends it back with
-  required changes.
-- **PM** (the `advisor` node) reads portfolio weights and memories; suggests buy/add/hold/trim/sell/watch/avoid
-  with a target weight, or refuses to size while the core profile is unknown.
-- **Assistant** (chat) onboards the investor into memory until the core topics
+- **Auditor** (the `checker` node) re-pulls the figures with the same tools and approves or sends
+  it back with required changes.
+- **Strategist** (the `advisor` node) reads portfolio weights and memories; suggests
+  buy/add/hold/trim/sell/watch/avoid with a target weight, or refuses to size while the core
+  profile is unknown.
+- **The Director** (the chat assistant) onboards the investor into memory until the core topics
   (`memory/topics.py`) are known, then relays the team's results.
 - **Stage** (`bootstrap`/`onboard`/`ready`) is decided in code from what facts hold, never by
-  the model: bootstrap until both names are known, onboard until the core topics are known.
+  the model: bootstrap until the investor's name is known, onboard until the core topics are
+  known.
 - **Persona** (chat assistant only): `<rules>` (code, `prompts/rules.py`) then `<soul>`,
   `<identity>`, `<user>`, `<signals>`. The soul changes only when the investor replies
   `approve soul <id>`, which code applies in the context step; the advisor sees `<user>` only.
+- **Names**: every agent's name (Director, Analyst, Auditor, Strategist) is an identity fact
+  (`bot_name`, `analyst_name`, `auditor_name`, `strategist_name`) with its default in
+  `prompts/identity.py`; `set_identity` renames them. The pipeline loads the names once per run,
+  tells each role its name, and sends it on every progress event (`name`, optional).
 
 ## Layout
 
@@ -42,8 +48,8 @@ Paths below are relative to `services/`.
 
 - `agent/src/prompts/`: all prompts and user-facing wording live here, and nowhere else: rules,
   default soul and desk lines, identity defaults, each agent's system prompt (`assistant`,
-  `analyst`, `risk`, `pm`), block empty states, progress labels, client notes, error text
-  (`errors`), tool notes (`tools`), fact sentences (`facts`) and the report. It imports nothing.
+  `analyst`, `auditor`, `strategist`), block empty states, progress labels, client notes, error
+  text (`errors`), tool notes (`tools`), fact sentences (`facts`) and the report. It imports nothing.
   Templates use `str.format` fields; `tests/unit/test_prompts.py` checks their fields and fails
   on wording found elsewhere (explicit `file:symbol` allowlist, each with a reason). Tool
   descriptions stay as docstrings and `Field` descriptions on the tools.

@@ -5,6 +5,9 @@
 
 SENTENCES = {
     "bot_name": "The investor calls the assistant {}.",
+    "analyst_name": "The investor calls the Analyst {}.",
+    "auditor_name": "The investor calls the Auditor {}.",
+    "strategist_name": "The investor calls the Strategist {}.",
     "bot_emoji": "The assistant's emoji is {}.",
     "bot_vibe": "The assistant's manner is: {}.",
     "tts_voice": "The assistant speaks with the {} voice.",

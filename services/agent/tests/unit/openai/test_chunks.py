@@ -32,7 +32,21 @@ THINKING = State(mid_thought=True)
             FRESH,
             "progress",
             {"stage": "analyst", "detail": "drafting"},
-            [Part({"reasoning_content": "Analyst drafting…\n"})],
+            [Part({"reasoning_content": "Nate (Analyst) drafting…\n"})],
+            FRESH,
+        ),
+        (
+            FRESH,
+            "progress",
+            {"stage": "checker", "detail": "re-checking the numbers", "name": "Sarah"},
+            [Part({"reasoning_content": "Sarah (Auditor) re-checking the numbers…\n"})],
+            FRESH,
+        ),
+        (
+            FRESH,
+            "progress",
+            {"stage": "assistant", "detail": "working it", "name": None},
+            [Part({"reasoning_content": "The Director working it…\n"})],
             FRESH,
         ),
         (

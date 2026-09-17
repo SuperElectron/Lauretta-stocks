@@ -17,6 +17,7 @@ from src.persona.approval import (
     proposal_notice,
     proposals_in_turn,
 )
+from tests.unit.conftest import DEFAULT_NAMES
 from tests.utils import call, scripted
 
 NOW = datetime(2026, 9, 16, tzinfo=UTC)
@@ -110,6 +111,9 @@ async def test_chat_applies_the_phrase_before_the_model_and_appends_notices(monk
     async def blocks(_pool, _user_id):
         return "<soul>s</soul>", []
 
+    async def persona_blocks(_pool, _user_id):
+        return "<soul>s</soul>", [], DEFAULT_NAMES
+
     async def theses_block(_pool, _user_id):
         return "<theses>\nnone yet\n</theses>"
 
@@ -117,7 +121,7 @@ async def test_chat_applies_the_phrase_before_the_model_and_appends_notices(monk
         decided.append((verb, short_id))
         return f"<soul_change>approved {short_id}: warmer.</soul_change>"
 
-    for name, double in [("persona_blocks", blocks), ("investor_blocks", blocks),
+    for name, double in [("persona_blocks", persona_blocks), ("investor_blocks", blocks),
                          ("theses_block", theses_block), ("decide", fake_decide)]:  # fmt: skip
         monkeypatch.setattr(chat_module, name, double)
 

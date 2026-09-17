@@ -68,6 +68,15 @@ class SetIdentityArgs(FieldUpdateArgs):
     name: str | None = Field(
         default=None, min_length=1, description="The name the investor chose for you."
     )
+    analyst_name: str | None = Field(
+        default=None, min_length=1, description="The name the investor chose for the Analyst."
+    )
+    auditor_name: str | None = Field(
+        default=None, min_length=1, description="The name the investor chose for the Auditor."
+    )
+    strategist_name: str | None = Field(
+        default=None, min_length=1, description="The name the investor chose for the Strategist."
+    )
     emoji: str | None = Field(default=None, min_length=1, max_length=8)
     vibe: str | None = Field(
         default=None, min_length=1, max_length=200, description="Your manner in a few words."

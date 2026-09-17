@@ -73,6 +73,8 @@ class Progress(Event):
     type = "progress"
     stage: str
     detail: str
+    # The agent's current name; older events have none and show the default.
+    name: str | None = None
 
 
 class Tool(Event):

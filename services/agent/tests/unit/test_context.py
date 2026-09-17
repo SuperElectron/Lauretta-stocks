@@ -3,6 +3,7 @@ from src.db.queries.memories import content_hash
 from src.graph.context import render_holdings, render_investor, unknown_topics
 from src.graph.render import render_assistant_prompt
 from src.graph.state import stage
+from src.persona.layers import build_persona, desk_names
 from src.tools.portfolio import valued
 
 MEMORY = {"id": "m1", "topic": "risk_tolerance", "content": "Medium risk", "created": "2026-09-16"}
@@ -22,7 +23,8 @@ def test_unknown_core_topics_drive_the_stage():
 
 def test_assistant_prompt_carries_stage_and_unknowns():
     investor = "<investor>\nnothing yet\n</investor>"
-    prompt = render_assistant_prompt("<soul>s</soul>", investor, ["goals"], [], "onboard")
+    names = desk_names(build_persona([]))
+    prompt = render_assistant_prompt("<soul>s</soul>", investor, ["goals"], [], "onboard", names)
     assert "<unknown>goals</unknown>" in prompt
     assert "<stage>onboard:" in prompt
 

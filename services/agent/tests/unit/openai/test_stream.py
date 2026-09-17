@@ -23,7 +23,7 @@ async def test_a_stream_opens_with_the_role_and_ends_with_done(client, worker):
     assert frames[-1] == "[DONE]"
     assert [f["choices"][0]["delta"] for f in frames[:-1]] == [
         {"role": "assistant"},
-        {"reasoning_content": "Desk working it…\n"},
+        {"reasoning_content": "The Director working it…\n"},
         {"content": "Hi"},
         {"content": "\n\nN.\n\n"},
         {},
@@ -81,7 +81,7 @@ async def test_non_stream_returns_the_whole_answer(client, worker):
     assert answer["choices"][0]["message"] == {
         "role": "assistant",
         "content": "Hold MSFT.",
-        "reasoning_content": "Analyst drafting…\n",
+        "reasoning_content": "Nate (Analyst) drafting…\n",
     }
 
 
