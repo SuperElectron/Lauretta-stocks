@@ -1,4 +1,4 @@
-"""The agent's single Postgres pool, and the per-user scope every query on user data runs in.
+"""The API's Postgres pool, and the per-user scope every query on user data runs in.
 
 The app connects as `lauretta_app`, which row-level security applies to: `facts`, `holdings`,
 `theses`, `threads` and `thread_aliases` show and accept only rows whose `user_id` is the
@@ -25,7 +25,7 @@ async def open_pool(
 ) -> AsyncGenerator[AsyncConnectionPool]:
     """Opens the pool, yields it, and closes it on exit.
 
-    `autocommit` and `dict_row` are what the checkpointer requires of its connections.
+    `autocommit` keeps the user scope inside explicit transactions; rows come back as dicts.
     """
     pool = AsyncConnectionPool(
         database_url,
