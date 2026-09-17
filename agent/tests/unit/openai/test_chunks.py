@@ -58,6 +58,13 @@ STARTED = State(content_sent=True)
         (STARTED, "notice", {"text": "N."}, [Part({"content": "\n\nN.\n\n"})], STARTED),
         (STARTED, "done", {"result": {}}, [Part({}, "stop")], State(True, True)),
         (FRESH, "timeout", {}, [Part({"content": TIMED_OUT}, "stop")], State(False, True)),
+        (
+            STARTED,
+            "timeout",
+            {},
+            [Part({"content": "\n\n" + TIMED_OUT}, "stop")],
+            State(True, True),
+        ),
         (FRESH, "surprise", {"x": 1}, [], FRESH),
     ],
 )

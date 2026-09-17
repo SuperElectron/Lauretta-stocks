@@ -4,6 +4,7 @@ The status hash `job:{id}` holds `status` (queued, running, done, failed), `kind
 and on failure `error_code`. It expires with the job's events.
 """
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -31,21 +32,56 @@ async def submit(broker: Redis, job: Job, ttl_s: int) -> None:
         await pipe.execute()
 
 
-async def submit_once(broker: Redis, job: Job, ttl_s: int) -> bool:
-    """As `submit`, unless a job with this id is already recorded: then nothing is queued and
-    False is returned. Callers derive the id from the request, so a retry never runs twice."""
+@dataclass(frozen=True)
+class Queued:
+    job_id: str
+    thread_id: str
+    # The request named a job already queued (a retry), so nothing new was queued.
+    attached: bool = False
+    # Another job was still queued or running on the thread when this one was queued.
+    behind: bool = False
+
+
+async def attachable(broker: Redis | Pipeline, request_key: str) -> Queued | None:
+    """The job a request record names, unless it failed or expired: a failed turn is run again."""
+    record = await broker.get(request_key)
+    if record is None:
+        return None
+    job_id, thread_id = record.split(" ", 1)
+    status = await broker.hget(keys.job(job_id), "status")
+    return None if status in (None, "failed") else Queued(job_id, thread_id, attached=True)
+
+
+async def submit_once(
+    broker: Redis, job: Job, ttl_s: int, request_key: str, request_ttl_s: int
+) -> Queued:
+    """Queues `job` and records it under `request_key` for `request_ttl_s`, in one transaction,
+    unless the record already names a live job: then that job is returned, attached."""
     async with broker.pipeline(transaction=True) as pipe:
-        try:
-            await pipe.watch(keys.job(job.job_id))
-            if await pipe.exists(keys.job(job.job_id)):
-                return False
-            pipe.multi()
-            _queue(pipe, job, ttl_s)
-            await pipe.execute()
-        except WatchError:
-            # Another request recorded the same job between the check and the write.
-            return False
-    return True
+        while True:
+            try:
+                await pipe.watch(request_key, keys.thread_job(job.thread_id))
+                existing = await attachable(pipe, request_key)
+                if existing is not None:
+                    return existing
+                previous = await pipe.get(keys.thread_job(job.thread_id))
+                status = previous and await pipe.hget(keys.job(previous), "status")
+                pipe.multi()
+                pipe.set(request_key, f"{job.job_id} {job.thread_id}", ex=request_ttl_s)
+                pipe.set(keys.thread_job(job.thread_id), job.job_id, ex=ttl_s)
+                _queue(pipe, job, ttl_s)
+                await pipe.execute()
+                return Queued(job.job_id, job.thread_id, behind=status in ("queued", "running"))
+            except WatchError:
+                # A request on the same key or thread won the race; look again.
+                continue
+
+
+async def release(broker: Redis, request_key: str, job_id: str) -> None:
+    """Forgets a request whose answer was delivered, so sending it again runs a new turn."""
+    record = await broker.get(request_key)
+    if record is not None and record.split(" ", 1)[0] == job_id:
+        await broker.delete(request_key)
 
 
 def _queue(pipe: Pipeline, job: Job, ttl_s: int) -> None:

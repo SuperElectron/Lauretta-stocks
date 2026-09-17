@@ -1,21 +1,46 @@
-"""Who owns each conversation started through the OpenAI-compatible API."""
+"""Conversations started through the OpenAI-compatible API: who owns each, and the aliases
+(hashes of a prompt and its answer) that find one again."""
 
 from psycopg_pool import AsyncConnectionPool
 
 from src.db.pool import rows
 
 
-async def claim(pool: AsyncConnectionPool, thread_id: str, user_id: str, client: str) -> str:
-    """Records the thread as `user_id`'s unless it exists, and returns its owner.
-
-    The no-op update makes the row come back either way, even when another request inserts it
-    concurrently (a `DO NOTHING` then a read could miss that row).
-    """
-    (owner,) = await rows(
+async def create(pool: AsyncConnectionPool, thread_id: str, user_id: str, client: str) -> bool:
+    """Records the thread as `user_id`'s; False when it already exists."""
+    created = await rows(
         pool,
         """INSERT INTO threads (thread_id, user_id, client) VALUES (%s, %s, %s)
-           ON CONFLICT (thread_id) DO UPDATE SET thread_id = EXCLUDED.thread_id
-           RETURNING user_id""",
+           ON CONFLICT (thread_id) DO NOTHING RETURNING thread_id""",
         (thread_id, user_id, client),
     )
-    return owner["user_id"]
+    return bool(created)
+
+
+async def owner(pool: AsyncConnectionPool, thread_id: str) -> str | None:
+    found = await rows(pool, "SELECT user_id FROM threads WHERE thread_id = %s", (thread_id,))
+    return found[0]["user_id"] if found else None
+
+
+async def find_alias(pool: AsyncConnectionPool, user_id: str, alias_hash: str) -> str | None:
+    found = await rows(
+        pool,
+        "SELECT thread_id FROM thread_aliases WHERE alias_hash = %s AND user_id = %s",
+        (alias_hash, user_id),
+    )
+    return found[0]["thread_id"] if found else None
+
+
+async def add_aliases(
+    pool: AsyncConnectionPool, user_id: str, thread_id: str, alias_hashes: list[str]
+) -> None:
+    """An alias already pointing elsewhere keeps its thread."""
+    if not alias_hashes:
+        return
+    await rows(
+        pool,
+        """INSERT INTO thread_aliases (alias_hash, thread_id, user_id)
+           SELECT unnest(%s::text[]), %s, %s
+           ON CONFLICT (alias_hash) DO NOTHING""",
+        (alias_hashes, thread_id, user_id),
+    )

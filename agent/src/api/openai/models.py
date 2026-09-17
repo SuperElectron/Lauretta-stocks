@@ -26,8 +26,10 @@ class OpenAIError(Exception):
         *,
         kind: str = "invalid_request_error",
         param: str | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(message)
+        self.headers = headers
         self.status = status
         self.message = message
         self.code = code
@@ -47,7 +49,7 @@ class OpenAIError(Exception):
 
 async def error_response(_request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, OpenAIError)
-    return JSONResponse(exc.body(), status_code=exc.status)
+    return JSONResponse(exc.body(), status_code=exc.status, headers=exc.headers)
 
 
 class ChatMessage(BaseModel):
@@ -82,8 +84,31 @@ class ChatRequest(BaseModel):
             )
         return last.text()
 
-    def user_texts(self) -> list[str]:
-        return [m.text() for m in self.messages if m.role == "user"]
+    def first_user_text(self) -> str:
+        """What names a conversation that has no alias yet; a first message without text would
+        put every such conversation on one thread."""
+        first = next(m.text() for m in self.messages if m.role == "user")
+        if not first.strip():
+            raise OpenAIError(
+                400,
+                "the first user message must have text",
+                "invalid_first_message",
+                param="messages",
+            )
+        return first
+
+    def transcript(self) -> list[tuple[str, str]]:
+        """Role and text of every message but the system prompt, which clients rewrite."""
+        return [(m.role, m.text()) for m in self.messages if m.role != "system"]
+
+    def pairs(self) -> list[tuple[str, str]]:
+        """(prompt, answer) for each answered user message before the last message."""
+        history = self.transcript()[:-1]
+        return [
+            (prompt, answer)
+            for (role, prompt), (next_role, answer) in zip(history, history[1:], strict=False)
+            if role == "user" and next_role == "assistant"
+        ]
 
 
 async def chat_request(request: Request) -> ChatRequest:

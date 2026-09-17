@@ -8,7 +8,7 @@ Fails (exit 1) when the first token comes more than 2s after the assistant's mod
 the API directly. `STREAM_CHECK_MESSAGE` and `STREAM_CHECK_THREAD` choose what is sent where.
 
 With `--openai` it streams `POST /v1/chat/completions` as a chat app would, on a new thread
-each run (a repeated request would replay the job already answered). It also fails when the
+each run, so the timings are for a fresh turn. It also fails when the
 first reasoning delta takes more than 1s after the request.
 """
 

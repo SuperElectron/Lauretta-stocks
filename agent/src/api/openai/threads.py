@@ -1,55 +1,57 @@
-"""Which conversation, and which job, an OpenAI-style request belongs to.
+"""Which thread an OpenAI-style request continues. Chat apps send history, never an id.
 
-Chat clients send the whole visible history and no conversation id, so both are derived:
-
-- The thread is a hash of the user, the model and the first user message: the same
-  conversation in the client lands on the same thread every turn. `X-Thread-Id` overrides the
-  first message for clients that can name their conversations; it is hashed with the user too,
-  so two users' ids never meet.
-- The job is a hash of the user, the thread, the last user message and how many user messages
-  were sent: a retried request (SDK retries, a reconnect) names the job already queued, while
-  the same words sent again as a new turn name a new one.
+- `X-Thread-Id`, when sent, names the thread (hashed with the user).
+- A request with no history is a new conversation: it takes its first-message thread, or a
+  fresh one when that thread is already in use (two conversations that both open "hi").
+- A request with history follows the alias of the oldest prompt and answer it still carries,
+  else its first-message thread. Each answered pair it carries is registered as an alias, and
+  each answer is registered as it is sent, so turn two already finds a fresh thread.
 """
 
-import hashlib
-import re
+import secrets
 
 from loguru import logger
 from psycopg_pool import AsyncConnectionPool
 
+from src.api.openai import digests
 from src.api.openai.models import ChatRequest, OpenAIError
 from src.db.queries import threads
 
-THREAD_PREFIX = "oa-"
-_THREAD_HEADER = re.compile(r"[A-Za-z0-9_.:-]{1,64}")
 
-
-def _digest(*parts: str) -> str:
-    # Length-prefixed, so no two different part lists hash the same bytes.
-    joined = "".join(f"{len(p)}:{p}" for p in parts)
-    return hashlib.sha256(joined.encode()).hexdigest()[:32]
-
-
-def thread_id_for(user_id: str, request: ChatRequest, header: str | None) -> str:
-    if header is not None:
-        if not _THREAD_HEADER.fullmatch(header):
-            raise OpenAIError(
-                400, "X-Thread-Id must be 1-64 letters, digits or _.:-", "invalid_thread_id"
-            )
-        return THREAD_PREFIX + _digest(user_id, "header", header)
-    first = request.user_texts()[0]
-    return THREAD_PREFIX + _digest(user_id, "first", request.model, first)
-
-
-def job_id_for(user_id: str, thread_id: str, request: ChatRequest) -> str:
-    """32 hex characters, the shape of every job id."""
-    users = request.user_texts()
-    return _digest(user_id, thread_id, users[-1], str(len(users)))
-
-
-async def claim(pool: AsyncConnectionPool, thread_id: str, user_id: str, client: str) -> None:
-    """Records a new thread as the user's; a thread someone else started is not found."""
-    owner = await threads.claim(pool, thread_id, user_id, client)
-    if owner != user_id:
+async def _owned(pool: AsyncConnectionPool, thread_id: str, user_id: str, client: str) -> str:
+    """The thread, recorded as the user's if new; someone else's thread is not found."""
+    if await threads.create(pool, thread_id, user_id, client):
+        return thread_id
+    if await threads.owner(pool, thread_id) != user_id:
         logger.bind(thread_id=thread_id).warning("openai.thread_not_owned")
         raise OpenAIError(404, "no such conversation", "thread_not_found")
+    return thread_id
+
+
+async def resolve(
+    pool: AsyncConnectionPool, user_id: str, request: ChatRequest, header: str | None, client: str
+) -> str:
+    if header is not None:
+        return await _owned(pool, digests.header_thread(user_id, header), user_id, client)
+    base = digests.first_message_thread(user_id, request)
+    pairs = request.pairs()
+    if not pairs:
+        if await threads.create(pool, base, user_id, client):
+            return base
+        fresh = f"{base}-{secrets.token_hex(6)}"
+        logger.bind(thread_id=fresh).info("openai.thread_forked")
+        return await _owned(pool, fresh, user_id, client)
+    aliases = [digests.pair_alias(user_id, prompt, answer) for prompt, answer in pairs]
+    found = await threads.find_alias(pool, user_id, aliases[0])
+    thread_id = await _owned(pool, found or base, user_id, client)
+    await threads.add_aliases(pool, user_id, thread_id, aliases)
+    return thread_id
+
+
+async def remember_answer(
+    pool: AsyncConnectionPool, user_id: str, thread_id: str, prompt: str, answer: str
+) -> None:
+    """Registers the answer just sent, which the client will resend with its prompt."""
+    if digests.answer_text(answer):
+        alias = digests.pair_alias(user_id, prompt, answer)
+        await threads.add_aliases(pool, user_id, thread_id, [alias])

@@ -68,14 +68,20 @@ may petition the Director directly.
 | Streaming | on |
 
 - **Conversations:** the app sends no conversation id, so the court recognises a conversation
-  by its first message. Apps that can send `X-Thread-Id` may name their own.
+  by the history it resends: each prompt and answer it has seen points back to its thread, so
+  a long conversation keeps its thread after the first message scrolls out of the window. A
+  message with no history opens a new conversation, even when it says "hi" like the last one.
+  Apps that can send `X-Thread-Id` may name their own.
 - **What is heard:** only the latest message. The app's own system prompt, attached documents
   and resent history are politely ignored; the court keeps its own minutes.
 - **What is shown:** the team's comings and goings ("The Royal Analyst drafting…") arrive as
   reasoning, which most apps fold into a thought block; the answer arrives token by token.
-- **Patience:** an app that retries a request, as the OpenAI SDKs do, rejoins the answer already
-  under way; no research is run twice. Without streaming the court waits up to
-  `API_MAX_WAIT_S`, then says it is still at work and to ask again.
+- **Patience:** an app that retries a request within 15 minutes, as the OpenAI SDKs do, rejoins
+  the answer already under way; no research is run twice. Once an answer has been delivered, or
+  if the turn failed, the same request is a new turn (a regenerate or a resend). A message sent
+  while the previous one is still being answered waits its turn, and says so at once. Without
+  streaming the court waits up to `API_MAX_WAIT_S`, then says it is still working: wait a
+  minute, then ask for the result.
 - **Check it:** `just stream-check --openai` (see above) times the first reasoning and the first
   word through this door.
 - **Not yet:** the app's own tools (agent skills) are not passed through; disable them.

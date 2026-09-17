@@ -74,3 +74,13 @@ CREATE TABLE threads (
     created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX threads_user_created_idx ON threads (user_id, created_at DESC);
+
+-- A prompt and its answer, hashed with the user, pointing at the thread they were said on.
+-- Chat apps resend a sliding window of past turns and no conversation id; any pair still in
+-- the window finds the thread. The first thread to register an alias keeps it.
+CREATE TABLE thread_aliases (
+    alias_hash text PRIMARY KEY,
+    thread_id text NOT NULL REFERENCES threads (thread_id) ON DELETE CASCADE,
+    user_id text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+);

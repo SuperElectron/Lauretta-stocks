@@ -49,7 +49,8 @@ research pipeline (LangGraph)                                                   
   graph. `POST /v1/jobs` (`?wait=`), `GET /v1/jobs/{id}`, `GET /v1/jobs/{id}/events` (SSE),
   `/v1/theses/{ticker}`, `/v1/holdings`, `/healthz`. `api/openai/`: `/v1/models` and
   `/v1/chat/completions` (OpenAI-compatible, streamed), a thin adapter over the same jobs; the
-  user comes from `deps.current_user`, threads are owned in the `threads` table.
+  user comes from `deps.current_user`; threads are owned in `threads` and found again through
+  `thread_aliases` (hashes of prompt and answer pairs the client resends).
 - `agent/src/queue/`: Valkey Streams: `jobs` (group `workers`, reclaim, `jobs:dead`), per-job
   status hash and `job:{id}:events` stream, per-thread lock. Event models in `queue/models.py`.
 - `agent/src/worker/`: `python -m src.worker` runs jobs through `open_app`; `stream.py` maps

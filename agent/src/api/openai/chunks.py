@@ -2,7 +2,7 @@
 
 | job event     | delta                                                               |
 |---------------|---------------------------------------------------------------------|
-| (stream open) | `role: assistant`, sent before any event                            |
+| (stream open) | `role: assistant`; then `WAITING` when queued behind another turn    |
 | `progress`    | `reasoning_content`: "Royal Analyst drafting…"                      |
 | `tool`        | `reasoning_content`: "Consulting research stock…"                   |
 | `token`       | `content`                                                           |
@@ -28,10 +28,8 @@ TITLES = {
     "save": "The clerk",
 }
 RETRYING = "\n\n_(retrying…)_\n\n"
-TIMED_OUT = (
-    "\n\n_(The court is still at work, but this answer has run as long as a reply may. "
-    "Ask again shortly and the finished answer will be read back.)_"
-)
+STILL_WORKING = "The court is still working. Wait a minute, then ask for the result."
+TIMED_OUT = f"_({STILL_WORKING})_"
 
 
 @dataclass(frozen=True)
@@ -49,6 +47,8 @@ class State:
 
 
 ROLE = Part({"role": "assistant"})
+# Sent at once when the turn is queued behind another on its thread, before the lock is free.
+WAITING = Part({"reasoning_content": "Waiting for the court to finish the previous request…\n"})
 # Clients built on the OpenAI SDKs ignore SSE comments, so a quiet stream sends this instead.
 KEEPALIVE = Part({"reasoning_content": ""})
 
@@ -88,5 +88,6 @@ def map_event(state: State, event: str, data: dict[str, Any]) -> tuple[list[Part
         error = {"message": note, "type": "server_error", "code": data["code"]}
         return [Part({"content": prefix + note}, "stop", error)], replace(state, finished=True)
     if event == "timeout":
-        return [Part({"content": TIMED_OUT}, "stop")], replace(state, finished=True)
+        note = ("\n\n" if state.content_sent else "") + TIMED_OUT
+        return [Part({"content": note}, "stop")], replace(state, finished=True)
     return [], state
