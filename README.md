@@ -143,6 +143,24 @@ web app with threads, where the desk answers.
 - **What it fetches from the internet:** at boot, LiteLLM's model map (GitHub) and model prices
   (models.dev); on the first document, its embedding model, once. None of it carries user data.
 
+## Voice
+
+Speech runs on the Spark's CPU in the `speech` service ([speaches](https://speaches.ai):
+faster-whisper `small` to transcribe, Kokoro-82M to speak; about 2 GB RAM, no GPU memory). Only
+api reaches it. The models download once, at its first start.
+
+- **AnythingLLM** reads replies aloud with it (the speaker button, or auto-play in Settings >
+  Voice & Speech), in the Director's voice `af_heart`. Its microphone uses the browser's own
+  speech recognition.
+- **`POST /v1/voice/turns`** (multipart `audio`, optional `thread_id`, default `voice`): a spoken
+  message in, the Director's spoken reply out. The answer is NDJSON, a line per step as it
+  happens: `transcript`, then `reply` (with `notices`), then `audio` (base64 mp3), or `error`.
+  The turn is an ordinary chat job for the gateway's user, recorded with channel `voice`; the
+  voice is the user's `tts_voice` identity fact when set, else `TTS_VOICE`.
+- **`POST /v1/audio/transcriptions`** and **`POST /v1/audio/speech`**: OpenAI-compatible, for
+  any client (`voice` is a Kokoro voice such as `af_heart` or `am_michael`; `model` is ignored).
+- **Limits:** recordings up to `VOICE_MAX_UPLOAD_BYTES` (10 MB). Speech down answers 503.
+
 ## Running on the Spark
 
 On the Mac the desk runs for development. On the DGX Spark it runs full time: the whole stack

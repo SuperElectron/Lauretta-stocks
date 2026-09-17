@@ -36,6 +36,9 @@ networks:
   # The gateway and vLLM only: the worker reaches the model through the gateway's llm listener.
   llm:
     driver: bridge
+  # api and the speech service only.
+  speech:
+    driver: bridge
 
 volumes:
   pgdata:
@@ -43,6 +46,7 @@ volumes:
   models:
   tsstate:
   anythingllm:
+  speechmodels:
 
 # The model key is a file mounted into the gateway and vllm; api and worker hold none.
 secrets:
@@ -140,7 +144,10 @@ services:
   api:
     <<: *app
     command: ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
-    networks: [app, api-data]
+    networks: [app, api-data, speech]
+    environment:
+      <<: *app-env
+      SPEECH_URL: http://speech:8000
     mem_limit: 2g
     healthcheck:
       test: ["CMD", "python", "/app/healthcheck.py", "api"]
@@ -204,6 +211,13 @@ services:
       GENERIC_OPEN_AI_MODEL_PREF: lauretta
       GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT: "128000"
       GENERIC_OPEN_AI_MAX_TOKENS: "8192"
+      # Read replies aloud with the desk's own speech (Kokoro, through the gateway to api). Its key
+      # may call /v1/audio/speech, which acts for nobody; the model name is ignored.
+      TTS_PROVIDER: generic-openai
+      TTS_OPEN_AI_COMPATIBLE_ENDPOINT: http://gateway:18400/v1
+      TTS_OPEN_AI_COMPATIBLE_KEY: ${ANYTHINGLLM_API_KEY:?set ANYTHINGLLM_API_KEY (random, e.g. openssl rand -hex 32)}
+      TTS_OPEN_AI_COMPATIBLE_MODEL: kokoro
+      TTS_OPEN_AI_COMPATIBLE_VOICE_MODEL: af_heart
       # Plain chats take the streaming chat path, not the agent loop that sends tools.
       PROVIDER_DISABLE_NATIVE_TOOL_CALLING: generic-openai
       # Built-in embedder (downloads its small model once into storage) and LanceDB in the volume.
@@ -264,6 +278,37 @@ services:
       vllm:
         condition: service_started
         restart: true
+
+  # Speech for voice: faster-whisper (STT) and Kokoro-82M (TTS) on CPU, no GPU memory (about
+  # 2 GB RAM). Only api reaches it (`speech` network). The models download once into
+  # `speechmodels` at the first start, before the service counts as healthy.
+  speech:
+    image: ghcr.io/speaches-ai/speaches@sha256:21e3df06d842fb7802ab470dd77c25f0e8c0d22950e8d8c6ae886e851af53ef8
+    restart: unless-stopped
+    environment:
+      STT_MODEL: Systran/faster-whisper-small
+      TTS_MODEL: speaches-ai/Kokoro-82M-v1.0-ONNX
+    command:
+      - sh
+      - -c
+      - >-
+        uvicorn --factory speaches.main:create_app & pid=$$!;
+        until curl -sf localhost:8000/health >/dev/null; do sleep 2; done;
+        for m in $$STT_MODEL $$TTS_MODEL; do
+        curl -sf -X POST "localhost:8000/v1/models/$$m" >/dev/null
+        || { echo "speech: could not download $$m" >&2; kill $$pid; exit 1; }; done;
+        touch /tmp/models-ready; wait $$pid
+    volumes:
+      - speechmodels:/home/ubuntu/.cache/huggingface
+    networks: [speech]
+    mem_limit: 4g
+    healthcheck:
+      # Healthy once both downloads have finished (a model is listed before its files are complete).
+      test: ["CMD-SHELL", "test -f /tmp/models-ready && curl -sf localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10m
 
   # gpt-oss-120b, served OpenAI-compatible on the llm network alone: no host port, so the Spark's
   # firewall never sees it. The flags are the measured budget from dgx-model-serve

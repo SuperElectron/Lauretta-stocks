@@ -96,12 +96,14 @@ routes:
             metadata: {caller: owner, user: mat}
           - key: ${ANYTHINGLLM_API_KEY}
             metadata: {caller: anythingllm}
-      # AnythingLLM may list models, and chat only as a user the map below names: any other
+      # AnythingLLM may list models, read replies aloud (`/v1/audio/speech`, which acts for nobody),
+      # and chat only as a user the map below names: any other
       # model, or a body that cannot be read, is refused here (403) rather than sent on.
       authorization:
         rules:
           - require: >-
               apiKey.caller != "anythingllm" || request.path == "/v1/models"
+              || request.path == "/v1/audio/speech"
               || (request.path == "/v1/chat/completions"
                   && json(request.body).model in ["lauretta-mat", "lauretta-max"])
       requestHeaderModifier:
