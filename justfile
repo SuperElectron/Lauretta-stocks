@@ -40,9 +40,11 @@ migrate:
 up:
     docker compose -f docker-compose.dev.yaml up -d --wait db
 
-# docker: stop (add clean=true to wipe memories, holdings and theses).
+# docker: stop the local db (add clean=true to wipe memories, holdings and theses). No
+# --remove-orphans: the dev file shares the stack's project name, so on the Spark that would stop
+# every other container of the stack.
 down clean="false":
-    docker compose -f docker-compose.dev.yaml down --remove-orphans {{ if clean == "true" { "-v" } else { "" } }}
+    docker compose -f docker-compose.dev.yaml down {{ if clean == "true" { "-v" } else { "" } }}
 
 # test: unit tests and lint.
 test:
