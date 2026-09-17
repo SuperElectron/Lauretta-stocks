@@ -14,12 +14,11 @@ from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, ToolMes
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from src.graph import emit
+from src.graph import emit, progress
 from src.graph.ctx import user_of
 from src.graph.state import ChatState
 from src.memory.topics import Topic
 from src.prompts import compaction as wording
-from src.prompts import progress
 
 # Compact once this many messages have left the window since the last summary.
 BATCH = 20

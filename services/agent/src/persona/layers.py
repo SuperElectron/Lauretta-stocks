@@ -1,20 +1,33 @@
 """The persona as prompt blocks: soul, identity, user profile and signals, built from facts rows.
 
-Rules are not here: they are code (`prompts/rules.py`) and render before all of these. The
-wording (defaults, empty states) lives in `src/prompts`.
+Rules are not here: they are code (`prompts/rules.py`) and render before all of these. The soul's
+default text is `prompts/soul.py`.
 """
 
 from dataclasses import dataclass
 from typing import Any
 
 from src.memory.keys import keys_of
-from src.prompts import blocks
-from src.prompts import identity as naming
 from src.prompts.soul import DEFAULT_SOUL
+
+# Every desk agent has a name the investor can change; the others are the defaults. No emoji.
+IDENTITY_DEFAULTS: dict[str, str | None] = {
+    "bot_name": "the Director",
+    "analyst_name": "Andy",
+    "checker_name": "Charlie",
+    "strategist_name": "Sammy",
+    "bot_emoji": None,
+    "bot_vibe": "a sharp desk trader: direct, candid, professional",
+    "tts_voice": None,
+}
+
+NOT_SET = "not set"
+NO_SIGNALS = "none"
+SIGNAL_LINE = "{key}: {value} (since {since})"
 
 Fields = dict[str, str | None]
 
-# Each desk agent's name key; every one has a default in `prompts/identity.py`.
+# Each desk agent's name key; every one has a default in `IDENTITY_DEFAULTS`.
 NAME_KEYS = ("bot_name", "analyst_name", "checker_name", "strategist_name")
 # Whose name a progress line from each graph node carries.
 STAGE_NAME_KEYS = {
@@ -44,7 +57,7 @@ class Persona:
 
 def build_persona(found: list[dict[str, Any]]) -> Persona:
     """The persona from active facts rows, defaults filling whatever was never set."""
-    identity = dict(naming.IDENTITY_DEFAULTS)
+    identity = dict(IDENTITY_DEFAULTS)
     user: Fields = dict.fromkeys(USER_KEYS)
     signals: dict[str, tuple[str, str]] = {}
     soul = DEFAULT_SOUL
@@ -61,17 +74,17 @@ def build_persona(found: list[dict[str, Any]]) -> Persona:
 
 
 def render_fields(tag: str, values: Fields, keys: tuple[str, ...]) -> str:
-    lines = [f"{key}: {values.get(key) or blocks.NOT_SET}" for key in keys]
+    lines = [f"{key}: {values.get(key) or NOT_SET}" for key in keys]
     return f"<{tag}>\n" + "\n".join(lines) + f"\n</{tag}>"
 
 
 def render_signals(signals: dict[str, tuple[str, str]]) -> str:
     lines = [
-        blocks.SIGNAL_LINE.format(key=key, value=value, since=since)
+        SIGNAL_LINE.format(key=key, value=value, since=since)
         for key, (value, since) in sorted(signals.items())
         if key in SIGNALS_SHOWN
     ]
-    return "<signals>\n" + ("\n".join(lines) or blocks.NO_SIGNALS) + "\n</signals>"
+    return "<signals>\n" + ("\n".join(lines) or NO_SIGNALS) + "\n</signals>"
 
 
 def render_persona(persona: Persona) -> str:
@@ -94,4 +107,4 @@ def desk_names(persona: Persona) -> dict[str, str]:
 def default_name(stage: str) -> str | None:
     """The default name of the agent behind a graph node, for progress events sent without one."""
     key = STAGE_NAME_KEYS.get(stage)
-    return naming.IDENTITY_DEFAULTS[key] if key else None
+    return IDENTITY_DEFAULTS[key] if key else None

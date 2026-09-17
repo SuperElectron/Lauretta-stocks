@@ -65,6 +65,3 @@ SOUL_CHANGE: dict[str, str] = {
     "Offer to propose it again.",
     "other": "could not {verb} {short_id}: proposal {outcome}; nothing changed. Tell the investor.",
 }
-
-# The result given to a tool call that never finished, so the provider accepts the history.
-UNFINISHED_TOOL_CALL = "failed: this tool call did not complete; tell the investor if it mattered"

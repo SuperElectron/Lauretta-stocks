@@ -6,13 +6,14 @@ from langchain_core.tools import BaseTool, tool
 
 from src.data.sec import SecClient
 from src.errors import UpstreamUnavailable
-from src.prompts import tools as wording
 from src.tools.market import unavailable
 from src.tools.models import FilingsArgs, FinancialsArgs
 
+NOT_REGISTERED = "no SEC registrant has this ticker; EDGAR covers US-listed shares and ADRs only"
+
 NOT_REGISTERED = {
     "found": False,
-    "reason": wording.NOT_REGISTERED,
+    "reason": NOT_REGISTERED,
 }
 
 

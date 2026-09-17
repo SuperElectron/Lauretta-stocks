@@ -13,7 +13,13 @@ from src.persona.layers import (
     build_persona,
     render_fields,
 )
-from src.prompts import blocks
+
+# Each block's empty state and line format.
+NO_INVESTOR_FACTS = "nothing yet"
+NO_HOLDINGS = "none recorded"
+NO_THESES = "none yet"
+INVESTOR_LINE = "{topic}: {content} ({created}, id {id})"
+THESIS_LINE = "{ticker}: {action} ({verdict} by the Checker), {created}"
 
 PER_TOPIC = 3
 THESES_IN_PROMPT = 10
@@ -49,8 +55,8 @@ def advisor_user_block(known: Known) -> str:
 
 async def theses_block(pool: AsyncConnectionPool, user_id: str) -> str:
     saved = await theses.recent(pool, user_id, THESES_IN_PROMPT)
-    lines = [blocks.THESIS_LINE.format(**t) for t in saved]
-    return "<theses>\n" + ("\n".join(lines) or blocks.NO_THESES) + "\n</theses>"
+    lines = [THESIS_LINE.format(**t) for t in saved]
+    return "<theses>\n" + ("\n".join(lines) or NO_THESES) + "\n</theses>"
 
 
 def render_investor(remembered: list[dict[str, Any]]) -> str:
@@ -58,8 +64,8 @@ def render_investor(remembered: list[dict[str, Any]]) -> str:
     lines = []
     for topic in TOPICS:
         facts = [m for m in remembered if m["topic"] == topic][:PER_TOPIC]
-        lines.extend(blocks.INVESTOR_LINE.format(**m) for m in facts)
-    return "<investor>\n" + ("\n".join(lines) or blocks.NO_INVESTOR_FACTS) + "\n</investor>"
+        lines.extend(INVESTOR_LINE.format(**m) for m in facts)
+    return "<investor>\n" + ("\n".join(lines) or NO_INVESTOR_FACTS) + "\n</investor>"
 
 
 def render_holdings(positions: list[dict[str, Any]]) -> str:
@@ -68,7 +74,7 @@ def render_holdings(positions: list[dict[str, Any]]) -> str:
         cost = f" @ {position['avg_cost']:g}" if position["avg_cost"] else ""
         note = f" ({position['note']})" if position["note"] else ""
         lines.append(f"{position['ticker']}: {position['shares']:g} shares{cost}{note}")
-    return "<holdings>\n" + ("\n".join(lines) or blocks.NO_HOLDINGS) + "\n</holdings>"
+    return "<holdings>\n" + ("\n".join(lines) or NO_HOLDINGS) + "\n</holdings>"
 
 
 def unknown_topics(remembered: list[dict[str, Any]]) -> list[str]:

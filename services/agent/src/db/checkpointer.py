@@ -14,7 +14,11 @@ from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
 from src.errors import DatabaseUnavailable
-from src.prompts import errors as wording
+
+CHECKPOINTS_NOT_MIGRATED = (
+    "the checkpoint tables are missing or out of date; on the Spark run "
+    "`docker compose run --rm migrate`, locally `just migrate` or set DATABASE_SETUP_URL"
+)
 
 _VERSION = "SELECT max(v) AS v FROM checkpoint_migrations"
 
@@ -37,9 +41,9 @@ async def check_tables(pool: AsyncConnectionPool) -> None:
         async with pool.connection() as conn:
             found = await (await conn.execute(_VERSION)).fetchone()
     except Exception as exc:
-        raise DatabaseUnavailable(wording.CHECKPOINTS_NOT_MIGRATED) from exc
+        raise DatabaseUnavailable(CHECKPOINTS_NOT_MIGRATED) from exc
     if found is None or found["v"] != latest:
-        raise DatabaseUnavailable(wording.CHECKPOINTS_NOT_MIGRATED)
+        raise DatabaseUnavailable(CHECKPOINTS_NOT_MIGRATED)
 
 
 async def build_checkpointer(

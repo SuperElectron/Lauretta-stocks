@@ -21,7 +21,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.runtime import Runtime
 from psycopg_pool import AsyncConnectionPool
 
-from src.graph import compaction, emit
+from src.graph import compaction, emit, progress
 from src.graph.context import investor_blocks, load_known, theses_block
 from src.graph.ctx import Ctx, user_of
 from src.graph.history import answered, recent
@@ -38,7 +38,6 @@ from src.persona.approval import (
     soul_change_block,
 )
 from src.persona.layers import desk_names, render_persona
-from src.prompts import progress
 
 # The model sees the latest messages only; long-term facts live in memory, not the transcript.
 HISTORY_MESSAGES = 40

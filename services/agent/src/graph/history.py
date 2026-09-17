@@ -3,7 +3,9 @@
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, ToolMessage
 
 from src.graph.reasoning import without_reasoning
-from src.prompts.assistant import UNFINISHED_TOOL_CALL as UNFINISHED
+
+# The result given to a tool call that never finished, so the provider accepts the history.
+UNFINISHED_TOOL_CALL = "failed: this tool call did not complete; tell the investor if it mattered"
 
 
 def answered(messages: list[AnyMessage]) -> list[AnyMessage]:
@@ -30,7 +32,7 @@ def answered(messages: list[AnyMessage]) -> list[AnyMessage]:
                 break
             results.add(later.tool_call_id)
         missing = [call["id"] for call in message.tool_calls if call["id"] not in results]
-        shown.extend(ToolMessage(UNFINISHED, tool_call_id=call_id) for call_id in missing)
+        shown.extend(ToolMessage(UNFINISHED_TOOL_CALL, tool_call_id=call_id) for call_id in missing)
     return shown
 
 

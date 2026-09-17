@@ -14,9 +14,9 @@ from typing import Any
 from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
 from langgraph.graph.state import CompiledStateGraph
 
+from src.graph import progress
 from src.graph.ctx import Ctx
 from src.graph.reasoning import reasoning_text
-from src.prompts import progress
 from src.queue import keys
 from src.queue.models import Event, MessageEnd, Notice, Progress, Reasoning, Reset, Token, Tool
 from src.worker.redact import ReasoningFilter

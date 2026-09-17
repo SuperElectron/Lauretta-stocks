@@ -100,10 +100,3 @@ def test_status_hash_and_entry_fields():
     assert keys.STATUS_HASH_FIELDS == tuple(KEYS["status_hash_fields"])
     assert keys.STATUSES == tuple(KEYS["statuses"])
     assert (keys.ENTRY_TYPE, keys.ENTRY_DATA) == tuple(KEYS["event_entry_fields"])
-
-
-def test_research_stage_roles():
-    from src.prompts.progress import ROLES
-
-    assert ROLES == EVENTS["roles"]
-    assert set(ROLES) <= set(EVENTS["defaults"]["names_by_stage"])

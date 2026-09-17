@@ -16,7 +16,33 @@ from psycopg_pool import AsyncConnectionPool
 
 from src.db.queries import soul as queries
 from src.prompts.assistant import SOUL_CHANGE
-from src.prompts.notes import SOUL_DECISION, SOUL_PROPOSAL
+
+# Under a reply that proposed a soul change.
+SOUL_PROPOSAL = """---
+Proposed change to my soul (id {short_id})
+Reason: {reason}
+
+Proposed text:
+
+{content}
+
+Reply `approve soul {short_id}` to apply it, or `reject soul {short_id}` to discard it."""
+
+# Under the reply to a message that approved or rejected a proposal, keyed by outcome;
+# any other outcome uses "other". Fields: verb, short_id, outcome,
+# reason, days.
+SOUL_DECISION = {
+    "approved": "---\nSoul change {short_id} applied: {reason}.",
+    "rejected": "---\nSoul change {short_id} rejected: {reason}. The soul is unchanged.",
+    "unknown": "---\nNo soul proposal {short_id} was found; nothing changed.",
+    "ambiguous": "---\n{short_id} matches more than one soul proposal; nothing changed. Reply "
+    "with more of the id.",
+    "expired": "---\nSoul proposal {short_id} is older than {days} days and expired; nothing "
+    "changed.",
+    "stale": "---\nSoul proposal {short_id} was written against an older soul, so it was not "
+    "applied; nothing changed. Ask for it to be proposed again.",
+    "other": "---\nCould not {verb} soul proposal {short_id} ({outcome}); nothing changed.",
+}
 
 # The id shown to the investor: long enough not to collide within one investor's proposals.
 SHORT_ID_CHARS = 8

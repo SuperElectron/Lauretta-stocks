@@ -12,12 +12,16 @@ from src.memory.embedder import Embedder
 from src.memory.keys import ANSWERED, SETUP_SKIPS, SKIPPED, SkippableStep
 from src.persona.approval import MAX_PENDING_PROPOSALS, PROPOSAL_MAX_AGE, SHORT_ID_CHARS
 from src.persona.layers import NAME_KEYS
-from src.prompts import tools as wording
 from src.tools.scoped import (
     ScopedProposeSoulArgs,
     ScopedSetIdentityArgs,
     ScopedSetUserDetailsArgs,
     ScopedSkipSetupStepArgs,
+)
+
+TOO_MANY_PROPOSALS = (
+    "not proposed: {cap} soul proposals already wait for the investor's decision; ask them to "
+    "approve or reject one first"
 )
 
 
@@ -115,7 +119,7 @@ def build_propose_soul_change(pool: AsyncConnectionPool, embedder: Embedder) -> 
             pool, embedder, user_id, content, reason, MAX_PENDING_PROPOSALS, PROPOSAL_MAX_AGE
         )
         if saved is None:
-            note = wording.TOO_MANY_PROPOSALS.format(cap=MAX_PENDING_PROPOSALS)
+            note = TOO_MANY_PROPOSALS.format(cap=MAX_PENDING_PROPOSALS)
             return {"proposed": False, "applied": False, "note": note}
         return {
             "proposed": True,
