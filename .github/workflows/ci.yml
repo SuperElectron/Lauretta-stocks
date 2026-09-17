@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [staging, main]
+  push:
+    branches: [staging, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Personal accounts (not GitHub Organizations) don't need a GITLEAKS_LICENSE.
+          GITLEAKS_ENABLE_COMMENTS: "false"
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.13"
+
+      - name: Install just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+
+      - name: just test
+        run: just test
+
+  compose:
+    name: compose
+    runs-on: ubuntu-latest
+    env:
+      # Dummy values so `docker compose config` can render the required `${VAR:?...}`
+      # interpolations; nothing here is a real secret or is used to run anything.
+      LOG_LEVEL: info
+      USER_ID: dummy
+      DB_USER: dummy
+      DB_PASSWORD: dummy
+      DB_NAME: dummy
+      DB_PORT: "5432"
+      DB_POOL_MIN: "1"
+      DB_POOL_MAX: "5"
+      BROKER_PASSWORD: dummy
+      LLM_INTERNAL_KEY: dummy
+      STACK_AGENT_MODEL: dummy
+      AGENT_TEMPERATURE: "0.1"
+      AGENT_MAX_TOKENS: "100"
+      AGENT_TIMEOUT: "30"
+      AGENT_RECURSION_LIMIT: "10"
+      PIPELINE_MAX_REVISIONS: "2"
+      EMBED_MODEL: dummy
+      EMBED_DIMS: "384"
+      SEC_USER_AGENT: dummy
+      BROKER_MIN_IDLE_MS: "60000"
+      BROKER_MAX_DELIVERIES: "3"
+      WORKER_CONCURRENCY: "4"
+      AGENT_LOCK_WAIT_MS: "30000"
+      AGENT_LOCK_TTL_MS: "30000"
+      EVENTS_TTL_S: "86400"
+      API_MAX_WAIT_S: "25"
+      API_MAX_STREAM_S: "900"
+      ANYTHINGLLM_JWT_SECRET: dummy
+      ANYTHINGLLM_AUTH_TOKEN: dummy
+      GATEWAY_API_KEY: dummy
+      BACKUP_KEEP: "14"
+      TS_OAUTH_SECRET: dummy
+      POSTGRES_DB: dummy
+      POSTGRES_USER: dummy
+      PGDATABASE: dummy
+      OPENROUTER_API_KEY: dummy
+      SPARK_VLLM_API_KEY: dummy
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate docker-compose.yaml
+        run: docker compose -f docker-compose.yaml config -q
+
+      - name: Validate docker-compose.dev.yaml
+        run: docker compose -f docker-compose.dev.yaml config -q
