@@ -1,8 +1,7 @@
 """Each agent's system prompt, stitched from the wording in `src/prompts` and this run's blocks.
 
 Assistant order: head, `<rules>` (code), `<soul>`, `<identity>`, `<user>`, `<signals>`,
-`<investor>`, `<holdings>`, `<theses>`, then this turn's `<soul_change>`, `<unknown>`,
-`<unnamed>`, `<stage>`.
+`<investor>`, `<holdings>`, `<theses>`, then this turn's `<soul_change>`, `<setup>`, `<stage>`.
 """
 
 import json
@@ -10,7 +9,7 @@ from datetime import date
 from typing import Any
 
 from src.graph.state import Stage
-from src.prompts import analyst, assistant, auditor, blocks, strategist
+from src.prompts import analyst, assistant, checker, strategist
 from src.prompts.rules import RULES
 
 
@@ -21,21 +20,19 @@ def _today() -> str:
 def render_assistant_prompt(
     persona: str,
     context: str,
-    unknown: list[str],
-    unnamed: list[str],
+    setup: str,
     stage: Stage,
     names: dict[str, str],
     soul_change: str = "",
 ) -> str:
-    """`names` is the desk's current names by key (`persona.layers.desk_names`)."""
+    """`setup` is the rendered `<setup>` block; `names` the desk's current names by key."""
     parts = [
         assistant.HEAD.format(today=_today(), **names),
         f"<rules>\n{RULES}\n</rules>",
         persona,
         context,
         soul_change,
-        f"<unknown>{', '.join(unknown) or blocks.NOTHING_UNKNOWN}</unknown>",
-        f"<unnamed>{', '.join(unnamed)}</unnamed>" if unnamed else "",
+        setup,
         f"<stage>{stage}: {assistant.STAGE_INSTRUCTION[stage].format(**names)}</stage>",
     ]
     return "\n".join(part for part in parts if part)
@@ -68,12 +65,12 @@ def render_checker_prompt(
     last_round: bool,
     names: dict[str, str],
 ) -> str:
-    """The Auditor's prompt: the head (warning on the last round), the draft, the last review."""
-    last = auditor.LAST_ROUND if last_round else ""
-    parts = [auditor.HEAD.format(ticker=ticker, today=_today(), last_round=last, **names)]
+    """The Checker's prompt: the head (warning on the last round), the draft, the last review."""
+    last = checker.LAST_ROUND if last_round else ""
+    parts = [checker.HEAD.format(ticker=ticker, today=_today(), last_round=last, **names)]
     parts.append(f"<draft>{json.dumps(story)}</draft>")
     if previous_review is not None:
-        parts.append(auditor.PREVIOUS.format(review=json.dumps(previous_review)))
+        parts.append(checker.PREVIOUS.format(review=json.dumps(previous_review)))
     return "\n".join(parts)
 
 

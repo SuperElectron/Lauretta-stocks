@@ -206,12 +206,12 @@ async def test_research_streams_each_stage_then_returns_the_saved_thesis():
 
     assert [data for _, data in events] == [
         {"stage": "analyst", "detail": "drafting the story", "name": "Sarah"},
-        {"stage": "checker", "detail": "re-checking the numbers", "name": "Vera"},
-        {"stage": "checker", "detail": "verdict: revise", "name": "Vera"},
+        {"stage": "checker", "detail": "re-checking the numbers", "name": "Charlie"},
+        {"stage": "checker", "detail": "verdict: revise", "name": "Charlie"},
         {"stage": "analyst", "detail": "redrafting (revision 1)", "name": "Sarah"},
-        {"stage": "checker", "detail": "re-checking the numbers", "name": "Vera"},
-        {"stage": "checker", "detail": "verdict: approve", "name": "Vera"},
-        {"stage": "advisor", "detail": "sizing it against your book", "name": "Marcus"},
+        {"stage": "checker", "detail": "re-checking the numbers", "name": "Charlie"},
+        {"stage": "checker", "detail": "verdict: approve", "name": "Charlie"},
+        {"stage": "advisor", "detail": "sizing it against your book", "name": "Sammy"},
         {"stage": "save", "detail": "saving the thesis", "name": "the Director"},
     ]
     assert result["names"]["analyst_name"] == "Sarah"

@@ -15,13 +15,13 @@ from src.prompts.soul import DEFAULT_SOUL
 Fields = dict[str, str | None]
 
 # Each desk agent's name key; every one has a default in `prompts/identity.py`.
-NAME_KEYS = ("bot_name", "analyst_name", "auditor_name", "strategist_name")
+NAME_KEYS = ("bot_name", "analyst_name", "checker_name", "strategist_name")
 # Whose name a progress line from each graph node carries.
 STAGE_NAME_KEYS = {
     "assistant": "bot_name",
     "save": "bot_name",
     "analyst": "analyst_name",
-    "checker": "auditor_name",
+    "checker": "checker_name",
     "advisor": "strategist_name",
 }
 # Shown to the assistant; tts_voice is reserved for the voice channel.
@@ -92,9 +92,3 @@ def default_name(stage: str) -> str | None:
     """The default name of the agent behind a graph node, for progress events sent without one."""
     key = STAGE_NAME_KEYS.get(stage)
     return naming.IDENTITY_DEFAULTS[key] if key else None
-
-
-def unnamed(persona: Persona) -> list[str]:
-    """What is missing before the desk and the investor know what to call each other. Every
-    agent has a default name, so only the investor's can be."""
-    return [] if persona.user.get("preferred_name") else [naming.UNNAMED_USER]

@@ -53,7 +53,7 @@ async def test_a_retry_after_reasoning_alone_marks_the_break_without_a_reset():
     await relay.feed(thinking("The investor asks"))
     await relay.flush()
     boundary = events.index(
-        ("progress", {"stage": "assistant", "detail": progress.ASSISTANT_RETRYING})
+        ("progress", {"stage": "assistant", "detail": progress.ASSISTANT_RETRYING, "name": None})
     )
     assert "".join(data["text"] for _, data in events[:boundary]) == "Let me check the hol"
     assert "".join(data["text"] for _, data in events[boundary + 1 :]) == "The investor asks"

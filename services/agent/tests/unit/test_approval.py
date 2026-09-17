@@ -9,6 +9,7 @@ from src.db.queries import facts
 from src.errors import PersonaInvalid
 from src.graph import chat as chat_module
 from src.graph.chat import build_chat
+from src.graph.setup import compute_setup
 from src.persona import approval
 from src.persona.approval import (
     decide,
@@ -17,6 +18,7 @@ from src.persona.approval import (
     proposal_notice,
     proposals_in_turn,
 )
+from src.persona.layers import build_persona
 from tests.unit.conftest import DEFAULT_NAMES
 from tests.utils import call, scripted
 
@@ -112,7 +114,10 @@ async def test_chat_applies_the_phrase_before_the_model_and_appends_notices(monk
         return "<soul>s</soul>", []
 
     async def persona_blocks(_pool, _user_id):
-        return "<soul>s</soul>", [], DEFAULT_NAMES
+        return "<soul>s</soul>", DEFAULT_NAMES
+
+    async def load_setup(_pool, _user_id):
+        return compute_setup(build_persona([]), [], 0)
 
     async def theses_block(_pool, _user_id):
         return "<theses>\nnone yet\n</theses>"
@@ -122,7 +127,8 @@ async def test_chat_applies_the_phrase_before_the_model_and_appends_notices(monk
         return f"<soul_change>approved {short_id}: warmer.</soul_change>"
 
     for name, double in [("persona_blocks", persona_blocks), ("investor_blocks", blocks),
-                         ("theses_block", theses_block), ("decide", fake_decide)]:  # fmt: skip
+                         ("theses_block", theses_block), ("decide", fake_decide),
+                         ("load_setup", load_setup)]:  # fmt: skip
         monkeypatch.setattr(chat_module, name, double)
 
     @tool

@@ -12,7 +12,6 @@ from src.persona.layers import (
     desk_names,
     render_fields,
     render_persona,
-    unnamed,
 )
 from src.prompts import blocks
 
@@ -29,13 +28,10 @@ async def investor_blocks(pool: AsyncConnectionPool, user_id: str) -> tuple[str,
     return blocks, unknown
 
 
-async def persona_blocks(
-    pool: AsyncConnectionPool, user_id: str
-) -> tuple[str, list[str], dict[str, str]]:
-    """The `<soul>`, `<identity>`, `<user>` and `<signals>` blocks, the names still unknown and
-    the desk's current names."""
+async def persona_blocks(pool: AsyncConnectionPool, user_id: str) -> tuple[str, dict[str, str]]:
+    """The `<soul>`, `<identity>`, `<user>` and `<signals>` blocks, and the desk's current names."""
     persona = build_persona(await facts.persona_rows(pool, user_id))
-    return render_persona(persona), unnamed(persona), desk_names(persona)
+    return render_persona(persona), desk_names(persona)
 
 
 async def names_of_desk(pool: AsyncConnectionPool, user_id: str) -> dict[str, str]:

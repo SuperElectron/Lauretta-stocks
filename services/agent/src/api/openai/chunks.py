@@ -3,7 +3,7 @@
 | job event     | delta                                                               |
 |---------------|---------------------------------------------------------------------|
 | (stream open) | `role: assistant`; then `WAITING` when queued behind another turn    |
-| `progress`    | `reasoning_content`: "Nate (Analyst) drafting…"                     |
+| `progress`    | `reasoning_content`: "Andy (Analyst) drafting…"                     |
 | `tool`        | `reasoning_content`: "Consulting research stock…"                   |
 | `reasoning`   | `reasoning_content`, as streamed                                    |
 | `token`       | `content`                                                           |

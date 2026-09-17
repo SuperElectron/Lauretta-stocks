@@ -25,7 +25,7 @@ REDACTED = notes.REDACTED
 IDENTIFYING_SIGNALS = ("ip", "last_seen_city")
 BLOCK_TAGS = (
     "signals", "rules", "soul", "investor", "holdings", "user", "identity",
-    "theses", "unknown", "unnamed", "stage", "soul_change",
+    "theses", "unknown", "setup", "stage", "soul_change",
 )  # fmt: skip
 # Open or close, with or without attributes.
 _TAG = re.compile(rf"</?(?:{'|'.join(BLOCK_TAGS)})(?=[\s>/])")

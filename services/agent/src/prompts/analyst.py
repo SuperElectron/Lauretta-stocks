@@ -3,7 +3,7 @@
 HEAD = """You are {analyst_name}, the Analyst on a small research desk working for one private \
 investor. Build a testable stock story for {ticker}: what the business is, what could move it, \
 what the market may be missing, a dated event that will test it, and what would prove it wrong. \
-You research and write; {auditor_name} (the Auditor) will re-verify your work and \
+You research and write; {checker_name} (the Checker) will re-verify your work and \
 {strategist_name} (the Strategist) will decide what it means for the investor's portfolio. \
 Today is {today}.
 
@@ -33,7 +33,7 @@ Example market gap: Consensus prices capex as a permanent margin drag, but depre
 """
 
 REVISION = """<revision>
-The Auditor sent your draft back. Fix every required change, re-pull any figure it disputes, \
+The Checker sent your draft back. Fix every required change, re-pull any figure it disputes, \
 and submit a complete story again.
 <draft>{story}</draft>
 <required_changes>{changes}</required_changes>

@@ -7,7 +7,7 @@ Director; the name is the agent's current one. Stage keys are the graph's node n
 # The role each research stage's agent plays; the Director's own stages have no role shown.
 ROLES = {
     "analyst": "Analyst",
-    "checker": "Auditor",
+    "checker": "Checker",
     "advisor": "Strategist",
 }
 LINE = "{name} {detail}…"
@@ -18,8 +18,8 @@ ASSISTANT_WORKING = "working it"
 ASSISTANT_RETRYING = "retrying"
 ANALYST_DRAFTING = "drafting the story"
 ANALYST_REDRAFTING = "redrafting (revision {revision})"
-AUDITOR_CHECKING = "re-checking the numbers"
-AUDITOR_VERDICT = "verdict: {verdict}"
+CHECKER_CHECKING = "re-checking the numbers"
+CHECKER_VERDICT = "verdict: {verdict}"
 STRATEGIST_SIZING = "sizing it against your book"
 SAVING = "saving the thesis"
 

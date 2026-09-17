@@ -27,7 +27,7 @@ Reply `approve soul {short_id}` to apply it, or `reject soul {short_id}` to disc
 # The command line.
 CLI_CHATTING = "chatting on thread {thread!r}; ctrl-d to quit"
 CLI_TURN_FAILED = "[turn failed: {error}; see the log above]"
-CLI_RESEARCHING = "researching {ticker}: Analyst, Auditor, Strategist (a minute or two)..."
+CLI_RESEARCHING = "researching {ticker}: Analyst, Checker, Strategist (a minute or two)..."
 CLI_SAVED = "saved to {path}"
 CLI_REPLY = "\nassistant> {reply}\n"
 CLI_THREAD_HELP = "conversation to continue"

@@ -6,6 +6,7 @@ from langchain_core.tools import InjectedToolCallId
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.graph.outputs import Advice, Review, StockStory
+from src.memory.keys import SkippableStep
 from src.memory.topics import Topic
 from src.prompts import tools as wording
 from src.prompts.soul import SOUL_MAX_CHARS
@@ -71,8 +72,8 @@ class SetIdentityArgs(FieldUpdateArgs):
     analyst_name: str | None = Field(
         default=None, min_length=1, description="The name the investor chose for the Analyst."
     )
-    auditor_name: str | None = Field(
-        default=None, min_length=1, description="The name the investor chose for the Auditor."
+    checker_name: str | None = Field(
+        default=None, min_length=1, description="The name the investor chose for the Checker."
     )
     strategist_name: str | None = Field(
         default=None, min_length=1, description="The name the investor chose for the Strategist."
@@ -95,6 +96,13 @@ class SetUserDetailsArgs(FieldUpdateArgs):
     )
     timezone: str | None = Field(
         default=None, min_length=1, description='IANA name, e.g. "Europe/London".'
+    )
+
+
+class SkipSetupStepArgs(ToolArgs):
+    step: SkippableStep = Field(
+        description="team_names when they keep the desk's names; holdings when they hold "
+        "nothing or would rather not say."
     )
 
 

@@ -1,4 +1,4 @@
-"""The research desk: the Analyst drafts, the Auditor checks (and may send it back), the
+"""The research desk: the Analyst drafts, the Checker checks (and may send it back), the
 Strategist suggests. Each agent goes by the investor's name for it, loaded once per run."""
 
 from dataclasses import dataclass
@@ -12,9 +12,10 @@ from src.graph import emit
 from src.graph.context import advisor_user_block, investor_blocks, names_of_desk
 from src.graph.render import render_advisor_prompt, render_analyst_prompt, render_checker_prompt
 from src.graph.role import Role
+from src.graph.setup import load_setup, missing_core
 from src.graph.state import PipelineState
 from src.prompts import analyst as analyst_text
-from src.prompts import auditor as auditor_text
+from src.prompts import checker as checker_text
 from src.prompts import progress
 from src.prompts import strategist as strategist_text
 
@@ -36,7 +37,9 @@ def build_pipeline(
     pool: AsyncConnectionPool, user_id: str, team: Team, max_revisions: int
 ) -> CompiledStateGraph:
     async def load_context(_state: PipelineState) -> dict[str, object]:
-        investor, unknown = await investor_blocks(pool, user_id)
+        investor, _unknown = await investor_blocks(pool, user_id)
+        # The same setup state the chat reads: no sizing while a core topic is unknown.
+        unknown = missing_core(await load_setup(pool, user_id))
         user = await advisor_user_block(pool, user_id)
         names = await names_of_desk(pool, user_id)
         return {
@@ -63,11 +66,11 @@ def build_pipeline(
         last_round = state["revisions"] >= max_revisions
         previous = state.get("review") if state["revisions"] else None
         names = state["names"]
-        emit.progress("checker", progress.AUDITOR_CHECKING, names["auditor_name"])
+        emit.progress("checker", progress.CHECKER_CHECKING, names["checker_name"])
         prompt = render_checker_prompt(ticker, state["story"], previous, last_round, names)
-        review = await team.checker(prompt, auditor_text.TASK.format(ticker=ticker))
-        verdict = progress.AUDITOR_VERDICT.format(verdict=review["verdict"])
-        emit.progress("checker", verdict, names["auditor_name"])
+        review = await team.checker(prompt, checker_text.TASK.format(ticker=ticker))
+        verdict = progress.CHECKER_VERDICT.format(verdict=review["verdict"])
+        emit.progress("checker", verdict, names["checker_name"])
         return {"review": review}
 
     def after_checker(state: PipelineState) -> str:

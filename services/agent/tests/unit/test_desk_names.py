@@ -68,8 +68,8 @@ class Embedder:
 
 def test_defaults_render_in_the_identity_block():
     block = render_persona(build_persona([]))
-    for line in ("bot_name: the Director", "analyst_name: Nate", "auditor_name: Vera",
-                 "strategist_name: Marcus"):  # fmt: skip
+    for line in ("bot_name: the Director", "analyst_name: Andy", "checker_name: Charlie",
+                 "strategist_name: Sammy"):  # fmt: skip
         assert line in block
 
 
@@ -77,12 +77,12 @@ async def test_set_identity_renames_agents_and_keeps_the_old_names():
     table = FactsTable()
     set_identity = build_set_identity(table, Embedder(), "friend")
 
-    await set_identity.ainvoke({"analyst_name": "Sarah", "auditor_name": "Ivy"})
+    await set_identity.ainvoke({"analyst_name": "Sarah", "checker_name": "Ivy"})
     await set_identity.ainvoke({"strategist_name": "Rex", "analyst_name": "Tom"})
 
     names = desk_names(build_persona(table.active()))
     assert names == {
-        "bot_name": "the Director", "analyst_name": "Tom", "auditor_name": "Ivy",
+        "bot_name": "the Director", "analyst_name": "Tom", "checker_name": "Ivy",
         "strategist_name": "Rex",
     }  # fmt: skip
     old, new = [r for r in table.rows if r["key"] == "analyst_name"]
@@ -93,8 +93,8 @@ async def test_set_identity_renames_agents_and_keeps_the_old_names():
 
 async def test_the_same_name_twice_writes_nothing():
     table = FactsTable()
-    await facts.set_keyed(table, Embedder(), "friend", "auditor_name", "Ivy", "chat")
-    assert (await facts.set_keyed(table, Embedder(), "friend", "auditor_name", "Ivy", "chat"))[
+    await facts.set_keyed(table, Embedder(), "friend", "checker_name", "Ivy", "chat")
+    assert (await facts.set_keyed(table, Embedder(), "friend", "checker_name", "Ivy", "chat"))[
         "changed"
     ] is False
     assert len(table.rows) == 1
@@ -107,11 +107,11 @@ async def test_each_role_is_told_its_name_and_the_report_uses_them():
     final = await pipeline.ainvoke({"ticker": "MSFT"})
 
     assert analyst.prompts[0].startswith("You are Sarah, the Analyst")
-    assert checker.prompts[0].startswith("You are Vera, the Auditor")
+    assert checker.prompts[0].startswith("You are Charlie, the Checker")
     assert "Sarah (the Analyst)" in checker.prompts[0]
-    assert advisor.prompts[0].startswith("You are Marcus, the Strategist")
+    assert advisor.prompts[0].startswith("You are Sammy, the Strategist")
     report = render_report(final)
-    for heading in ("## Story (Sarah, Analyst)", "## Auditor review (Vera)",
-                    "## Strategist (Marcus)", "Auditor (Vera): **approve**"):  # fmt: skip
+    for heading in ("## Story (Sarah, Analyst)", "## Checker review (Charlie)",
+                    "## Strategist (Sammy)", "Checker (Charlie): **approve**"):  # fmt: skip
         assert heading in report
-    assert render_report({k: v for k, v in final.items() if k != "names"}).count("Nate") == 1
+    assert render_report({k: v for k, v in final.items() if k != "names"}).count("Andy") == 1

@@ -81,7 +81,7 @@ async def test_non_stream_returns_the_whole_answer(client, worker):
     assert answer["choices"][0]["message"] == {
         "role": "assistant",
         "content": "Hold MSFT.",
-        "reasoning_content": "Nate (Analyst) drafting…\n",
+        "reasoning_content": "Andy (Analyst) drafting…\n",
     }
 
 

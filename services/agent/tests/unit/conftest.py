@@ -3,6 +3,7 @@ from typing import Any
 import pytest
 
 from src.graph import pipeline as pipeline_module
+from src.graph.setup import compute_setup
 from src.persona.layers import build_persona, desk_names
 
 DEFAULT_NAMES = desk_names(build_persona([]))
@@ -14,6 +15,9 @@ def no_database(monkeypatch):
 
     async def investor_blocks(_pool, _user_id):
         return "<investor>\nnothing yet\n</investor>", ["risk_tolerance"]
+
+    async def load_setup(_pool, _user_id):
+        return compute_setup(build_persona([]), ["risk_tolerance"], 0)
 
     async def advisor_user_block(_pool, _user_id):
         return "<user>\ncurrency: GBP\n</user>"
@@ -28,5 +32,6 @@ def no_database(monkeypatch):
     monkeypatch.setattr(pipeline_module, "investor_blocks", investor_blocks)
     monkeypatch.setattr(pipeline_module, "advisor_user_block", advisor_user_block)
     monkeypatch.setattr(pipeline_module, "names_of_desk", names_of_desk)
+    monkeypatch.setattr(pipeline_module, "load_setup", load_setup)
     monkeypatch.setattr(pipeline_module.theses, "save", save)
     return saved

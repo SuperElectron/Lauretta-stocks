@@ -4,7 +4,7 @@ from typing import Any, Literal, TypedDict
 
 from langgraph.graph import MessagesState
 
-Stage = Literal["bootstrap", "onboard", "ready"]
+Stage = Literal["setup", "ready"]
 
 
 class RoleState(MessagesState):
@@ -35,18 +35,10 @@ class ChatState(MessagesState):
     context: str
     # The soul, identity, user and signals blocks; rules are code and added at render.
     persona: str
-    unknown: list[str]
-    # What the desk does not yet know to call the investor.
-    unnamed: list[str]
+    # The guided setup (`graph/setup.py`): each step's status, and the one to take next.
+    setup: list[dict[str, Any]]
+    next_step: str | None
     # Each desk agent's current name, by name key.
     names: dict[str, str]
     # The `<soul_change>` block when this turn's message approved or rejected a proposal.
     soul_change: str
-
-
-def stage(unknown: list[str], unnamed: list[str]) -> Stage:
-    """Bootstrap until the investor's name is known, then onboard until the core investor
-    profile is known. The model never decides this."""
-    if unnamed:
-        return "bootstrap"
-    return "onboard" if unknown else "ready"

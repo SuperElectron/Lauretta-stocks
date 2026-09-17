@@ -19,14 +19,19 @@ def template(text: str, **fields: str) -> str:
 
 
 # The desk's own reasoning lines (progress and tool steps, as `chunks.py` sends them, with a
-# newline first after the model's thinking); anything else is the model's own reasoning.
-_TITLES = "|".join(re.escape(title) for title in set(progress.TITLES.values()))
-_LINES = [template(progress.LINE, title=f"(?:{_TITLES})")]
+# newline first after the model's thinking); anything else is the model's own reasoning. Names
+# are the investor's to change, so any name matches; the role must be one of the desk's.
+_ROLES = "|".join(re.escape(role) for role in progress.ROLES.values())
+_DETAILS = (progress.ASSISTANT_WORKING, progress.ASSISTANT_RETRYING, progress.SAVING)
+_OWN = "|".join(re.escape(detail) for detail in _DETAILS)
+_LINES = [
+    template(progress.ROLE_LINE, role=f"(?:{_ROLES})"),
+    template(progress.LINE, detail=f"(?:{_OWN})"),
+]
 _LINES += [template(line) for line in progress.TOOL.values()]
 DESK_LINE = re.compile(r"\n?(?:" + "|".join(_LINES) + r")\n")
-MODEL_START = progress.LINE.format(
-    title=progress.TITLES["assistant"], detail=progress.ASSISTANT_WORKING
-)
+# The Director's first line of a turn, whatever it is called.
+MODEL_START = re.compile(template(progress.LINE, detail=re.escape(progress.ASSISTANT_WORKING)))
 
 
 def report(what: str, at: float | None, model_start: float | None) -> None:

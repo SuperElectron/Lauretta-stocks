@@ -10,7 +10,7 @@ TARGET_WEIGHT = " (target weight {weight:g}%)"
 
 REPORT = """# {ticker} stock story, {today}
 
-**Suggestion: {action}**{target} · Auditor ({auditor_name}): **{verdict}** after {revisions} \
+**Suggestion: {action}**{target} · Checker ({checker_name}): **{verdict}** after {revisions} \
 revision(s) · confidence: {confidence}
 
 {disclaimer}
@@ -32,7 +32,7 @@ revision(s) · confidence: {confidence}
 |---|---|---|---|
 {snapshot}
 
-## Auditor review ({auditor_name})
+## Checker review ({checker_name})
 {summary}
 
 **Weaknesses**

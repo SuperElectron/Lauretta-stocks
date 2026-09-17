@@ -19,7 +19,8 @@ from src.graph.context import investor_blocks, persona_blocks, theses_block
 from src.graph.history import answered, recent
 from src.graph.llm import complete, with_backoff
 from src.graph.render import render_assistant_prompt
-from src.graph.state import ChatState, stage
+from src.graph.setup import load_setup, next_step, render_setup, stage
+from src.graph.state import ChatState
 from src.persona.approval import decide, parse_decision, proposal_notice, proposals_in_turn
 from src.prompts import progress
 
@@ -44,25 +45,25 @@ def build_chat(
         if isinstance(latest, HumanMessage):
             decision = parse_decision(latest.text)
             update["soul_change"] = await decide(pool, user_id, *decision) if decision else ""
-        persona, unnamed, names = await persona_blocks(pool, user_id)
-        investor, unknown = await investor_blocks(pool, user_id)
+        persona, names = await persona_blocks(pool, user_id)
+        investor, _unknown = await investor_blocks(pool, user_id)
+        setup = await load_setup(pool, user_id)
         return {
             **update,
             "persona": persona,
             "context": f"{investor}\n{await theses_block(pool, user_id)}",
-            "unknown": unknown,
-            "unnamed": unnamed,
+            "setup": setup,
+            "next_step": next_step(setup),
             "names": names,
         }
 
     async def agent(state: ChatState) -> dict[str, object]:
-        unknown, unnamed = state["unknown"], state["unnamed"]
+        setup, names = state["setup"], state["names"]
         prompt = render_assistant_prompt(
             state["persona"],
             state["context"],
-            unknown,
-            unnamed,
-            stage(unknown, unnamed),
+            render_setup(setup, names),
+            stage(setup),
             state["names"],
             state["soul_change"],
         )

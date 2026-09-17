@@ -6,7 +6,7 @@
 SENTENCES = {
     "bot_name": "The investor calls the assistant {}.",
     "analyst_name": "The investor calls the Analyst {}.",
-    "auditor_name": "The investor calls the Auditor {}.",
+    "checker_name": "The investor calls the Checker {}.",
     "strategist_name": "The investor calls the Strategist {}.",
     "bot_emoji": "The assistant's emoji is {}.",
     "bot_vibe": "The assistant's manner is: {}.",
@@ -21,4 +21,6 @@ SENTENCES = {
     "client": "Last connected with the {} app.",
     "channel": "Last spoke through the {} channel.",
     "last_seen_city": "Last seen near {}.",
+    "setup_team_names": "The investor kept the desk's names at setup ({}).",
+    "setup_holdings": "The investor skipped recording holdings at setup ({}).",
 }

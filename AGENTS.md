@@ -11,7 +11,8 @@ Run `just --list` for every command.
 ```
 chat (LangGraph, checkpointed in Postgres)
   context -> agent <-> tools -> notice  memory, holdings, snapshot, get_thesis, research_stock,
-                                        set_identity, set_user_details, propose_soul_change
+                                        set_identity, set_user_details, skip_setup_step,
+                                        propose_soul_change
                                                                                   |
 research pipeline (LangGraph)                                                     v
   load_context -> analyst -> checker --revise (max PIPELINE_MAX_REVISIONS)--> analyst
@@ -22,21 +23,27 @@ research pipeline (LangGraph)                                                   
   when its submit tool writes a validated result (`graph/outputs.py`). No submit is a hard error.
 - **Analyst** writes the stock story: business, driver, market gap, catalyst (dated), falsifier,
   risks, a sourced data snapshot, data gaps.
-- **Auditor** (the `checker` node) re-pulls the figures with the same tools and approves or sends
+- **Checker** (the `checker` node) re-pulls the figures with the same tools and approves or sends
   it back with required changes.
 - **Strategist** (the `advisor` node) reads portfolio weights and memories; suggests
   buy/add/hold/trim/sell/watch/avoid with a target weight, or refuses to size while the core
   profile is unknown.
-- **The Director** (the chat assistant) onboards the investor into memory until the core topics
-  (`memory/topics.py`) are known, then relays the team's results.
-- **Stage** (`bootstrap`/`onboard`/`ready`) is decided in code from what facts hold, never by
-  the model: bootstrap until the investor's name is known, onboard until the core topics are
-  known.
+- **The Director** (the chat assistant) guides the investor through setup, then relays the
+  team's results.
+- **Setup** (`graph/setup.py`, wording in `prompts/setup.py`): the context node computes the
+  steps from memory every turn (`investor_name`, `team_names` optional, `core_profile` from
+  `memory/topics.py`, `holdings` optional) into `setup` and `next_step` in `ChatState`, and
+  renders a `<setup>` checklist with the one next step. `skip_setup_step` stores a
+  `setup_team_names`/`setup_holdings` fact when the investor declines an optional step, so it is
+  never asked again. The pipeline reads the same computed setup for the Strategist's unknown
+  core topics.
+- **Stage** (`setup`/`ready`) is decided in code from `setup`, never by the model: `setup` while
+  any step is still to do.
 - **Persona** (chat assistant only): `<rules>` (code, `prompts/rules.py`) then `<soul>`,
   `<identity>`, `<user>`, `<signals>`. The soul changes only when the investor replies
   `approve soul <id>`, which code applies in the context step; the advisor sees `<user>` only.
-- **Names**: every agent's name (Director, Analyst, Auditor, Strategist) is an identity fact
-  (`bot_name`, `analyst_name`, `auditor_name`, `strategist_name`) with its default in
+- **Names**: every agent's name (Director, Analyst, Checker, Strategist) is an identity fact
+  (`bot_name`, `analyst_name`, `checker_name`, `strategist_name`) with its default in
   `prompts/identity.py`; `set_identity` renames them. The pipeline loads the names once per run,
   tells each role its name, and sends it on every progress event (`name`, optional).
 
@@ -48,13 +55,15 @@ Paths below are relative to `services/`.
 
 - `agent/src/prompts/`: all prompts and user-facing wording live here, and nowhere else: rules,
   default soul and desk lines, identity defaults, each agent's system prompt (`assistant`,
-  `analyst`, `auditor`, `strategist`), block empty states, progress labels, client notes, error
-  text (`errors`), tool notes (`tools`), fact sentences (`facts`) and the report. It imports nothing.
+  `analyst`, `checker`, `strategist`), block empty states, progress labels, client notes, error
+  text (`errors`), tool notes (`tools`), fact sentences (`facts`), the setup checklist (`setup`)
+  and the report. It imports nothing.
   Templates use `str.format` fields; `tests/unit/test_prompts.py` checks their fields and fails
   on wording found elsewhere (explicit `file:symbol` allowlist, each with a reason). Tool
   descriptions stay as docstrings and `Field` descriptions on the tools.
 - `agent/src/graph/render.py`: stitches each system prompt from that wording: a head, then data
-  blocks (`<investor>`, `<holdings>`, `<unknown>`, `<draft>`, `<review>`), then the stage.
+  blocks (`<investor>`, `<holdings>`, `<setup>`, `<unknown>`, `<draft>`, `<review>`), then the
+  stage.
 - `agent/src/tools/`: one `build_*` factory per tool; argument schemas in `tools/models.py`.
 - `agent/src/data/`: `sec.py` + `xbrl.py` (SEC EDGAR, free, needs `SEC_USER_AGENT`),
   `market.py` (yfinance, free, unofficial).
