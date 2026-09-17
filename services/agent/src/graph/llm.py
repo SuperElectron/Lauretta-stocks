@@ -11,10 +11,10 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.runnables import Runnable
-from langchain_openai import ChatOpenAI
 
-from src.errors import ReplyTruncated
+from src.errors import EmptyReply, ReplyTruncated
 from src.graph import emit
+from src.graph.reasoning import ReasoningChatOpenAI, reasoning_text, without_reasoning
 from src.settings import Settings
 
 # Retried with exponential backoff and jitter. Anything else (bad request, auth) fails at once.
@@ -56,7 +56,8 @@ def build_model(settings: Settings) -> BaseChatModel:
             timeout=settings.AGENT_TIMEOUT,
             max_retries=0,
         )
-    return ChatOpenAI(
+    # Keeps the reasoning vLLM streams, which plain ChatOpenAI drops.
+    return ReasoningChatOpenAI(
         base_url=settings.AGENT_BASE_URL,
         model=settings.AGENT_MODEL,
         temperature=settings.AGENT_TEMPERATURE,
@@ -100,8 +101,12 @@ _TRUNCATED = {("finish_reason", "length"), ("stop_reason", "max_tokens")}
 
 def complete(reply: AIMessage) -> AIMessage:
     """The reply, or `ReplyTruncated` when the output limit cut it off (a half-written tool
-    call would otherwise look like the model choosing to stop)."""
+    call would otherwise look like the model choosing to stop), or `EmptyReply` when it only
+    reasoned. The reasoning was streamed as it came and is not the answer, so it is dropped,
+    except on a tool call: the model reads it again in the rest of this turn."""
     metadata = reply.response_metadata
     if any(metadata.get(key) == value for key, value in _TRUNCATED):
         raise ReplyTruncated
-    return reply
+    if not reply.text and not reply.tool_calls and reasoning_text(reply):
+        raise EmptyReply
+    return reply if reply.tool_calls else without_reasoning(reply)

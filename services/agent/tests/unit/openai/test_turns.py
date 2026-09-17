@@ -109,4 +109,4 @@ async def test_a_turn_behind_a_running_one_says_it_is_waiting_at_once(broker, wo
 
     assert worker.jobs[0].thread_id == worker.jobs[1].thread_id
     deltas = [f["choices"][0]["delta"] for f in chunks(second.text)[:-1]]
-    assert deltas[1]["reasoning_content"].startswith("Waiting for the court to finish")
+    assert deltas[1]["reasoning_content"].startswith("Waiting on the desk to finish")

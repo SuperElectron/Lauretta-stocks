@@ -18,12 +18,14 @@ from redis.asyncio import Redis
 
 from src.api.openai import settle
 from src.api.openai.chunks import KEEPALIVE, ROLE, WAITING, Part, State, map_event
+from src.api.openai.keepalive import with_keepalive
 from src.api.openai.models import OpenAIError
+from src.prompts import errors
 from src.queue import events, keys
 
 KEEPALIVE_SECONDS = 15.0
 DONE_FRAME = "data: [DONE]\n\n"
-LOST = {"code": "JOB_LOST", "message": "its record expired before it finished; ask again"}
+LOST = {"code": "JOB_LOST", "message": errors.JOB_LOST}
 # A failed turn is not worth the SDK's automatic retry: it would fail the same way.
 NO_RETRY = {"x-should-retry": "false"}
 
@@ -60,31 +62,6 @@ def frame(meta: Meta, part: Part) -> str:
     return f"data: {json.dumps(chunk(meta, part), ensure_ascii=False)}\n\n"
 
 
-async def _with_keepalive(
-    source: AsyncIterator[events.StoredEvent], interval: float
-) -> AsyncIterator[events.StoredEvent | None]:
-    """Items from `source`, and None each time `interval` seconds pass without one."""
-    end = object()
-
-    async def following() -> Any:
-        return await anext(source, end)
-
-    pending = asyncio.create_task(following())
-    try:
-        while True:
-            done, _ = await asyncio.wait({pending}, timeout=interval)
-            if not done:
-                yield None
-                continue
-            item = pending.result()
-            if item is end:
-                return
-            yield item
-            pending = asyncio.create_task(following())
-    finally:
-        pending.cancel()
-
-
 async def _parts(
     broker: Redis, turn: Turn, limit_s: float, recording: list[asyncio.Task[None]]
 ) -> AsyncIterator[Part]:
@@ -95,7 +72,7 @@ async def _parts(
     if turn.behind:
         yield WAITING
     read = events.read(broker, turn.job_id, deadline=deadline)
-    async for event in _with_keepalive(read, KEEPALIVE_SECONDS):
+    async for event in with_keepalive(read, KEEPALIVE_SECONDS):
         if event is None:
             yield KEEPALIVE
             continue

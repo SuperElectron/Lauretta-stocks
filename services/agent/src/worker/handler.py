@@ -1,4 +1,4 @@
-"""Runs one job: its thread lock, its events and its status.
+"""Runs one job, for the user it carries: its thread lock, its events and its status.
 
 - A job's own failure ends in an `error` event with an `AgentError`'s code and message, or
   `INTERNAL` for anything else, whose details go to the worker log only. Either way the job is
@@ -25,13 +25,15 @@ from redis.asyncio import Redis
 
 from src.app import App
 from src.errors import AgentError, JobInterrupted
+from src.prompts import errors as wording
 from src.queue import events, submit
 from src.queue.lock import ThreadLock
 from src.queue.models import Done, Error, Event, Job
 from src.settings import Settings
-from src.worker.stream import run_chat, run_research
+from src.worker.research import run_research
+from src.worker.stream import run_chat
 
-INTERNAL = Error(code="INTERNAL", message="the job failed; the worker log has the details")
+INTERNAL = Error(code="INTERNAL", message=wording.JOB_FAILED)
 
 
 def error_event(exc: Exception) -> Error:
@@ -78,7 +80,7 @@ class JobHandler:
     async def dead(self, job: Job, reason: str) -> None:
         """The job was delivered too often without finishing; the reason stays in the log."""
         logger.bind(job_id=job.job_id, reason=reason).error("job.dead")
-        await self.finish(job, Error(code="JOB_ABANDONED", message="the job did not finish"))
+        await self.finish(job, Error(code="JOB_ABANDONED", message=wording.JOB_ABANDONED))
 
     async def finish(self, job: Job, outcome: Done | Error) -> None:
         await self.publish(job.job_id, outcome)
@@ -102,20 +104,32 @@ class JobHandler:
         await submit.mark(self._broker, job_id, self._ttl_s, **fields, finished_at=submit.now())
 
     async def _execute(self, job: Job) -> dict[str, Any]:
-        await self._app.record_signals({"client": job.client.client, "channel": "api"}, "gateway")
+        user = job.user
+        await self._app.record_signals(
+            user, {"client": job.client.client, "channel": job.channel}, "gateway"
+        )
 
         async def publish(event: Event) -> None:
             await self.publish(job.job_id, event)
 
         if job.kind == "research":
-            return await run_research(self._app.pipeline, job.ticker, publish)
+            return await run_research(self._app.pipeline, user, job.ticker, publish)
         lock = ThreadLock(
             self._broker,
+            user,
             job.thread_id,
             self._settings.AGENT_LOCK_TTL_MS,
             self._settings.AGENT_LOCK_WAIT_MS,
         )
         async with lock.held():
-            return await lock.guard(
-                run_chat(self._app.chat, job.thread_id, job.job_id, job.message, publish)
+            chat = run_chat(
+                self._app.chat,
+                user,
+                job.thread_id,
+                job.job_id,
+                job.message,
+                publish,
+                secrets=await self._app.signal_values(user),
+                stream_reasoning=self._settings.AGENT_STREAM_REASONING,
             )
+            return await lock.guard(chat)

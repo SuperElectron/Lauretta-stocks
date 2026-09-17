@@ -1,9 +1,9 @@
 """Which thread a chat app's request lands on, as AnythingLLM sends them."""
 
 from src.api.openai import digests
-from src.api.openai.chunks import TIMED_OUT
 from src.api.openai.models import ChatRequest
 from src.api.openai.threads import remember_answer
+from src.prompts.notes import TIMED_OUT
 from src.queue.models import Done, MessageEnd, Progress, Token, Tool
 from tests.unit.openai.conftest import body, chunks
 
@@ -61,7 +61,7 @@ async def test_conversations_that_open_alike_get_their_own_threads(client, worke
 
 async def test_a_forked_conversation_keeps_its_thread_after_a_tool_call_mid_answer(client, worker):
     worker.reply = lambda _job, n: [
-        Progress(stage="assistant", detail="replying"),
+        Progress(stage="assistant", detail="working it"),
         Token(text="Let me check."),
         MessageEnd(),
         Tool(name="research_stock", status="started"),
@@ -83,17 +83,17 @@ async def test_a_forked_conversation_keeps_its_thread_after_a_tool_call_mid_answ
 async def test_any_known_pair_beats_the_first_message(client, worker, db):
     request = body("hello", "unknown answer", "hi again", "known answer", "next")
     parsed = ChatRequest.model_validate(request)
-    db.owners["oa-fork"] = "friend"
-    db.aliases[digests.pair_alias("friend", "hi again", "known answer")] = ("oa-fork", "friend")
+    db.threads.add(("mat", "oa-fork"))
+    db.aliases[("mat", digests.pair_alias("mat", "hi again", "known answer"))] = "oa-fork"
 
     await client.post("/v1/chat/completions", json=request)
 
-    assert worker.jobs[0].thread_id == "oa-fork" != digests.first_message_thread("friend", parsed)
+    assert worker.jobs[0].thread_id == "oa-fork" != digests.first_message_thread("mat", parsed)
 
 
 async def test_a_fixed_note_alone_is_not_an_alias(db):
-    await remember_answer(None, "friend", "oa-t", "hello", f"<think>x</think>{TIMED_OUT}")
-    await remember_answer(None, "friend", "oa-t", "hello", "A real answer.")
+    await remember_answer(None, "mat", "oa-t", "hello", f"<think>x</think>{TIMED_OUT}")
+    await remember_answer(None, "mat", "oa-t", "hello", "A real answer.")
     assert len(db.aliases) == 1
 
 
@@ -107,14 +107,14 @@ async def test_a_thread_header_names_the_thread(client, worker):
 
 def test_thread_ids_are_namespaced_by_user():
     request = ChatRequest.model_validate(body("hello"))
-    assert digests.first_message_thread("friend", request) != digests.first_message_thread(
-        "someone", request
+    assert digests.first_message_thread("mat", request) != digests.first_message_thread(
+        "max", request
     )
-    assert digests.header_thread("friend", "phone") != digests.header_thread("someone", "phone")
+    assert digests.header_thread("mat", "phone") != digests.header_thread("max", "phone")
 
 
 def test_an_alias_ignores_every_stored_reasoning_block_and_outer_space():
     stored = "<think>\nhmm\n</think>\n\nHello. Checking.\n\n<think>Consulting x…\n</think>Done. "
-    assert digests.pair_alias("friend", "hi", stored) == digests.pair_alias(
-        "friend", "hi", "Hello. Checking.\n\nDone."
+    assert digests.pair_alias("mat", "hi", stored) == digests.pair_alias(
+        "mat", "hi", "Hello. Checking.\n\nDone."
     )

@@ -3,8 +3,9 @@
 | job event     | delta                                                               |
 |---------------|---------------------------------------------------------------------|
 | (stream open) | `role: assistant`; then `WAITING` when queued behind another turn    |
-| `progress`    | `reasoning_content`: "Royal Analyst drafting…"                      |
+| `progress`    | `reasoning_content`: "Andy (Analyst) drafting…"                     |
 | `tool`        | `reasoning_content`: "Consulting research stock…"                   |
+| `reasoning`   | `reasoning_content`, as streamed                                    |
 | `token`       | `content`                                                           |
 | `message_end` | `content` "\\n\\n", so text before a tool call stays readable       |
 | `reset`       | nothing before any content; after, a "retrying" note (no rollback) |
@@ -19,17 +20,8 @@ Anything else is not part of the contract and maps to nothing.
 from dataclasses import dataclass, replace
 from typing import Any
 
-# The court's titles for the stages a job reports progress from.
-TITLES = {
-    "assistant": "The Director",
-    "analyst": "The Royal Analyst",
-    "checker": "The Inspector General",
-    "advisor": "The Privy Counsellor",
-    "save": "The clerk",
-}
-RETRYING = "\n\n_(retrying…)_\n\n"
-STILL_WORKING = "The court is still working. Wait a minute, then ask for the result."
-TIMED_OUT = f"_({STILL_WORKING})_"
+from src.persona.layers import default_name
+from src.prompts import notes, progress
 
 
 @dataclass(frozen=True)
@@ -44,16 +36,13 @@ class State:
     # Content went out, so a retried model call can no longer be hidden from the client.
     content_sent: bool = False
     finished: bool = False
+    # The model's reasoning so far ends mid-line, so the next desk line starts a new one.
+    mid_thought: bool = False
 
 
 ROLE = Part({"role": "assistant"})
 # Sent at once when the turn is queued behind another on its thread, before the lock is free.
-WAITING = Part(
-    {
-        "reasoning_content": "Waiting for the court to finish the previous request; if it is "
-        "still busy after half a minute, send again once it has answered.\n"
-    }
-)
+WAITING = Part({"reasoning_content": notes.WAITING})
 # Clients built on the OpenAI SDKs ignore SSE comments, so a quiet stream sends this instead.
 KEEPALIVE = Part({"reasoning_content": ""})
 
@@ -62,37 +51,49 @@ def _content(state: State, text: str) -> tuple[list[Part], State]:
     return [Part({"content": text})], replace(state, content_sent=True)
 
 
-def _reasoning(line: str) -> list[Part]:
-    return [Part({"reasoning_content": line + "\n"})]
+def _reasoning(state: State, line: str) -> tuple[list[Part], State]:
+    prefix = "\n" if state.mid_thought else ""
+    return [Part({"reasoning_content": prefix + line + "\n"})], replace(state, mid_thought=False)
+
+
+def _progress_line(data: dict[str, Any]) -> str:
+    stage, detail = data["stage"], data["detail"]
+    name = data.get("name") or default_name(stage) or stage.capitalize()
+    role = progress.ROLES.get(stage)
+    if role is None:
+        line = progress.LINE.format(name=name, detail=detail)
+    else:
+        line = progress.ROLE_LINE.format(name=name, role=role, detail=detail)
+    return line[0].upper() + line[1:]
 
 
 def map_event(state: State, event: str, data: dict[str, Any]) -> tuple[list[Part], State]:
     """The deltas one job event becomes, and the state after it."""
     if event == "token":
         return _content(state, data["text"])
+    if event == "reasoning":
+        after = replace(state, mid_thought=not data["text"].endswith("\n"))
+        return [Part({"reasoning_content": data["text"]})], after
     if event == "progress":
-        who = TITLES.get(data["stage"], data["stage"].capitalize())
-        return _reasoning(f"{who} {data['detail']}…"), state
+        return _reasoning(state, _progress_line(data))
     if event == "tool":
         name = data["name"].replace("_", " ")
-        line = {"started": f"Consulting {name}…", "done": f"{name} answered."}.get(
-            data["status"], f"{name} failed."
-        )
-        return _reasoning(line[0].upper() + line[1:]), state
+        line = progress.TOOL.get(data["status"], progress.TOOL["error"]).format(name=name)
+        return _reasoning(state, line[0].upper() + line[1:])
     if event == "message_end":
         return _content(state, "\n\n")
     if event == "reset":
-        return _content(state, RETRYING) if state.content_sent else ([], state)
+        return _content(state, notes.RETRYING) if state.content_sent else ([], state)
     if event == "notice":
         return _content(state, ("\n\n" if state.content_sent else "") + data["text"] + "\n\n")
     if event == "done":
         return [Part({}, "stop")], replace(state, finished=True)
     if event == "error":
-        note = f"The court could not answer: {data['message']}."
+        note = notes.ERROR.format(message=data["message"])
         prefix = "\n\n" if state.content_sent else ""
         error = {"message": note, "type": "server_error", "code": data["code"]}
         return [Part({"content": prefix + note}, "stop", error)], replace(state, finished=True)
     if event == "timeout":
-        note = ("\n\n" if state.content_sent else "") + TIMED_OUT
+        note = ("\n\n" if state.content_sent else "") + notes.TIMED_OUT
         return [Part({"content": note}, "stop")], replace(state, finished=True)
     return [], state

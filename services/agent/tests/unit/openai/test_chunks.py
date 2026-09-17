@@ -1,20 +1,52 @@
 import pytest
 
-from src.api.openai.chunks import RETRYING, TIMED_OUT, Part, State, map_event
+from src.api.openai.chunks import Part, State, map_event
+from src.prompts.notes import RETRYING, TIMED_OUT
 
 FRESH = State()
 STARTED = State(content_sent=True)
+THINKING = State(mid_thought=True)
 
 
 @pytest.mark.parametrize(
     ("state", "event", "data", "parts", "after"),
     [
         (FRESH, "token", {"text": "Hel"}, [Part({"content": "Hel"})], STARTED),
+        (FRESH, "reasoning", {"text": " so"}, [Part({"reasoning_content": " so"})], THINKING),
+        (STARTED, "reasoning", {"text": "x\n"}, [Part({"reasoning_content": "x\n"})], STARTED),
+        (
+            THINKING,
+            "tool",
+            {"name": "get_thesis", "status": "started"},
+            [Part({"reasoning_content": "\nConsulting get thesis…\n"})],
+            FRESH,
+        ),
+        (
+            THINKING,
+            "progress",
+            {"stage": "assistant", "detail": "retrying"},
+            [Part({"reasoning_content": "\nThe Director retrying…\n"})],
+            FRESH,
+        ),
         (
             FRESH,
             "progress",
             {"stage": "analyst", "detail": "drafting"},
-            [Part({"reasoning_content": "The Royal Analyst drafting…\n"})],
+            [Part({"reasoning_content": "Andy (Analyst) drafting…\n"})],
+            FRESH,
+        ),
+        (
+            FRESH,
+            "progress",
+            {"stage": "checker", "detail": "re-checking the numbers", "name": "Sarah"},
+            [Part({"reasoning_content": "Sarah (Checker) re-checking the numbers…\n"})],
+            FRESH,
+        ),
+        (
+            FRESH,
+            "progress",
+            {"stage": "assistant", "detail": "working it", "name": None},
+            [Part({"reasoning_content": "The Director working it…\n"})],
             FRESH,
         ),
         (
@@ -76,7 +108,7 @@ def test_each_job_event_maps_to_its_deltas(state, event, data, parts, after):
 def test_an_error_is_a_readable_note_that_stops_and_carries_the_error(state, prefix):
     parts, after = map_event(state, "error", {"code": "THREAD_BUSY", "message": "busy"})
 
-    note = "The court could not answer: busy."
+    note = "The desk could not answer: busy."
     assert parts == [
         Part(
             {"content": prefix + note},

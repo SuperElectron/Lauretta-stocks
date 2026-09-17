@@ -1,7 +1,8 @@
 """A job's life on the broker: submitted by the API, marked by the worker, read by both.
 
-The status hash `job:{id}` holds `status` (queued, running, done, failed), `kind`, timestamps,
-and on failure `error_code`. It expires with the job's events.
+The status hash `job:{id}` holds `status` (queued, running, done, failed), `kind`, `user` (whose
+job it is: the API answers anyone else as if it did not exist), timestamps, and on failure
+`error_code`. It expires with the job's events.
 """
 
 from dataclasses import dataclass
@@ -60,15 +61,15 @@ async def submit_once(
     async with broker.pipeline(transaction=True) as pipe:
         while True:
             try:
-                await pipe.watch(request_key, keys.thread_job(job.thread_id))
+                await pipe.watch(request_key, keys.thread_job(job.user, job.thread_id))
                 existing = await attachable(pipe, request_key)
                 if existing is not None:
                     return existing
-                previous = await pipe.get(keys.thread_job(job.thread_id))
+                previous = await pipe.get(keys.thread_job(job.user, job.thread_id))
                 status = previous and await pipe.hget(keys.job(previous), "status")
                 pipe.multi()
                 pipe.set(request_key, f"{job.job_id} {job.thread_id}", ex=request_ttl_s)
-                pipe.set(keys.thread_job(job.thread_id), job.job_id, ex=ttl_s)
+                pipe.set(keys.thread_job(job.user, job.thread_id), job.job_id, ex=ttl_s)
                 _queue(pipe, job, ttl_s)
                 await pipe.execute()
                 return Queued(job.job_id, job.thread_id, behind=status in ("queued", "running"))
@@ -87,7 +88,12 @@ async def release(broker: Redis, request_key: str, job_id: str) -> None:
 def _queue(pipe: Pipeline, job: Job, ttl_s: int) -> None:
     pipe.hset(
         keys.job(job.job_id),
-        mapping={"status": "queued", "kind": job.kind, "created_at": job.submitted_at},
+        mapping={
+            "status": "queued",
+            "kind": job.kind,
+            "user": job.user,
+            "created_at": job.submitted_at,
+        },
     )
     pipe.expire(keys.job(job.job_id), ttl_s)
     pipe.xadd(

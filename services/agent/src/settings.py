@@ -1,9 +1,13 @@
 """Agent process configuration, read from the environment (`just` loads `.env`)."""
 
+import re
 from typing import Literal
 
 from pydantic import PositiveInt, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# A user id: it prefixes thread keys as `{user}:{thread}`, so it never holds a colon.
+USER_ID = re.compile(r"[a-z][a-z0-9_-]{0,31}")
 
 
 class Settings(BaseSettings):
@@ -11,8 +15,16 @@ class Settings(BaseSettings):
     # model clients read themselves.
     model_config = SettingsConfigDict(extra="ignore")
     LOG_LEVEL: str
-    USER_ID: str
+    # Everyone who may use the desk, comma-separated user ids; the first is the owner. The API
+    # acts only for a user named here, as the gateway's `X-Lauretta-User` header.
+    ALLOWED_USERS: str
+    # The app role (`lauretta_app`), which row-level security applies to.
     DATABASE_URL: str
+    # `lauretta_migrator`, which owns the checkpoint tables and may create tables but reads no
+    # user data. Set for `python -m src.db.migrate` (the compose `migrate` service), or locally so
+    # the CLI creates the tables itself; never on the long-running worker, which then only
+    # checks that the tables are current.
+    DATABASE_SETUP_URL: str | None = None
     DB_POOL_MIN: int
     DB_POOL_MAX: int
     AGENT_PROVIDER: Literal["anthropic", "openai"]
@@ -22,6 +34,8 @@ class Settings(BaseSettings):
     AGENT_MAX_TOKENS: PositiveInt
     AGENT_TIMEOUT: float
     AGENT_RECURSION_LIMIT: PositiveInt
+    # Stream the assistant model's own reasoning (unverified thinking) to clients.
+    AGENT_STREAM_REASONING: bool = True
     PIPELINE_MAX_REVISIONS: int
     EMBED_MODEL: str
     EMBED_DIMS: PositiveInt
@@ -42,8 +56,19 @@ class Settings(BaseSettings):
     # The longest `POST /v1/jobs?wait=` may block before answering 202. The gateway's
     # requestTimeout (30s) bounds the time to response headers, so stay under it.
     API_MAX_WAIT_S: PositiveInt = 25
-    # An SSE stream ends with `error STREAM_TIMEOUT` after this long; the job carries on.
+    # An SSE stream ends with a `timeout` event (STREAM_TIMEOUT) after this long; the job goes on.
     API_MAX_STREAM_S: PositiveInt = 900
+    # The secret the gateway adds as `X-Lauretta-Gateway` (`api/edge.py`); api refuses anything
+    # without it. Unset (tests, local runs) nothing is checked; compose always sets it.
+    API_GATEWAY_SECRET: str | None = None
+    # Speech (speaches: faster-whisper and Kokoro on CPU), reached by the API only. Unset, the
+    # voice routes answer 503.
+    SPEECH_URL: str | None = None
+    STT_MODEL: str = "Systran/faster-whisper-small"
+    TTS_MODEL: str = "speaches-ai/Kokoro-82M-v1.0-ONNX"
+    # The Director's voice unless the user's `tts_voice` identity fact names another.
+    TTS_VOICE: str = "af_heart"
+    VOICE_MAX_UPLOAD_BYTES: PositiveInt = 10_000_000
 
     @model_validator(mode="after")
     def _sec_user_agent_names_a_contact(self) -> "Settings":
@@ -65,6 +90,20 @@ class Settings(BaseSettings):
         if self.AGENT_LOCK_WAIT_MS >= self.BROKER_MIN_IDLE_MS:
             raise ValueError("AGENT_LOCK_WAIT_MS must be less than BROKER_MIN_IDLE_MS")
         return self
+
+    @model_validator(mode="after")
+    def _allowed_users_are_ids(self) -> "Settings":
+        users = self.allowed_users()
+        if not users or any(USER_ID.fullmatch(user) is None for user in users):
+            raise ValueError("ALLOWED_USERS must list user ids like mat,max (a-z, 0-9, _ or -)")
+        return self
+
+    def allowed_users(self) -> tuple[str, ...]:
+        """The user ids in ALLOWED_USERS, owner first."""
+        return tuple(user.strip() for user in self.ALLOWED_USERS.split(",") if user.strip())
+
+    def owner(self) -> str:
+        return self.allowed_users()[0]
 
     def broker_url(self) -> str:
         """BROKER_URL, required by the API and the worker."""

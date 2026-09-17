@@ -6,18 +6,18 @@ from src.queue import keys
 from tests.unit.openai.conftest import body
 
 
-async def test_models_lists_the_director(client):
+async def test_models_lists_the_desk(client):
     response = await client.get("/v1/models")
-    assert [m["id"] for m in response.json()["data"]] == ["lauretta"]
+    assert [m["id"] for m in response.json()["data"]] == ["lauretta-mat"]
 
 
 @pytest.mark.parametrize(
     ("payload", "status", "code"),
     [
         (body("hello", model="gpt-4o"), 404, "model_not_found"),
-        ({"model": "lauretta", "messages": []}, 400, "invalid_request"),
+        ({"model": "lauretta-mat", "messages": []}, 400, "invalid_request"),
         (
-            {"model": "lauretta", "messages": [{"role": "user", "content": 7}]},
+            {"model": "lauretta-mat", "messages": [{"role": "user", "content": 7}]},
             400,
             "invalid_request",
         ),
@@ -34,7 +34,7 @@ async def test_bad_requests_are_openai_errors_and_queue_nothing(
     assert response.status_code == status
     assert response.json()["error"]["code"] == code
     assert await broker.exists(keys.JOBS) == 0
-    assert db.owners == {}
+    assert db.threads == set()
 
 
 async def test_errors_never_echo_input_or_leak_internals(client, broker, monkeypatch):
@@ -43,7 +43,7 @@ async def test_errors_never_echo_input_or_leak_internals(client, broker, monkeyp
     secret = "sk-live-do-not-echo"
     bad = await client.post(
         "/v1/chat/completions",
-        json={"model": "lauretta", "messages": [{"role": "user", "content": {"k": secret}}]},
+        json={"model": "lauretta-mat", "messages": [{"role": "user", "content": {"k": secret}}]},
     )
     assert bad.status_code == 400 and secret not in bad.text
     not_json = await client.post("/v1/chat/completions", content=b"{" + secret.encode())
@@ -59,14 +59,16 @@ async def test_errors_never_echo_input_or_leak_internals(client, broker, monkeyp
     assert await broker.exists(keys.JOBS) == 0
 
 
-async def test_a_thread_started_by_someone_else_is_not_found(client, broker, db):
+async def test_another_users_thread_under_the_same_id_is_never_joined(client, worker, db):
     request = ChatRequest.model_validate(body("hello", "hi", "more"))
-    db.owners[digests.first_message_thread("friend", request)] = "someone-else"
+    thread_id = digests.first_message_thread("mat", request)
+    db.threads.add(("max", thread_id))
 
     response = await client.post("/v1/chat/completions", json=body("hello", "hi", "more"))
 
-    assert (response.status_code, response.json()["error"]["code"]) == (404, "thread_not_found")
-    assert await broker.exists(keys.JOBS) == 0
+    assert response.status_code == 200
+    assert (worker.jobs[0].user, worker.jobs[0].thread_id) == ("mat", thread_id)
+    assert ("mat", thread_id) in db.threads
 
 
 async def test_a_bad_thread_header_is_refused(client):

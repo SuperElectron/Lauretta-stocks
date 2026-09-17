@@ -23,7 +23,9 @@ async def hang_up_at_finish(app, request: dict) -> list[bytes]:
         "type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"}, "http_version": "1.1",
         "method": "POST", "scheme": "http", "path": "/v1/chat/completions",
         "raw_path": b"/v1/chat/completions", "query_string": b"", "root_path": "",
-        "headers": [(b"host", b"api"), (b"content-type", b"application/json")],
+        "headers": [
+            (b"host", b"api"), (b"content-type", b"application/json"), (b"x-lauretta-user", b"mat"),
+        ],
         "client": ("127.0.0.1", 50000), "server": ("api", 80),
     }  # fmt: skip
 
@@ -52,7 +54,7 @@ async def test_hanging_up_at_finish_still_releases_the_request_and_records_the_a
     app = create_app(with_lifespan=False)
     app.state.settings, app.state.broker, app.state.pool = settings(), broker, None
     request = body("hello")
-    key = keys.request(digests.request_key("friend", ChatRequest.model_validate(request), None))
+    key = keys.request(digests.request_key("mat", ChatRequest.model_validate(request), None))
 
     received = await hang_up_at_finish(app, request)
     await asyncio.gather(*settle.running)
@@ -60,8 +62,8 @@ async def test_hanging_up_at_finish_still_releases_the_request_and_records_the_a
     assert any(b'"finish_reason": "stop"' in chunk for chunk in received)
     assert not any(b"[DONE]" in chunk for chunk in received)
     assert await broker.exists(key) == 0
-    (thread_id,) = db.owners
-    assert db.aliases == {digests.pair_alias("friend", "hello", "answer 1"): (thread_id, "friend")}
+    ((_, thread_id),) = db.threads
+    assert db.aliases == {("mat", digests.pair_alias("mat", "hello", "answer 1")): thread_id}
 
 
 async def test_a_failed_record_is_logged_with_the_job_id(monkeypatch):
@@ -105,4 +107,28 @@ async def test_a_client_that_reads_to_the_end_finds_the_answer_recorded(
     async with client_for(broker) as client:
         await client.post("/v1/chat/completions", json=body("hello", stream_=stream_))
 
-        assert digests.pair_alias("friend", "hello", "answer 1") in db.aliases
+        assert ("mat", digests.pair_alias("mat", "hello", "answer 1")) in db.aliases
+
+
+async def test_finish_stops_waiting_after_the_timeout_and_logs_the_job(monkeypatch):
+    logged = []
+
+    class Log:
+        def __init__(self, job_id):
+            self.job_id = job_id
+
+        def error(self, event):
+            logged.append((self.job_id, event))
+
+    monkeypatch.setattr(settle.logger, "bind", lambda job_id: Log(job_id))
+    release = asyncio.Event()
+
+    async def stalled(_text, _done):
+        await release.wait()
+
+    task = settle.start("job-2", stalled, "answer", True)
+    await asyncio.wait_for(settle.finish([task], timeout=0.01), timeout=1)
+    assert logged == [("job-2", "openai.answer_recording_slow")]
+    assert not task.done()
+    release.set()
+    await task

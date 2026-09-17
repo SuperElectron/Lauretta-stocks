@@ -47,7 +47,7 @@ async def pending(broker) -> int:
 
 
 async def test_a_job_runs_once_and_is_acked(broker):
-    job = Job(kind="chat", message="hi")
+    job = Job(user="mat", kind="chat", message="hi")
     await submit(broker, job, ttl_s=60)
     handler = RecordingHandler()
     worker = consumer(broker, handler)
@@ -61,7 +61,7 @@ async def test_a_job_runs_once_and_is_acked(broker):
 
 
 async def test_a_job_whose_handler_raises_stays_pending_and_is_reclaimed(broker):
-    await submit(broker, Job(kind="research", ticker="MSFT"), ttl_s=60)
+    await submit(broker, Job(user="mat", kind="research", ticker="MSFT"), ttl_s=60)
     first = consumer(broker, RecordingHandler(fail=True), "w1", min_idle_ms=1)
     delivery = await first.next_delivery()
     with pytest.raises(ConnectionError):
@@ -78,7 +78,7 @@ async def test_a_job_whose_handler_raises_stays_pending_and_is_reclaimed(broker)
 
 
 async def test_a_job_past_max_deliveries_is_dead_lettered_not_run(broker):
-    job = Job(kind="chat", message="hi")
+    job = Job(user="mat", kind="chat", message="hi")
     await submit(broker, job, ttl_s=60)
     handler = RecordingHandler()
     worker = consumer(broker, handler, min_idle_ms=1, max_deliveries=1)
@@ -108,7 +108,7 @@ async def test_an_invalid_payload_is_dead_lettered(broker):
 
 
 async def test_run_consumes_until_stopped(broker):
-    jobs = [Job(kind="chat", message=str(n)) for n in range(3)]
+    jobs = [Job(user="mat", kind="chat", message=str(n)) for n in range(3)]
     for job in jobs:
         await submit(broker, job, ttl_s=60)
     handler = RecordingHandler()
@@ -125,7 +125,10 @@ async def test_run_consumes_until_stopped(broker):
 
 
 async def test_after_stop_no_new_job_starts_and_running_ones_finish(broker):
-    first, second = Job(kind="chat", message="1"), Job(kind="chat", message="2")
+    first, second = (
+        Job(user="mat", kind="chat", message="1"),
+        Job(user="mat", kind="chat", message="2"),
+    )
     await submit(broker, first, ttl_s=60)
     await submit(broker, second, ttl_s=60)
     release, started = asyncio.Event(), asyncio.Event()
@@ -152,7 +155,7 @@ async def test_after_stop_no_new_job_starts_and_running_ones_finish(broker):
 
 
 async def test_a_job_read_as_stop_is_set_is_left_pending_for_redelivery(broker, monkeypatch):
-    job = Job(kind="chat", message="hi")
+    job = Job(user="mat", kind="chat", message="hi")
     await submit(broker, job, ttl_s=60)
     handler = RecordingHandler()
     worker = consumer(broker, handler)

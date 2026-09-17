@@ -7,8 +7,9 @@ with `ainvoke`, as the CLI does, nothing is written. Call these only from inside
 from langgraph.config import get_stream_writer
 
 
-def progress(stage: str, detail: str) -> None:
-    get_stream_writer()({"event": "progress", "stage": stage, "detail": detail})
+def progress(stage: str, detail: str, name: str) -> None:
+    """A step of `stage`, done by the agent currently called `name`."""
+    get_stream_writer()({"event": "progress", "stage": stage, "detail": detail, "name": name})
 
 
 def notice(text: str) -> None:

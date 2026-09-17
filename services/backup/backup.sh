@@ -70,9 +70,9 @@ dump() {
   storage="/backups/anythingllm-$stamp.tar.gz"
   partials="$db.partial $storage.partial"
 
+  [ -f /anythingllm/anythingllm.db ] || { echo "backup: /anythingllm has no anythingllm.db" >&2; exit 1; }
   pg_dump --format=custom --file="$db.partial"
 
-  [ -f /anythingllm/anythingllm.db ] || { echo "backup: /anythingllm has no anythingllm.db" >&2; exit 1; }
   rm -rf -- "$SNAP" && mkdir -p -- "$SNAP"
   copy_db
   tar_storage "$storage.partial"

@@ -7,7 +7,8 @@ dependencies = [
     "langgraph-checkpoint-postgres",
     "langchain-core",
     "langchain-anthropic",
-    "langchain-openai",
+    # reasoning.py overrides a private ChatOpenAI hook; bump minors deliberately (#19)
+    "langchain-openai>=1.6.2,<1.7",
     "pydantic",
     "pydantic-settings",
     "psycopg[binary,pool]",
@@ -19,6 +20,8 @@ dependencies = [
     "uvicorn[standard]>=0.53.0",
     "redis>=8.1.0",
     "httpx2>=2.13.0",
+    "mcp>=1,<2",
+    "python-multipart>=0.0.20",
 ]
 
 [dependency-groups]
@@ -46,4 +49,5 @@ select = ["E", "F", "I", "UP", "B", "ARG"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = ["integration: needs a real database (just test-db); skipped otherwise"]
 pythonpath = ["."]

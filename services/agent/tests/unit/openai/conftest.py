@@ -23,45 +23,46 @@ def broker():
 
 
 class FakeThreads:
-    """`src.db.queries.threads`, in memory."""
+    """`src.db.queries.threads`, in memory: rows keyed by (user, id), as the table is."""
 
     def __init__(self) -> None:
-        self.owners: dict[str, str] = {}
-        self.aliases: dict[str, tuple[str, str]] = {}
+        self.threads: set[tuple[str, str]] = set()
+        self.aliases: dict[tuple[str, str], str] = {}
 
-    async def create(self, _pool, thread_id, user_id, _client):
-        if thread_id in self.owners:
+    async def create(self, _pool, user_id, thread_id, _client):
+        if (user_id, thread_id) in self.threads:
             return False
-        self.owners[thread_id] = user_id
+        self.threads.add((user_id, thread_id))
         return True
 
-    async def owner(self, _pool, thread_id):
-        return self.owners.get(thread_id)
-
     async def find_aliases(self, _pool, user_id, alias_hashes):
-        found = {alias: self.aliases.get(alias, (None, None)) for alias in alias_hashes}
-        return {alias: thread for alias, (thread, owner) in found.items() if owner == user_id}
+        found = {alias: self.aliases.get((user_id, alias)) for alias in alias_hashes}
+        return {alias: thread for alias, thread in found.items() if thread is not None}
 
     async def add_aliases(self, _pool, user_id, thread_id, alias_hashes):
         for alias in alias_hashes:
-            self.aliases.setdefault(alias, (thread_id, user_id))
+            self.aliases.setdefault((user_id, alias), thread_id)
 
 
 @pytest.fixture
 def db(monkeypatch) -> FakeThreads:
     fake = FakeThreads()
-    for name in ("create", "owner", "find_aliases", "add_aliases"):
+    for name in ("create", "find_aliases", "add_aliases"):
         monkeypatch.setattr(threads.threads, name, getattr(fake, name))
     return fake
 
 
 @contextlib.asynccontextmanager
-async def client_for(broker, **overrides):
+async def client_for(broker, user="mat", **overrides):
+    """An API client whose requests carry the gateway's user header (none when `user` is None)."""
     app = create_app(with_lifespan=False)
     app.state.settings = settings(**{"API_MAX_WAIT_S": 5, **overrides})
     app.state.broker, app.state.pool = broker, None
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
-    async with httpx.AsyncClient(transport=transport, base_url="http://api") as http:
+    headers = {} if user is None else {"X-Lauretta-User": user}
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://api", headers=headers
+    ) as http:
         yield http
 
 
@@ -116,7 +117,7 @@ def body(*texts: str, stream_: bool = True, **extra: Any) -> dict[str, Any]:
     """A request whose messages alternate user and assistant, starting with the user."""
     roles = ["user", "assistant"]
     messages = [{"role": roles[i % 2], "content": t} for i, t in enumerate(texts)]
-    return {"model": "lauretta", "messages": messages, "stream": stream_, **extra}
+    return {"model": "lauretta-mat", "messages": messages, "stream": stream_, **extra}
 
 
 def chunks(text: str) -> list[Any]:

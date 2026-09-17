@@ -3,11 +3,10 @@
 from typing import Annotated
 
 from langchain_core.tools import InjectedToolCallId
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.graph.outputs import Advice, Review, StockStory
 from src.memory.topics import Topic
-from src.persona.soul import SOUL_MAX_CHARS
 
 
 class ToolArgs(BaseModel):
@@ -53,48 +52,6 @@ class SetHoldingArgs(TickerArgs):
 
 class ForgetArgs(ToolArgs):
     memory_id: str = Field(description="The id of a memory from recall that is wrong or outdated.")
-
-
-class FieldUpdateArgs(ToolArgs):
-    @model_validator(mode="after")
-    def _sets_something(self) -> "FieldUpdateArgs":
-        if all(value is None for value in self.model_dump().values()):
-            raise ValueError("pass at least one field to set")
-        return self
-
-
-class SetIdentityArgs(FieldUpdateArgs):
-    name: str | None = Field(
-        default=None, min_length=1, description="The name the investor chose for you."
-    )
-    emoji: str | None = Field(default=None, min_length=1, max_length=8)
-    vibe: str | None = Field(
-        default=None, min_length=1, max_length=200, description="Your manner in a few words."
-    )
-
-
-class SetUserDetailsArgs(FieldUpdateArgs):
-    name: str | None = Field(default=None, min_length=1, description="Their name.")
-    preferred_name: str | None = Field(
-        default=None, min_length=1, description='What they want to be called, e.g. "Your Grace".'
-    )
-    city: str | None = Field(default=None, min_length=1, description="The city they live in.")
-    country: str | None = Field(default=None, min_length=1, description="The country they live in.")
-    currency: str | None = Field(
-        default=None, min_length=3, max_length=3, description='ISO code, e.g. "GBP".'
-    )
-    timezone: str | None = Field(
-        default=None, min_length=1, description='IANA name, e.g. "Europe/London".'
-    )
-
-
-class ProposeSoulArgs(ToolArgs):
-    content: str = Field(
-        min_length=1,
-        max_length=SOUL_MAX_CHARS,
-        description="The full new soul text (persona, voice, boundaries), not a diff.",
-    )
-    reason: str = Field(min_length=1, description="Why, in one sentence, in the investor's terms.")
 
 
 class SubmitStoryArgs(StockStory):

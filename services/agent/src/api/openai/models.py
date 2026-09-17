@@ -1,6 +1,6 @@
 """What an OpenAI Chat Completions client sends, and the errors it understands.
 
-Clients send more than the court uses (temperature, max_tokens, their own system prompt and
+Clients send more than the desk uses (temperature, max_tokens, their own system prompt and
 history); extra fields are accepted and ignored.
 """
 
@@ -11,8 +11,15 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-# The Director: the only model this API serves.
-MODEL = "lauretta"
+from src.prompts import errors as wording
+
+# The desk, one model per user: `lauretta-mat`, `lauretta-max`. AnythingLLM sends no user, so each
+# person's workspace chats with their own model, and the gateway names the user from it.
+MODEL_PREFIX = "lauretta-"
+
+
+def model_for(user_id: str) -> str:
+    return MODEL_PREFIX + user_id
 
 
 class OpenAIError(Exception):
@@ -78,7 +85,7 @@ class ChatRequest(BaseModel):
         if last.role != "user" or not last.text().strip():
             raise OpenAIError(
                 400,
-                "the last message must be the user's, with text",
+                wording.LAST_MESSAGE_NOT_USER,
                 "invalid_last_message",
                 param="messages",
             )
@@ -91,7 +98,7 @@ class ChatRequest(BaseModel):
         if not first.strip():
             raise OpenAIError(
                 400,
-                "the first user message must have text",
+                wording.FIRST_MESSAGE_EMPTY,
                 "invalid_first_message",
                 param="messages",
             )
@@ -118,9 +125,11 @@ async def chat_request(request: Request) -> ChatRequest:
         parsed = ChatRequest.model_validate(body)
     except ValueError as exc:
         if not isinstance(exc, ValidationError):
-            raise OpenAIError(400, "the body is not valid JSON", "invalid_json") from exc
+            raise OpenAIError(400, wording.BODY_NOT_JSON, "invalid_json") from exc
         fields = ", ".join(".".join(str(p) for p in e["loc"]) or "body" for e in exc.errors())
-        raise OpenAIError(400, f"invalid request fields: {fields}", "invalid_request") from exc
+        raise OpenAIError(
+            400, wording.INVALID_FIELDS.format(fields=fields), "invalid_request"
+        ) from exc
     if parsed.model_extra:
         logger.bind(fields=sorted(parsed.model_extra)).debug("openai.fields_ignored")
     return parsed

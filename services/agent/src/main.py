@@ -1,4 +1,8 @@
-"""Entrypoint: `chat` talks to the assistant; `research TICKER` runs the team once."""
+"""Entrypoint: `chat` talks to the assistant; `research TICKER` runs the team once.
+
+Both act for `--user` (default: the owner, the first of ALLOWED_USERS), through the same
+runtime context and thread keys as the worker, so the CLI and the API share a user's threads.
+"""
 
 import argparse
 import asyncio
@@ -11,16 +15,20 @@ from loguru import logger
 
 from src.app import App, open_app
 from src.errors import AgentError
+from src.graph.ctx import Ctx
+from src.prompts import notes
+from src.queue import keys
 from src.report import render_report
 from src.settings import Settings
 
 REPORTS_DIR = Path(__file__).resolve().parents[3] / "reports"
 
 
-async def chat(app: App, thread: str) -> None:
-    config = {"configurable": {"thread_id": thread}}
-    await app.record_signals({"channel": "cli"}, "cli")
-    print(f"chatting on thread {thread!r}; ctrl-d to quit")
+async def chat(app: App, user: str, thread: str) -> None:
+    config = {"configurable": {"thread_id": keys.thread(user, thread)}}
+    context = Ctx(user_id=user)
+    await app.record_signals(user, {"channel": "cli"}, "cli")
+    print(notes.CLI_CHATTING.format(thread=thread))
     while True:
         try:
             text = (await asyncio.to_thread(input, "you> ")).strip()
@@ -30,31 +38,36 @@ async def chat(app: App, thread: str) -> None:
         if not text:
             continue
         try:
-            final = await app.chat.ainvoke({"messages": [HumanMessage(text)]}, config)
+            final = await app.chat.ainvoke(
+                {"messages": [HumanMessage(text)]}, config, context=context
+            )
         except Exception as exc:
             # The thread stays usable: unanswered tool calls are repaired on the next turn.
-            logger.exception("chat turn failed")
-            print(f"\nassistant> [turn failed: {type(exc).__name__}; see the log above]\n")
+            logger.exception("cli.turn_failed")
+            print(
+                notes.CLI_REPLY.format(reply=notes.CLI_TURN_FAILED.format(error=type(exc).__name__))
+            )
             continue
-        print(f"\nassistant> {final['messages'][-1].text}\n")
+        print(notes.CLI_REPLY.format(reply=final["messages"][-1].text))
 
 
-async def research(app: App, ticker: str) -> None:
-    print(f"researching {ticker.upper()}: analyst, checker, advisor (a minute or two)...")
-    final = await app.research(ticker)
+async def research(app: App, user: str, ticker: str) -> None:
+    print(notes.CLI_RESEARCHING.format(ticker=ticker.upper()))
+    final = await app.research(ticker, Ctx(user_id=user))
     report = render_report(final)
     REPORTS_DIR.mkdir(exist_ok=True)
     path = REPORTS_DIR / f"{final['ticker']}-{date.today().isoformat()}.md"
     path.write_text(report)
     print(report)
-    print(f"saved to {path}")
+    print(notes.CLI_SAVED.format(path=path))
 
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--user", help=notes.CLI_USER_HELP)
     commands = parser.add_subparsers(dest="command", required=True)
     chat_command = commands.add_parser("chat")
-    chat_command.add_argument("--thread", default="main", help="conversation to continue")
+    chat_command.add_argument("--thread", default="main", help=notes.CLI_THREAD_HELP)
     research_command = commands.add_parser("research")
     research_command.add_argument("ticker")
     args = parser.parse_args()
@@ -62,12 +75,15 @@ async def main() -> None:
     settings = Settings()
     logger.remove()
     logger.add(sys.stderr, level=settings.LOG_LEVEL)
+    user = args.user or settings.owner()
+    if user not in settings.allowed_users():
+        sys.exit(notes.CLI_UNKNOWN_USER.format(user=user))
     try:
         async with open_app(settings) as app:
             if args.command == "chat":
-                await chat(app, args.thread)
+                await chat(app, user, args.thread)
             else:
-                await research(app, args.ticker)
+                await research(app, user, args.ticker)
     except AgentError as exc:
         sys.exit(f"{exc.code}: {exc.message}")
 

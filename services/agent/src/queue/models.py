@@ -1,9 +1,10 @@
 """The job payload on the queue and the events a job publishes, as JSON on both sides.
 
-Events, in the order a client may see them: `progress`, `tool`, `token`, `message_end` (text
-before a tool call is complete), `reset` (discard the partial message), `notice`, and last
-`done` or `error`. The API alone sends `timeout` when a stream reaches its cap; it is never
-stored, and the job carries on.
+Events, in the order a client may see them: `progress`, `tool`, `reasoning` (the assistant
+model's own thinking, never part of the reply), `token`, `message_end` (text before a tool call
+is complete), `reset` (discard the partial message), `notice`, and last `done` or `error`. The
+API alone sends `timeout` when a stream reaches its cap; it is never stored, and the job
+carries on.
 """
 
 from datetime import UTC, datetime
@@ -11,6 +12,8 @@ from typing import Any, ClassVar, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from src.prompts import errors as wording
 
 JobKind = Literal["chat", "research"]
 
@@ -34,17 +37,21 @@ class JobRequest(BaseModel):
     @model_validator(mode="after")
     def _fields_match_kind(self) -> "JobRequest":
         if self.kind == "chat" and (self.message is None or self.ticker is not None):
-            raise ValueError("a chat job needs a message and no ticker")
+            raise ValueError(wording.CHAT_JOB_FIELDS)
         if self.kind == "research" and (self.ticker is None or self.message is not None):
-            raise ValueError("a research job needs a ticker and no message")
+            raise ValueError(wording.RESEARCH_JOB_FIELDS)
         return self
 
 
 class Job(JobRequest):
-    """A request as queued: with its id and who sent it."""
+    """A request as queued: with its id, the user it acts for and the app that sent it. `user` is
+    set by the API from the gateway's header, never from the request body (which forbids it)."""
 
+    user: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,31}$")
     job_id: str = Field(default_factory=lambda: uuid4().hex)
     client: ClientInfo = ClientInfo()
+    # How the user reached the desk, recorded as their `channel` signal; set by the API.
+    channel: Literal["api", "voice"] = "api"
     submitted_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
@@ -59,10 +66,19 @@ class Token(Event):
     text: str
 
 
+class Reasoning(Event):
+    """The assistant model's reasoning as it streams, before or between its answer tokens."""
+
+    type = "reasoning"
+    text: str
+
+
 class Progress(Event):
     type = "progress"
     stage: str
     detail: str
+    # The agent's current name; older events have none and show the default.
+    name: str | None = None
 
 
 class Tool(Event):

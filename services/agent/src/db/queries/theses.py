@@ -19,6 +19,7 @@ async def save(
 ) -> str:
     (saved,) = await rows(
         pool,
+        user_id,
         """INSERT INTO theses (user_id, ticker, story, review, advice, revisions)
            VALUES (%s, %s, %s, %s, %s, %s) RETURNING id::text""",
         (user_id, ticker.upper(), Jsonb(story), Jsonb(review), Jsonb(advice), revisions),
@@ -29,6 +30,7 @@ async def save(
 async def latest(pool: AsyncConnectionPool, user_id: str, ticker: str) -> dict[str, Any] | None:
     found = await rows(
         pool,
+        user_id,
         """SELECT ticker, story, review, advice, revisions, created_at::date::text AS created
            FROM theses WHERE user_id = %s AND ticker = %s
            ORDER BY created_at DESC LIMIT 1""",
@@ -41,6 +43,7 @@ async def recent(pool: AsyncConnectionPool, user_id: str, limit: int) -> list[di
     """The newest thesis per ticker: its date, action and verdict, newest first."""
     return await rows(
         pool,
+        user_id,
         """SELECT * FROM (
              SELECT DISTINCT ON (ticker) ticker, created_at::date::text AS created,
                     advice->>'action' AS action, review->>'verdict' AS verdict, created_at

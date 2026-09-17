@@ -1,4 +1,4 @@
-"""The hashes that tie a stateless chat request to the court's threads and jobs.
+"""The hashes that tie a stateless chat request to the desk's threads and jobs.
 
 - `request_key`: the user, the thread header and every message but the system prompt. An SDK
   retry sends the same body, so it names the same key; a real repeat carries a longer or slid
@@ -40,7 +40,7 @@ def header_thread(user_id: str, header: str) -> str:
 
 
 def answer_text(answer: str) -> str:
-    """The answer as the court sent it: without stored reasoning blocks or outer whitespace."""
+    """The answer as the desk sent it: without stored reasoning blocks or outer whitespace."""
     return _THINK.sub("", answer).strip()
 
 

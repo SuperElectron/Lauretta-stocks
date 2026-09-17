@@ -1,8 +1,9 @@
 """Soul proposals: the investor decides by an exact phrase, and code applies it, never the model.
 
 The chat graph checks each new investor message with `parse_decision`, applies it with `decide`
-before the model runs, and tells the model what happened in a `<soul_change>` block. After a
-turn that proposed a change, `proposal_notice` is appended to the reply for the investor.
+before the model runs, and tells the model what happened in a `<soul_change>` block. The reply
+then ends with code-written text for the investor: `decision_notice` saying what the decision did,
+and `proposal_notice` for each change proposed in the turn.
 """
 
 import json
@@ -14,16 +15,21 @@ from langchain_core.messages import AnyMessage, HumanMessage, ToolMessage
 from psycopg_pool import AsyncConnectionPool
 
 from src.db.queries import soul as queries
+from src.prompts.assistant import SOUL_CHANGE
+from src.prompts.notes import SOUL_DECISION, SOUL_PROPOSAL
 
 # The id shown to the investor: long enough not to collide within one investor's proposals.
 SHORT_ID_CHARS = 8
 # An old proposal was written against a soul and a conversation that may have moved on.
 PROPOSAL_MAX_AGE = timedelta(days=7)
+# Proposals waiting for a decision; another is refused until the investor decides one.
+MAX_PENDING_PROPOSALS = 3
 PROPOSE_TOOL = "propose_soul_change"
 
 Verb = Literal["approve", "reject"]
 
-_DECISION = re.compile(r"(approve|reject) soul ([0-9a-f]{4,36})")
+# The short id shown, or more of the id up to the whole uuid, dashes included.
+_DECISION = re.compile(r"(approve|reject) soul ([0-9a-f][0-9a-f-]{3,35})")
 
 
 def parse_decision(text: str) -> tuple[Verb, str] | None:
@@ -46,43 +52,43 @@ def judge(found: list[dict[str, Any]], now: datetime) -> str:
     return "ok"
 
 
+def _formatted(templates: dict[str, str], decision: dict[str, Any]) -> str:
+    template = templates.get(decision["outcome"], templates["other"])
+    return template.format(**decision, days=PROPOSAL_MAX_AGE.days)
+
+
 def soul_change_block(verb: Verb, short_id: str, outcome: str, reason: str | None = None) -> str:
-    if outcome == "approved":
-        text = f"approved {short_id}: {reason}. The new soul is active from this reply."
-    elif outcome == "rejected":
-        text = f"rejected {short_id}: {reason}. The soul is unchanged."
-    elif outcome == "unknown":
-        text = f"no soul proposal {short_id} exists; nothing changed. Tell the investor."
-    elif outcome == "ambiguous":
-        text = f"{short_id} matches more than one proposal; nothing changed. Ask for the full id."
-    elif outcome == "expired":
-        text = (
-            f"proposal {short_id} is older than {PROPOSAL_MAX_AGE.days} days and expired; "
-            "nothing changed. Offer to propose it again."
-        )
-    else:
-        text = (
-            f"could not {verb} {short_id}: proposal {outcome}; nothing changed. Tell the investor."
-        )
-    return f"<soul_change>{text}</soul_change>"
+    decision = {"verb": verb, "short_id": short_id, "outcome": outcome, "reason": reason}
+    return f"<soul_change>{_formatted(SOUL_CHANGE, decision)}</soul_change>"
 
 
-async def decide(pool: AsyncConnectionPool, user_id: str, verb: Verb, short_id: str) -> str:
-    """Applies or rejects the proposal; returns the `<soul_change>` block saying what happened."""
+def decision_notice(decision: dict[str, Any]) -> str:
+    """What the investor sees under the reply to their decision, whatever the model says. Pure,
+    beside `proposal_notice`."""
+    return _formatted(SOUL_DECISION, decision)
+
+
+async def decide(
+    pool: AsyncConnectionPool, user_id: str, verb: Verb, short_id: str
+) -> dict[str, Any]:
+    """Applies or rejects the proposal. Returns what happened: verb, short_id, outcome (approved,
+    rejected, stale, unknown, ambiguous, expired or already <status>) and the proposal's reason."""
     found = await queries.matching(pool, user_id, short_id)
     verdict = judge(found, datetime.now(UTC))
+    decision = {"verb": verb, "short_id": short_id, "outcome": verdict, "reason": None}
     if verdict != "ok":
-        return soul_change_block(verb, short_id, verdict)
+        return decision
     proposal = found[0]
+    decision["reason"] = proposal["reason"]
     if verb == "approve":
-        await queries.approve(pool, user_id, proposal["id"])
-        return soul_change_block(verb, short_id, "approved", proposal["reason"])
+        applied = await queries.approve(pool, user_id, proposal["id"])
+        return {**decision, "outcome": "approved" if applied else "stale"}
     await queries.reject(pool, user_id, proposal["id"])
-    return soul_change_block(verb, short_id, "rejected", proposal["reason"])
+    return {**decision, "outcome": "rejected"}
 
 
 def proposals_in_turn(messages: list[AnyMessage]) -> list[dict[str, Any]]:
-    """The soul proposals that succeeded since the investor's latest message, oldest first."""
+    """The soul proposals stored since the investor's latest message, oldest first."""
     proposals = []
     for message in reversed(messages):
         if isinstance(message, HumanMessage):
@@ -92,16 +98,14 @@ def proposals_in_turn(messages: list[AnyMessage]) -> list[dict[str, Any]]:
             and message.name == PROPOSE_TOOL
             and message.status != "error"
         ):
-            proposals.append(json.loads(message.text))
+            result = json.loads(message.text)
+            if result.get("proposed"):
+                proposals.append(result)
     return proposals[::-1]
 
 
 def proposal_notice(proposal: dict[str, Any]) -> str:
     """What the investor sees under the reply. Pure, so a streaming API can send it as an event."""
-    short_id = proposal["proposal_id"]
-    return (
-        f"---\nProposed change to my soul (id {short_id})\n"
-        f"Reason: {proposal['reason']}\n\n"
-        f"Proposed text:\n\n{proposal['content']}\n\n"
-        f"Reply `approve soul {short_id}` to apply it, or `reject soul {short_id}` to discard it."
+    return SOUL_PROPOSAL.format(
+        short_id=proposal["proposal_id"], reason=proposal["reason"], content=proposal["content"]
     )

@@ -4,6 +4,7 @@ from langchain_core.tools import BaseTool
 from psycopg_pool import AsyncConnectionPool
 
 from src.data.sec import SecClient
+from src.db.queries import memories
 from src.memory.embedder import Embedder
 from src.tools.filings import build_get_financials, build_get_recent_filings
 from src.tools.market import build_get_market_snapshot, build_get_news, build_get_upcoming_events
@@ -12,6 +13,7 @@ from src.tools.persona import (
     build_propose_soul_change,
     build_set_identity,
     build_set_user_details,
+    build_skip_setup_step,
 )
 from src.tools.portfolio import build_get_portfolio, build_remove_holding, build_set_holding
 from src.tools.research import RunResearch, build_get_thesis, build_research_stock
@@ -37,29 +39,33 @@ def checker_tools(sec: SecClient) -> list[BaseTool]:
     return [*research_tools(sec), build_submit_review()]
 
 
-def advisor_tools(pool: AsyncConnectionPool, embedder: Embedder, user_id: str) -> list[BaseTool]:
+def advisor_tools(pool: AsyncConnectionPool, embedder: Embedder) -> list[BaseTool]:
+    """Scoped to the run's user through its context, like the assistant's. Recall reaches the
+    investor's memories only: the Strategist sees no profile beyond its `<user>` block."""
     return [
-        build_get_portfolio(pool, user_id),
+        build_get_portfolio(pool),
         build_get_market_snapshot(),
-        build_recall(pool, embedder, user_id),
+        build_recall(pool, embedder, memories.MEMORIES),
         build_submit_advice(),
     ]
 
 
 def assistant_tools(
-    pool: AsyncConnectionPool, embedder: Embedder, user_id: str, run_research: RunResearch
+    pool: AsyncConnectionPool, embedder: Embedder, run_research: RunResearch
 ) -> list[BaseTool]:
+    """No tool takes a user: each reads it from the run's context (`graph/ctx.py`)."""
     return [
-        build_remember(pool, embedder, user_id),
-        build_recall(pool, embedder, user_id),
-        build_forget(pool, user_id),
-        build_set_holding(pool, user_id),
-        build_remove_holding(pool, user_id),
-        build_get_portfolio(pool, user_id),
+        build_remember(pool, embedder),
+        build_recall(pool, embedder),
+        build_forget(pool),
+        build_set_holding(pool),
+        build_remove_holding(pool),
+        build_get_portfolio(pool),
         build_get_market_snapshot(),
         build_research_stock(run_research),
-        build_get_thesis(pool, user_id),
-        build_set_identity(pool, embedder, user_id),
-        build_set_user_details(pool, embedder, user_id),
-        build_propose_soul_change(pool, embedder, user_id),
+        build_get_thesis(pool),
+        build_set_identity(pool, embedder),
+        build_set_user_details(pool, embedder),
+        build_skip_setup_step(pool, embedder),
+        build_propose_soul_change(pool, embedder),
     ]

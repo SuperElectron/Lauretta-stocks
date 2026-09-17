@@ -1,0 +1,47 @@
+# The database integration tests (row-level security as `lauretta_app`), in a throwaway project
+# of their own: `just test-db` runs them and removes everything, volume included. The database
+# is built from services/db/init like the stack's, never published, and its passwords are fixed
+# test values that guard nothing else.
+name: lauretta-rlstest
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.6-pg17
+    environment:
+      POSTGRES_USER: owner
+      POSTGRES_PASSWORD: owner-test
+      POSTGRES_DB: rlstest
+      DB_APP_PASSWORD: app-test
+      DB_MIGRATOR_PASSWORD: migrator-test
+    volumes:
+      - ./services/db/init:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U owner -d rlstest"]
+      interval: 2s
+      retries: 30
+
+  tests:
+    # The agent's Python and uv, as in services/agent/Dockerfile; the code is mounted, not copied.
+    build:
+      context: ./services/agent
+      dockerfile_inline: |
+        FROM python:3.13.15-slim
+        COPY --from=ghcr.io/astral-sh/uv:0.11.21 /uv /usr/local/bin/uv
+    image: lauretta-rlstest-tests:latest
+    working_dir: /agent
+    environment:
+      RLS_TEST_OWNER_URL: postgresql://owner:owner-test@db:5432/rlstest
+      RLS_TEST_APP_URL: postgresql://lauretta_app:app-test@db:5432/rlstest
+      RLS_TEST_SETUP_URL: postgresql://lauretta_migrator:migrator-test@db:5432/rlstest
+      UV_PROJECT_ENVIRONMENT: /venv
+      UV_LINK_MODE: copy
+      UV_PYTHON_DOWNLOADS: never
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - ./services/agent:/agent:ro
+    command: ["uv", "run", "--frozen", "pytest", "-q", "-p", "no:cacheprovider", "-m", "integration", "tests/integration"]
+    depends_on:
+      db:
+        condition: service_healthy

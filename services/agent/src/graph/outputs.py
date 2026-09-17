@@ -44,7 +44,7 @@ class Review(Output):
     )
     missing_information: list[str]
     required_changes: list[str] = Field(
-        description="Concrete instructions for the analyst. Empty when the verdict is approve."
+        description="Concrete instructions for the Analyst. Empty when the verdict is approve."
     )
 
 

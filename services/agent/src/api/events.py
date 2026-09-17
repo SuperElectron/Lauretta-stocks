@@ -16,13 +16,14 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from src.api.deps import BrokerDep, JobId, JobStatusDep, SettingsDep
+from src.prompts import errors as wording
 from src.queue import events, keys
 from src.queue.models import TERMINAL, Timeout
 
 router = APIRouter()
 STREAM_TIMEOUT = Timeout(
     code="STREAM_TIMEOUT",
-    message="this stream reached its time limit; the job carries on, reconnect to follow it",
+    message=wording.STREAM_TIMEOUT,
 )
 
 
@@ -30,7 +31,9 @@ def resume_after(last_event_id: Annotated[str | None, Header()] = None) -> str:
     if last_event_id is None:
         return keys.SCAN_START
     if not events.is_entry_id(last_event_id):
-        raise HTTPException(400, detail={"code": "BAD_LAST_EVENT_ID", "message": "not an event id"})
+        raise HTTPException(
+            400, detail={"code": "BAD_LAST_EVENT_ID", "message": wording.NOT_AN_EVENT_ID}
+        )
     return last_event_id
 
 

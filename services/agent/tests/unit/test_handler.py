@@ -36,7 +36,7 @@ def broker():
 
 
 def handler_for(broker, node=replies, signals=None, **overrides):
-    async def record_signals(values, source):
+    async def record_signals(_user, values, source):
         if signals is not None:
             signals.append((values, source))
 
@@ -50,7 +50,7 @@ async def events_of(broker, job_id):
 
 async def test_a_chat_job_publishes_done_records_signals_and_status(broker):
     signals = []
-    job = Job(kind="chat", message="hi", client=ClientInfo(client="phone"))
+    job = Job(user="mat", kind="chat", message="hi", client=ClientInfo(client="phone"))
     await handler_for(broker, signals=signals).run(job)
 
     assert (await events_of(broker, job.job_id))[-1] == (
@@ -74,7 +74,7 @@ async def test_errors_carry_a_code_and_never_the_internals(broker, error, expect
     async def fails(_state):
         raise error
 
-    job = Job(kind="chat", message="hi")
+    job = Job(user="mat", kind="chat", message="hi")
     await handler_for(broker, fails).run(job)
 
     published = await events_of(broker, job.job_id)
@@ -84,14 +84,14 @@ async def test_errors_carry_a_code_and_never_the_internals(broker, error, expect
 
 
 async def test_a_busy_thread_fails_the_job_thread_busy(broker):
-    await ThreadLock(broker, "main", 10_000, 100).acquire()
-    job = Job(kind="chat", message="hi")
+    await ThreadLock(broker, "mat", "main", 10_000, 100).acquire()
+    job = Job(user="mat", kind="chat", message="hi")
     await handler_for(broker).run(job)
     assert (await events_of(broker, job.job_id))[-1][1]["code"] == "THREAD_BUSY"
 
 
 async def test_a_finished_job_delivered_again_is_not_run_again(broker):
-    job = Job(kind="chat", message="hi")
+    job = Job(user="mat", kind="chat", message="hi")
     handler = handler_for(broker)
     await handler.run(job)
     await handler.run(job)
@@ -108,7 +108,7 @@ async def test_a_redelivered_partly_run_chat_job_fails_interrupted_and_is_not_re
         await asyncio.Event().wait()
 
     handler = handler_for(broker, hangs)
-    job = Job(kind="chat", message="hi")
+    job = Job(user="mat", kind="chat", message="hi")
     running = asyncio.create_task(handler.run(job))
     await started.wait()
     await events.publish(broker, job.job_id, Token(text="Hal"), 60)
@@ -125,11 +125,11 @@ async def test_a_redelivered_partly_run_chat_job_fails_interrupted_and_is_not_re
     ]
     status = await broker.hgetall(keys.job(job.job_id))
     assert (status["status"], status["error_code"]) == ("failed", "JOB_INTERRUPTED")
-    assert await broker.get("lock:thread:main") is None
+    assert await broker.get("lock:thread:mat:main") is None
 
 
 async def test_a_job_that_published_its_outcome_before_dying_is_only_marked(broker):
-    job = Job(kind="chat", message="hi")
+    job = Job(user="mat", kind="chat", message="hi")
     handler = handler_for(broker)
     await broker.hset(keys.job(job.job_id), mapping={"status": "running"})
     await events.publish(broker, job.job_id, Done(result={"reply": "Hello"}), 60)
@@ -141,7 +141,7 @@ async def test_a_job_that_published_its_outcome_before_dying_is_only_marked(brok
 
 
 async def test_a_dead_job_tells_the_client(broker):
-    job = Job(kind="chat", message="hi")
+    job = Job(user="mat", kind="chat", message="hi")
     await handler_for(broker).dead(job, "not finished in 3 deliveries")
     assert (await events_of(broker, job.job_id)) == [
         ("error", {"code": "JOB_ABANDONED", "message": "the job did not finish"})
