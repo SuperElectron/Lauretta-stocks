@@ -102,10 +102,11 @@ _TRUNCATED = {("finish_reason", "length"), ("stop_reason", "max_tokens")}
 def complete(reply: AIMessage) -> AIMessage:
     """The reply, or `ReplyTruncated` when the output limit cut it off (a half-written tool
     call would otherwise look like the model choosing to stop), or `EmptyReply` when it only
-    reasoned. The reasoning is dropped: it was streamed as it came, and is not the answer."""
+    reasoned. The reasoning was streamed as it came and is not the answer, so it is dropped,
+    except on a tool call: the model reads it again in the rest of this turn."""
     metadata = reply.response_metadata
     if any(metadata.get(key) == value for key, value in _TRUNCATED):
         raise ReplyTruncated
     if not reply.text and not reply.tool_calls and reasoning_text(reply):
         raise EmptyReply
-    return without_reasoning(reply)
+    return reply if reply.tool_calls else without_reasoning(reply)
