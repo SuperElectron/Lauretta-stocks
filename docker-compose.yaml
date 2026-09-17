@@ -27,9 +27,9 @@ volumes:
   tsstate:
   anythingllm:
 
-# The model key is a file mounted into the gateway; api and worker hold none.
+# The model key is a file mounted into the gateway and vllm; api and worker hold none.
 secrets:
-  # vLLM's API key: the vllm service reads it from the environment, the gateway from this file.
+  # vLLM's API key: vllm checks it, the gateway sends it.
   spark_vllm_api_key:
     environment: SPARK_VLLM_API_KEY
 
@@ -221,7 +221,18 @@ services:
   # change them together, never one alone. The image is pinned by digest for sm_121a / arm64.
   vllm:
     image: ghcr.io/timothystewart6/vllm-gb10@sha256:fa87aea586e02719aba804f76e0895d1f096e8c387573e7981e2681589b3b712
-    restart: unless-stopped
+    # Not unless-stopped: a load that keeps failing (say, out of memory) stops after three tries
+    # instead of reloading 65 GiB forever next to the Spark's other workloads.
+    restart: on-failure:3
+    # The key comes from the secret file, not the environment, so `docker inspect` never shows it.
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        key=$$(cat /run/secrets/spark_vllm_api_key) && [ -n "$$key" ]
+        || { echo "vllm: the key is empty; set SPARK_VLLM_API_KEY" >&2; exit 1; };
+        VLLM_API_KEY=$$key exec "$$@"
+      - vllm
     command:
       - vllm
       - serve
@@ -245,12 +256,14 @@ services:
       # Deterministic defaults; the checkpoint's generation_config is discarded.
       - --generation-config=vllm
       - --override-generation-config={"temperature":0,"top_p":1,"top_k":-1}
+    secrets:
+      - spark_vllm_api_key
     environment:
-      VLLM_API_KEY: ${SPARK_VLLM_API_KEY:?set SPARK_VLLM_API_KEY (random, e.g. openssl rand -hex 32)}
-    # The weights (~65 GiB) are already downloaded on the Spark; mounting the cache keeps a
-    # recreate from downloading them again.
+      # The weights (~65 GiB) must already be in the cache: a missing model fails at once rather
+      # than downloading for longer than the healthcheck allows.
+      HF_HUB_OFFLINE: "1"
     volumes:
-      - ~/.cache/huggingface:/root/.cache/huggingface
+      - ${HOME}/.cache/huggingface:/root/.cache/huggingface
     ipc: host
     # No nvidia runtime is registered with Docker on the Spark; its CDI spec is.
     deploy:

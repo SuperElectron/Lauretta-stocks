@@ -178,9 +178,14 @@ just backup             # a database dump now, into backups/ on the Spark
   offline `lauretta-host` device in the admin console.
 - **Model:** api and worker ask the gateway's internal `llm` port for `gpt-oss-120b`, which the
   `vllm` service serves on the Spark's GPU. vLLM sits on the private `llm` network with the
-  gateway alone and needs `SPARK_VLLM_API_KEY`. It takes about 9 minutes to load; the stack starts
-  meanwhile, and model calls fail until `vllm` is healthy. Its flags are a measured memory budget
-  shared with the Spark's other workloads (see the comments in `docker-compose.yaml`).
+  gateway alone and reads `SPARK_VLLM_API_KEY` from a secret file. The weights must already be in
+  the Spark's `~/.cache/huggingface` (it never downloads them). It takes about 9 minutes to load,
+  so a `just deploy` that creates or recreates `vllm` (the first one, or a change to its image or
+  flags) waits that long before it returns, and gives up after 20 minutes; the rest of the stack
+  is up meanwhile, and model calls fail until `vllm` is healthy. A load that keeps failing stops
+  after three tries rather than looping. Its flags are a measured memory budget shared with the
+  Spark's other workloads (see the comments in `docker-compose.yaml`), so two engines never fit:
+  `just deploy` refuses while the hand-started `vllm-gpt-oss-120b` container still runs.
 - **Backups:** the `backup` service dumps the database and tars AnythingLLM's storage when it
   starts and at 03:00 UTC into `backups/`, keeps the newest `BACKUP_KEEP` of each, and turns
   unhealthy after 26 hours without either. Restore with `pg_restore`, and untar the storage into

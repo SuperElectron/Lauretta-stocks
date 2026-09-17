@@ -44,8 +44,10 @@ test:
     cd services/agent && uv run pytest -q && uv run ruff check . && uv run ruff format --check .
 
 # spark: pull ref (pushed first) on the Spark, then build natively and start the stack.
+# Refuses while the hand-started vllm-gpt-oss-120b runs: two engines do not fit in the Spark's
+# memory, so stop and remove it first. Creating or recreating vllm waits about 9 minutes for it.
 deploy ref="main":
-    just _spark "cd {{ spark_dir }} && git fetch origin && git checkout {{ quote(ref) }} && git pull --ff-only origin {{ quote(ref) }} && docker compose up -d --build --wait"
+    just _spark "if docker ps -q --filter name=^vllm-gpt-oss-120b\$ | grep -q .; then echo 'vllm-gpt-oss-120b is running; stop and remove it before deploying (docker stop vllm-gpt-oss-120b && docker rm vllm-gpt-oss-120b)' >&2; exit 1; fi && cd {{ spark_dir }} && git fetch origin && git checkout {{ quote(ref) }} && git pull --ff-only origin {{ quote(ref) }} && docker compose up -d --build --wait --wait-timeout 1200"
 
 # spark: follow the stack's logs, or one service's.
 logs service="":
