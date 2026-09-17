@@ -147,7 +147,7 @@ async def test_check_research_answers_with_every_run_of_that_user(broker):
     assert [run["ticker"] for run in answer["runs"]] == ["MSFT"]
 
 
-async def test_the_cli_keeps_every_run_it_started(broker):  # noqa: ARG001
+async def test_the_cli_keeps_every_run_it_started():
     running = asyncio.Event()
 
     async def research(ticker, _context):
@@ -162,6 +162,7 @@ async def test_the_cli_keeps_every_run_it_started(broker):  # noqa: ARG001
 
     assert sorted(run["ticker"] for run in await runs.active("mat")) == ["BBB", "CCC"]
     running.set()
+    await runs.drain()
 
 
 async def test_the_cli_runs_research_in_its_own_process():
