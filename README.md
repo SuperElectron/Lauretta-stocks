@@ -54,7 +54,7 @@ just research MSFT      # put the whole desk on one stock
 - **Commands:** run `just` to list them all (`chat`, `research`, `up`, `down`, `test`, and `deploy`, `ps`, `logs`, `backup` for the Spark).
 - **Model:** Claude through the Anthropic API by default. The API key is billed separately from a
   Claude Pro subscription. Any OpenAI-compatible server also works (`AGENT_PROVIDER=openai`).
-- **Reports:** `just research` saves a one-page report to `reports/`.
+- **Reports:** `just research` prints a one-page report. Every thesis is saved in the database for its user; phones, web and MCP clients get it through chat or the API, and nothing is written to disk.
 - **First run:** downloads a small embedding model (about 70 MB) for memory search.
 - **Start fresh:** `just down clean=true` wipes memories, holdings and past research.
 - **The API:** for phones and other devices, `just broker`,
