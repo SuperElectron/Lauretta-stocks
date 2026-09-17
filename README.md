@@ -215,7 +215,15 @@ just backup             # a database dump now, into backups/ on the Spark
   copied from the owner's Mac at deploy). The service withdraws when the container stops and
   returns about 20 seconds after it starts. If the `tsstate` volume is ever wiped, delete the old,
   offline `lauretta-host` device in the admin console.
-- **Model:** api and worker ask the gateway's internal `llm` port for `gpt-oss-120b`, which the
+  - **Prerequisites on the tailnet** (all done): the Service `svc:lauretta` defined with
+    `tcp:443`, `autoApprovers` for `tag:lauretta`, and HTTPS certificates enabled. The container
+    advertises the Service itself on every start and is healthy only once it has (#45).
+  - `services/tailscale/serve.json` names the MagicDNS suffix `tailae2b1.ts.net`; renaming the
+    tailnet means editing it.
+  - After the first login the node lives in `tsstate`, so `TS_OAUTH_SECRET` is only needed again
+    if that volume is lost. It stays in the Spark's `.env` (compose requires it), readable with
+    `docker inspect`; it is scoped to `auth_keys` for `tag:lauretta` alone.
+- **Model:** the worker asks the gateway's internal `llm` port for `gpt-oss-120b`, which the
   `vllm` service serves on the Spark's GPU. vLLM sits on the private `llm` network with the
   gateway alone and reads `SPARK_VLLM_API_KEY` from a secret file. The weights must already be in
   the Spark's `~/.cache/huggingface` (it never downloads them). It takes about 9 minutes to load,
