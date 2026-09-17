@@ -22,7 +22,7 @@ router = APIRouter()
 
 
 def accepted(job_id: str) -> JSONResponse:
-    body = {"job_id": job_id, "status": "queued", "events_url": f"/v1/jobs/{job_id}/events"}
+    body = {"job_id": job_id, "status": keys.QUEUED, "events_url": f"/v1/jobs/{job_id}/events"}
     return JSONResponse(body, status_code=202)
 
 
@@ -31,9 +31,9 @@ async def outcome(broker: Redis, job_id: str, wait_s: int) -> dict[str, Any] | N
     deadline = asyncio.get_running_loop().time() + wait_s
     async for event in events.read(broker, job_id, deadline=deadline):
         if event.type == "done":
-            return {"job_id": job_id, "status": "done", **json.loads(event.data)}
+            return {"job_id": job_id, "status": keys.DONE, **json.loads(event.data)}
         if event.type == "error":
-            return {"job_id": job_id, "status": "failed", "error": json.loads(event.data)}
+            return {"job_id": job_id, "status": keys.FAILED, "error": json.loads(event.data)}
     return None
 
 
