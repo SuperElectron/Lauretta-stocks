@@ -205,7 +205,7 @@ async def test_research_streams_each_stage_then_returns_the_saved_thesis():
     result = await run_research(build_pipeline(None, "friend", team, 1), "msft", events)
 
     assert [data for _, data in events] == [
-        {"stage": "analyst", "detail": "pulling the filings"},
+        {"stage": "analyst", "detail": "drafting the story"},
         {"stage": "checker", "detail": "re-checking the numbers"},
         {"stage": "checker", "detail": "verdict: revise"},
         {"stage": "analyst", "detail": "redrafting (revision 1)"},

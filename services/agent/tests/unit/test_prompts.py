@@ -1,32 +1,31 @@
 """All wording lives in `src/prompts`: its templates format as documented, and no prompt-like
 text grows back anywhere else."""
 
-import ast
 from pathlib import Path
 from string import Formatter
 
 import pytest
 
-from src.prompts import analyst, assistant, blocks, notes, pm, progress, report, risk
+from src.memory.keys import KEYS
+from src.prompts import analyst, assistant, blocks, errors, notes, pm, progress, report, risk
+from src.prompts.facts import SENTENCES
+from tests.unit.wording import wording
 
 SRC = Path(__file__).resolve().parents[2] / "src"
-# A string this long with a space in it, or text over several lines, reads as wording rather
-# than an identifier or a key. Stricter than it needs to be on purpose.
-MIN_CHARS = 40
-# Text that is not persona wording: SQL and Lua, tool descriptions and tool results (which
-# LangChain and the model read beside the tool), and settings and API validation.
-ALLOWED = (
-    "prompts/",
-    "db/queries/",
-    "queue/lock.py",
-    "tools/",
-    "graph/outputs.py",
-    "settings.py",
-    "queue/models.py",
-    "api/events.py",
-    "api/openai/models.py",
-    "api/openai/routes.py",
-)
+# `file:symbol` (top-level def, class or assignment) whose strings are not wording, and why.
+ALLOWED = {
+    "api/app.py:create_app": "the FastAPI app title, a product name",
+    "api/openai/stream.py:DONE_FRAME": "the SSE end-of-stream frame, protocol",
+    "graph/render.py:_today": "a strftime pattern",
+    "memory/embedder.py:Embedder": "the startup probe text, embedded and never shown",
+    "persona/approval.py:_DECISION": "the approval phrase regex; the phrase is shown from notes",
+    "queue/lock.py:_REFRESH": "Lua for the thread lock",
+    "queue/lock.py:_RELEASE": "Lua for the thread lock",
+    "settings.py:Settings": "settings validation, read by the operator at startup",
+    "tools/submit.py:build_submit_stock_story": "a tool description, kept with its tool",
+    "tools/submit.py:build_submit_review": "a tool description, kept with its tool",
+    "tools/submit.py:build_submit_advice": "a tool description, kept with its tool",
+}
 
 
 def fields(template: str) -> set[str]:
@@ -56,6 +55,12 @@ def fields(template: str) -> set[str]:
         (blocks.INVESTOR_LINE, {"topic", "content", "created", "id"}),
         (blocks.THESIS_LINE, {"ticker", "action", "verdict", "created"}),
         (report.TARGET_WEIGHT, {"weight"}),
+        (errors.NO_RESEARCH, {"ticker"}),
+        (errors.NO_SUCH_MODEL, {"model"}),
+        (errors.INVALID_FIELDS, {"fields"}),
+        (errors.EMBEDDER_DIMS, {"model", "dims", "expected"}),
+        (errors.DEAD_UNFINISHED, {"deliveries"}),
+        (errors.ROLE_STOPPED, {"role"}),
     ],
 )
 def test_templates_take_exactly_their_fields(template, expected):
@@ -68,34 +73,59 @@ def test_every_outcome_and_tool_line_formats():
     assert all(fields(line) == {"name"} for line in progress.TOOL.values())
 
 
+def test_each_fact_sentence_takes_one_value_and_every_key_has_one():
+    assert set(SENTENCES) == set(KEYS)
+    assert all(sentence.count("{}") == 1 for sentence in SENTENCES.values())
+
+
 def test_stage_instructions_have_no_fields():
     assert all(not fields(text) for text in assistant.STAGE_INSTRUCTION.values())
 
 
-def _wording(path: Path) -> list[str]:
-    tree = ast.parse(path.read_text())
-    docstrings = {
-        id(node.body[0].value)
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef)
-        and node.body
-        and isinstance(node.body[0], ast.Expr)
-    }
-    return [
-        f"{path.relative_to(SRC)}:{node.lineno}: {node.value[:60]!r}"
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Constant)
-        and isinstance(node.value, str)
-        and id(node) not in docstrings
-        and ((len(node.value) >= MIN_CHARS and " " in node.value) or "\n" in node.value.strip())
-    ]
-
-
-def test_no_prompt_text_outside_the_prompts_package():
-    found = [
-        line
-        for path in sorted(SRC.rglob("*.py"))
-        if not str(path.relative_to(SRC)).startswith(ALLOWED)
-        for line in _wording(path)
-    ]
+def test_no_wording_outside_the_prompts_package():
+    found = []
+    for path in sorted(SRC.rglob("*.py")):
+        name = str(path.relative_to(SRC))
+        if name.startswith("prompts/"):
+            continue
+        for line, symbol, text in wording(path.read_text(), sql=name.startswith("db/queries/")):
+            if f"{name}:{symbol}" not in ALLOWED:
+                found.append(f"{name}:{line} ({symbol}): {text[:60]!r}")
     assert found == [], "move this wording into src/prompts:\n" + "\n".join(found)
+
+
+def test_every_allowlist_entry_still_matches_something():
+    used = set()
+    for path in sorted(SRC.rglob("*.py")):
+        name = str(path.relative_to(SRC))
+        used.update(f"{name}:{symbol}" for _, symbol, _ in wording(path.read_text()))
+    assert set(ALLOWED) <= used
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        'note = f"The court could not answer: {x}."',
+        'emit.progress("analyst", "grand entrance incoming now")',
+        'emit.progress("analyst", f"on {x}")',
+        'raise OpenAIError(404, "no such thing", "not_found")',
+        'raise HTTPException(404, detail={"code": "X", "message": f"none for {t}"})',
+        'label = "a short label"',
+    ],
+)
+def test_the_guard_flags_wording(source):
+    assert wording(source)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        'emit.progress("analyst", detail)',
+        'raise OpenAIError(400, wording.BODY_NOT_JSON, "invalid_json")',
+        'logger.bind(job_id=job_id).info("job.done")',
+        'x: str = Field(description="What the model reads about this argument.")',
+        'raise PersonaInvalid(wording.X.format(keys=", ".join(wrong)))',
+    ],
+)
+def test_the_guard_ignores_code(source):
+    assert wording(source) == []

@@ -81,7 +81,7 @@ No new app to learn: any chat app with a Generic OpenAI provider can reach the d
   Apps that can send `X-Thread-Id` may name their own.
 - **What is heard:** only the latest message. The app's own system prompt, attached documents
   and resent history are ignored; the desk keeps its own record.
-- **What is shown:** the team's comings and goings ("Analyst pulling the filings…", "Risk re-checking the numbers…") arrive as
+- **What is shown:** the team's comings and goings ("Analyst drafting the story…", "Risk re-checking the numbers…") arrive as
   reasoning, which most apps fold into a thought block; the answer arrives token by token.
 - **Patience:** an app that retries a request within 15 minutes, as the OpenAI SDKs do, rejoins
   the answer already under way; no research is run twice. Once an answer has been delivered, or

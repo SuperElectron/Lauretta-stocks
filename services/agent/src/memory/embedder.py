@@ -5,6 +5,7 @@ import asyncio
 from fastembed import TextEmbedding
 
 from src.errors import EmbedderMismatch
+from src.prompts import errors as wording
 
 
 class Embedder:
@@ -19,12 +20,14 @@ class Embedder:
         probe = await self.embed("dimension probe")
         if len(probe) != self._dims:
             raise EmbedderMismatch(
-                f"{self._model_name} returns {len(probe)}-dim vectors but EMBED_DIMS={self._dims}"
+                wording.EMBEDDER_DIMS.format(
+                    model=self._model_name, dims=len(probe), expected=self._dims
+                )
             )
 
     async def embed(self, text: str) -> list[float]:
         if self._model is None:
-            raise RuntimeError("Embedder.start() was not awaited")
+            raise RuntimeError(wording.EMBEDDER_NOT_STARTED)
         model = self._model
         vector = await asyncio.to_thread(lambda: next(iter(model.embed([text]))))
         return [float(value) for value in vector]

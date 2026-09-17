@@ -1,4 +1,4 @@
-# Lauretta Stocks: the research court as a stack.
+# Lauretta Stocks: the research desk as a stack.
 #
 #   tailnet https://lauretta.tailae2b1.ts.net -> tailscale -> gateway :18400 -> api :8000 (/v1, /healthz)
 #                                                              gateway :18400 -> anythingllm :3001 (/)
@@ -134,7 +134,7 @@ services:
       retries: 3
       start_period: 60s
 
-  # The web app at / (and the Android app's pairing server). Its chat model is the court itself:
+  # The web app at / (and the Android app's pairing server). Its chat model is the desk itself:
   # the Generic OpenAI provider calls the gateway's /v1 with the API key, like any other client.
   # It reaches the gateway only when a chat is sent, so it does not depend on it (no cycle).
   anythingllm:

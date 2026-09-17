@@ -34,10 +34,12 @@ async def chat(app: App, thread: str) -> None:
             final = await app.chat.ainvoke({"messages": [HumanMessage(text)]}, config)
         except Exception as exc:
             # The thread stays usable: unanswered tool calls are repaired on the next turn.
-            logger.exception("chat turn failed")
-            print(f"\nassistant> {notes.CLI_TURN_FAILED.format(error=type(exc).__name__)}\n")
+            logger.exception("cli.turn_failed")
+            print(
+                notes.CLI_REPLY.format(reply=notes.CLI_TURN_FAILED.format(error=type(exc).__name__))
+            )
             continue
-        print(f"\nassistant> {final['messages'][-1].text}\n")
+        print(notes.CLI_REPLY.format(reply=final["messages"][-1].text))
 
 
 async def research(app: App, ticker: str) -> None:
@@ -55,7 +57,7 @@ async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     chat_command = commands.add_parser("chat")
-    chat_command.add_argument("--thread", default="main", help="conversation to continue")
+    chat_command.add_argument("--thread", default="main", help=notes.CLI_THREAD_HELP)
     research_command = commands.add_parser("research")
     research_command.add_argument("ticker")
     args = parser.parse_args()

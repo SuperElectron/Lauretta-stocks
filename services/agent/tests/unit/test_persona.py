@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -54,10 +55,15 @@ def test_defaults_leave_both_names_unset_and_stored_facts_win():
 
 
 COURT = re.compile(
-    r"royal|court|inspector|privy|counsellor|chamberlain|sovereign|excellency|treasury|"
-    r"grand entrance|sayings|director",
+    r"\b(royal|court|inspector|privy|counsellor|chamberlain|sovereign|excellency|treasury|"
+    r"grand entrance|sayings|director)\b",
     re.IGNORECASE,
 )
+ROOT = Path(__file__).resolve().parents[4]
+# The compose network keeps its name: renaming it would recreate the networks.
+NETWORK = re.compile(r"`court`|\bcourt:|\[court\b|\bcourt\]")
+# The owner's intro paragraph at the top of the README stays word for word.
+README_INTRO = range(3, 6)
 
 
 def test_no_court_theme_in_the_assistant_prompt_or_the_notes():
@@ -69,6 +75,19 @@ def test_no_court_theme_in_the_assistant_prompt_or_the_notes():
     notes = [*TITLES.values(), TIMED_OUT, WAITING, error[0].delta["content"]]
     assert not [note for note in notes if COURT.search(note)]
     assert set(TITLES.values()) >= {"Analyst", "Risk", "PM"}
+
+
+def test_no_court_theme_in_the_wording_readme_or_compose():
+    files = [*sorted((ROOT / "services/agent/src/prompts").glob("*.py")), ROOT / "README.md"]
+    files.append(ROOT / "docker-compose.yaml")
+    hits = [
+        f"{path.name}:{number}: {line.strip()}"
+        for path in files
+        for number, line in enumerate(path.read_text().splitlines(), start=1)
+        if not (path.name == "README.md" and number in README_INTRO)
+        and COURT.search(NETWORK.sub("", line))
+    ]
+    assert hits == []
 
 
 def test_advisor_user_block_has_no_nickname():

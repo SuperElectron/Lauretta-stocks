@@ -13,7 +13,7 @@ TITLES = {
 LINE = "{title} {detail}…"
 
 ASSISTANT_WORKING = "working it"
-ANALYST_DRAFTING = "pulling the filings"
+ANALYST_DRAFTING = "drafting the story"
 ANALYST_REDRAFTING = "redrafting (revision {revision})"
 RISK_CHECKING = "re-checking the numbers"
 RISK_VERDICT = "verdict: {verdict}"

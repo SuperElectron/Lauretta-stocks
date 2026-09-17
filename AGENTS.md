@@ -42,9 +42,11 @@ Paths below are relative to `services/`.
 
 - `agent/src/prompts/`: all prompts and user-facing wording live here, and nowhere else: rules,
   default soul and desk lines, identity defaults, each agent's system prompt (`assistant`,
-  `analyst`, `risk`, `pm`), block empty states, progress labels, client notes and the report.
+  `analyst`, `risk`, `pm`), block empty states, progress labels, client notes, error text
+  (`errors`), tool notes (`tools`), fact sentences (`facts`) and the report. It imports nothing.
   Templates use `str.format` fields; `tests/unit/test_prompts.py` checks their fields and fails
-  on wording found elsewhere. Tool descriptions stay as docstrings on the tools.
+  on wording found elsewhere (explicit `file:symbol` allowlist, each with a reason). Tool
+  descriptions stay as docstrings and `Field` descriptions on the tools.
 - `agent/src/graph/render.py`: stitches each system prompt from that wording: a head, then data
   blocks (`<investor>`, `<holdings>`, `<unknown>`, `<draft>`, `<review>`), then the stage.
 - `agent/src/tools/`: one `build_*` factory per tool; argument schemas in `tools/models.py`.

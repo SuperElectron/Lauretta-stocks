@@ -8,6 +8,7 @@ from psycopg_pool import AsyncConnectionPool
 from src.data import market
 from src.db.queries import holdings
 from src.errors import UpstreamUnavailable
+from src.prompts import tools as wording
 from src.tools.market import unavailable
 from src.tools.models import SetHoldingArgs, TickerArgs
 
@@ -27,7 +28,7 @@ def valued(positions: list[dict[str, Any]], prices: dict[str, float | None]) -> 
         "positions": sorted(rows, key=lambda row: row["value"] or 0, reverse=True),
         "total_value": round(total, 2),
         "unpriced": [row["ticker"] for row in rows if row["value"] is None],
-        "note": "Values are in each listing's own currency; weights assume one currency.",
+        "note": wording.MIXED_CURRENCIES,
     }
 
 
@@ -39,7 +40,7 @@ def build_get_portfolio(pool: AsyncConnectionPool, user_id: str) -> BaseTool:
         """
         positions = await holdings.all_of(pool, user_id)
         if not positions:
-            return {"positions": [], "total_value": 0, "note": "No holdings recorded yet."}
+            return {"positions": [], "total_value": 0, "note": wording.NO_HOLDINGS}
         try:
             prices = await market.prices([p["ticker"] for p in positions])
         except UpstreamUnavailable as exc:

@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.graph.outputs import Advice, Review, StockStory
 from src.memory.topics import Topic
+from src.prompts import tools as wording
 from src.prompts.soul import SOUL_MAX_CHARS
 
 
@@ -59,7 +60,7 @@ class FieldUpdateArgs(ToolArgs):
     @model_validator(mode="after")
     def _sets_something(self) -> "FieldUpdateArgs":
         if all(value is None for value in self.model_dump().values()):
-            raise ValueError("pass at least one field to set")
+            raise ValueError(wording.NOTHING_TO_SET)
         return self
 
 

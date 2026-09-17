@@ -32,7 +32,7 @@ confidence: {confidence}
 |---|---|---|---|
 {snapshot}
 
-## Risk
+## Risk review
 {summary}
 
 **Weaknesses**
