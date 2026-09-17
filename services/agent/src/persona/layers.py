@@ -1,23 +1,19 @@
 """The persona as prompt blocks: soul, identity, user profile and signals, built from facts rows.
 
-Rules are not here: they are code (`persona/rules.py`) and render before all of these.
+Rules are not here: they are code (`prompts/rules.py`) and render before all of these. The
+wording (defaults, empty states) lives in `src/prompts`.
 """
 
 from dataclasses import dataclass
 from typing import Any
 
 from src.memory.keys import keys_of
-from src.persona.soul import DEFAULT_SOUL
+from src.prompts import blocks
+from src.prompts import identity as naming
+from src.prompts.soul import DEFAULT_SOUL
 
 Fields = dict[str, str | None]
 
-# What the assistant is before the investor says otherwise. The name is never defaulted.
-IDENTITY_DEFAULTS: Fields = {
-    "bot_name": None,
-    "bot_emoji": None,
-    "bot_vibe": "a sharp desk trader: direct, candid, professional",
-    "tts_voice": None,
-}
 # Shown to the assistant; tts_voice is reserved for the voice channel.
 IDENTITY_SHOWN = ("bot_name", "bot_emoji", "bot_vibe")
 USER_KEYS = keys_of("profile")
@@ -36,7 +32,7 @@ class Persona:
 
 def build_persona(found: list[dict[str, Any]]) -> Persona:
     """The persona from active facts rows, defaults filling whatever was never set."""
-    identity = dict(IDENTITY_DEFAULTS)
+    identity = dict(naming.IDENTITY_DEFAULTS)
     user: Fields = dict.fromkeys(USER_KEYS)
     signals: dict[str, tuple[str, str]] = {}
     soul = DEFAULT_SOUL
@@ -53,13 +49,16 @@ def build_persona(found: list[dict[str, Any]]) -> Persona:
 
 
 def render_fields(tag: str, values: Fields, keys: tuple[str, ...]) -> str:
-    lines = [f"{key}: {values.get(key) or 'not set'}" for key in keys]
+    lines = [f"{key}: {values.get(key) or blocks.NOT_SET}" for key in keys]
     return f"<{tag}>\n" + "\n".join(lines) + f"\n</{tag}>"
 
 
 def render_signals(signals: dict[str, tuple[str, str]]) -> str:
-    lines = [f"{key}: {value} (since {since})" for key, (value, since) in sorted(signals.items())]
-    return "<signals>\n" + ("\n".join(lines) or "none") + "\n</signals>"
+    lines = [
+        blocks.SIGNAL_LINE.format(key=key, value=value, since=since)
+        for key, (value, since) in sorted(signals.items())
+    ]
+    return "<signals>\n" + ("\n".join(lines) or blocks.NO_SIGNALS) + "\n</signals>"
 
 
 def render_persona(persona: Persona) -> str:
@@ -78,7 +77,7 @@ def unnamed(persona: Persona) -> list[str]:
     """What is missing before the assistant and the investor know what to call each other."""
     missing = []
     if not persona.identity.get("bot_name"):
-        missing.append("what the investor wants to call you")
+        missing.append(naming.UNNAMED_BOT)
     if not persona.user.get("preferred_name"):
-        missing.append("what to call the investor")
+        missing.append(naming.UNNAMED_USER)
     return missing

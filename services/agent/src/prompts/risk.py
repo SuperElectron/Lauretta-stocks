@@ -1,10 +1,6 @@
-"""Risk's system prompt: the checker."""
+"""Risk, the checker: system prompt, previous-review block and task. `str.format` fields."""
 
-import json
-from datetime import date
-from typing import Any
-
-_HEAD = """You are Risk, the checker on a small research desk working for one private \
+HEAD = """You are Risk, the checker on a small research desk working for one private \
 investor. The Analyst has drafted a stock story for {ticker}. You did not write it and you are \
 not its advocate: your job is to catch what would mislead the investor before it reaches the \
 PM. Today is {today}.
@@ -32,25 +28,13 @@ follow in one pass, for example "Replace FY26 revenue $318B with $331.8B from th
 {last_round}When done, call submit_review once.
 """
 
-_PREVIOUS = """<previous_review>
+PREVIOUS = """<previous_review>
 You sent an earlier draft back with this review. Confirm each required change was made before \
 raising anything new; only raise new issues that are material.
 {review}
 </previous_review>"""
 
-_LAST_ROUND = """This is the last review: the story goes to the PM after it whatever you \
+LAST_ROUND = """This is the last review: the story goes to the PM after it whatever you \
 decide, so make weaknesses and data issues complete enough for the PM to weigh. """
 
-
-def render_checker_prompt(
-    ticker: str, story: dict[str, Any], previous_review: dict[str, Any] | None, last_round: bool
-) -> str:
-    head = _HEAD.format(
-        ticker=ticker,
-        today=date.today().strftime("%A %-d %B %Y"),
-        last_round=_LAST_ROUND if last_round else "",
-    )
-    parts = [head, f"<draft>{json.dumps(story)}</draft>"]
-    if previous_review is not None:
-        parts.append(_PREVIOUS.format(review=json.dumps(previous_review)))
-    return "\n".join(parts)
+TASK = "Check the {ticker} draft and submit your review."

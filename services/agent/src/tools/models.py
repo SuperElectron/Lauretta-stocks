@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.graph.outputs import Advice, Review, StockStory
 from src.memory.topics import Topic
-from src.persona.soul import SOUL_MAX_CHARS
+from src.prompts.soul import SOUL_MAX_CHARS
 
 
 class ToolArgs(BaseModel):
@@ -76,7 +76,7 @@ class SetIdentityArgs(FieldUpdateArgs):
 class SetUserDetailsArgs(FieldUpdateArgs):
     name: str | None = Field(default=None, min_length=1, description="Their name.")
     preferred_name: str | None = Field(
-        default=None, min_length=1, description='What they want to be called, e.g. "Your Grace".'
+        default=None, min_length=1, description='What they want to be called, e.g. "Boss".'
     )
     city: str | None = Field(default=None, min_length=1, description="The city they live in.")
     country: str | None = Field(default=None, min_length=1, description="The country they live in.")

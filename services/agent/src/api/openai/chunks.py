@@ -19,17 +19,7 @@ Anything else is not part of the contract and maps to nothing.
 from dataclasses import dataclass, replace
 from typing import Any
 
-# The desk's names for the stages a job reports progress from.
-TITLES = {
-    "assistant": "Desk",
-    "analyst": "Analyst",
-    "checker": "Risk",
-    "advisor": "PM",
-    "save": "Desk",
-}
-RETRYING = "\n\n_(retrying…)_\n\n"
-STILL_WORKING = "Still working the trade. Give it a minute, then ask for the result."
-TIMED_OUT = f"_({STILL_WORKING})_"
+from src.prompts import notes, progress
 
 
 @dataclass(frozen=True)
@@ -48,12 +38,7 @@ class State:
 
 ROLE = Part({"role": "assistant"})
 # Sent at once when the turn is queued behind another on its thread, before the lock is free.
-WAITING = Part(
-    {
-        "reasoning_content": "Waiting on the desk to finish your last request; if it is still "
-        "busy after half a minute, send again once it has answered.\n"
-    }
-)
+WAITING = Part({"reasoning_content": notes.WAITING})
 # Clients built on the OpenAI SDKs ignore SSE comments, so a quiet stream sends this instead.
 KEEPALIVE = Part({"reasoning_content": ""})
 
@@ -71,28 +56,26 @@ def map_event(state: State, event: str, data: dict[str, Any]) -> tuple[list[Part
     if event == "token":
         return _content(state, data["text"])
     if event == "progress":
-        who = TITLES.get(data["stage"], data["stage"].capitalize())
-        return _reasoning(f"{who} {data['detail']}…"), state
+        title = progress.TITLES.get(data["stage"], data["stage"].capitalize())
+        return _reasoning(progress.LINE.format(title=title, detail=data["detail"])), state
     if event == "tool":
         name = data["name"].replace("_", " ")
-        line = {"started": f"Consulting {name}…", "done": f"{name} answered."}.get(
-            data["status"], f"{name} failed."
-        )
+        line = progress.TOOL.get(data["status"], progress.TOOL["error"]).format(name=name)
         return _reasoning(line[0].upper() + line[1:]), state
     if event == "message_end":
         return _content(state, "\n\n")
     if event == "reset":
-        return _content(state, RETRYING) if state.content_sent else ([], state)
+        return _content(state, notes.RETRYING) if state.content_sent else ([], state)
     if event == "notice":
         return _content(state, ("\n\n" if state.content_sent else "") + data["text"] + "\n\n")
     if event == "done":
         return [Part({}, "stop")], replace(state, finished=True)
     if event == "error":
-        note = f"The desk could not answer: {data['message']}."
+        note = notes.ERROR.format(message=data["message"])
         prefix = "\n\n" if state.content_sent else ""
         error = {"message": note, "type": "server_error", "code": data["code"]}
         return [Part({"content": prefix + note}, "stop", error)], replace(state, finished=True)
     if event == "timeout":
-        note = ("\n\n" if state.content_sent else "") + TIMED_OUT
+        note = ("\n\n" if state.content_sent else "") + notes.TIMED_OUT
         return [Part({"content": note}, "stop")], replace(state, finished=True)
     return [], state

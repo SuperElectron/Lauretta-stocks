@@ -1,10 +1,6 @@
-"""The Analyst's system prompt."""
+"""The Analyst: system prompt, revision block and task. Placeholders are `str.format` fields."""
 
-import json
-from datetime import date
-from typing import Any
-
-_HEAD = """You are the Analyst on a small research desk working for one private investor. \
+HEAD = """You are the Analyst on a small research desk working for one private investor. \
 Build a testable stock story for {ticker}: what the business is, what could move it, what the \
 market may be missing, a dated event that will test it, and what would prove it wrong. You \
 research and write; Risk (the checker) will re-verify your work and the PM (the advisor) will \
@@ -35,7 +31,7 @@ Example market gap: Consensus prices capex as a permanent margin drag, but depre
 2024-25 builds peaks in FY27 while cloud pricing has held.
 """
 
-_REVISION = """<revision>
+REVISION = """<revision>
 Risk sent your draft back. Fix every required change, re-pull any figure it disputes, \
 and submit a complete story again.
 <draft>{story}</draft>
@@ -43,20 +39,4 @@ and submit a complete story again.
 <data_issues>{issues}</data_issues>
 </revision>"""
 
-
-def render_analyst_prompt(ticker: str, investor: str, previous: dict[str, Any] | None) -> str:
-    """The head, what we know of the investor for relevance, and the revision if there is one.
-
-    `previous` is the last story and its review, or None on the first draft.
-    """
-    parts = [_HEAD.format(ticker=ticker, today=date.today().strftime("%A %-d %B %Y")), investor]
-    if previous is not None:
-        review = previous["review"]
-        parts.append(
-            _REVISION.format(
-                story=json.dumps(previous["story"]),
-                changes=json.dumps(review["required_changes"]),
-                issues=json.dumps(review["data_issues"]),
-            )
-        )
-    return "\n".join(parts)
+TASK = "Research {ticker} and submit the stock story."

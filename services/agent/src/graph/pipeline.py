@@ -1,4 +1,4 @@
-"""The research team: analyst drafts, checker reviews (and may send it back), advisor suggests."""
+"""The research desk: the Analyst drafts, Risk checks (and may send it back), the PM suggests."""
 
 from dataclasses import dataclass
 
@@ -9,11 +9,13 @@ from psycopg_pool import AsyncConnectionPool
 from src.db.queries import theses
 from src.graph import emit
 from src.graph.context import advisor_user_block, investor_blocks
-from src.graph.prompts.advisor import render_advisor_prompt
-from src.graph.prompts.analyst import render_analyst_prompt
-from src.graph.prompts.checker import render_checker_prompt
+from src.graph.render import render_advisor_prompt, render_analyst_prompt, render_checker_prompt
 from src.graph.role import Role
 from src.graph.state import PipelineState
+from src.prompts import analyst as analyst_text
+from src.prompts import pm as pm_text
+from src.prompts import progress
+from src.prompts import risk as risk_text
 
 
 @dataclass(frozen=True)
@@ -44,20 +46,20 @@ def build_pipeline(
         redraft = state.get("story") is not None
         previous = {"story": state["story"], "review": state["review"]} if redraft else None
         revision = state["revisions"] + 1
-        detail = f"redrafting (revision {revision})" if redraft else "pulling the filings"
-        emit.progress("analyst", detail)
+        detail = progress.ANALYST_REDRAFTING.format(revision=revision)
+        emit.progress("analyst", detail if redraft else progress.ANALYST_DRAFTING)
         prompt = render_analyst_prompt(ticker, state["investor"], previous)
-        story = await team.analyst(prompt, f"Research {ticker} and submit the stock story.")
+        story = await team.analyst(prompt, analyst_text.TASK.format(ticker=ticker))
         return {"story": story, "revisions": state["revisions"] + (1 if redraft else 0)}
 
     async def checker(state: PipelineState) -> dict[str, object]:
         ticker = state["ticker"]
         last_round = state["revisions"] >= max_revisions
         previous = state.get("review") if state["revisions"] else None
-        emit.progress("checker", "re-checking the numbers")
+        emit.progress("checker", progress.RISK_CHECKING)
         prompt = render_checker_prompt(ticker, state["story"], previous, last_round)
-        review = await team.checker(prompt, f"Check the {ticker} draft and submit your review.")
-        emit.progress("checker", f"verdict: {review['verdict']}")
+        review = await team.checker(prompt, risk_text.TASK.format(ticker=ticker))
+        emit.progress("checker", progress.RISK_VERDICT.format(verdict=review["verdict"]))
         return {"review": review}
 
     def after_checker(state: PipelineState) -> str:
@@ -65,7 +67,7 @@ def build_pipeline(
 
     async def advisor(state: PipelineState) -> dict[str, object]:
         ticker = state["ticker"]
-        emit.progress("advisor", "sizing it against your book")
+        emit.progress("advisor", progress.PM_SIZING)
         prompt = render_advisor_prompt(
             ticker,
             state["user"],
@@ -74,7 +76,7 @@ def build_pipeline(
             state["story"],
             state["review"],
         )
-        advice = await team.advisor(prompt, f"Advise on {ticker} and submit your suggestion.")
+        advice = await team.advisor(prompt, pm_text.TASK.format(ticker=ticker))
         return {"advice": advice}
 
     async def save(state: PipelineState) -> dict[str, object]:
@@ -82,7 +84,7 @@ def build_pipeline(
             pool, user_id, state["ticker"], state["story"], state["review"],
             state["advice"], state["revisions"],
         )  # fmt: skip
-        emit.progress("save", "saving the thesis")
+        emit.progress("save", progress.SAVING)
         return {"thesis_id": thesis_id}
 
     graph = StateGraph(PipelineState)

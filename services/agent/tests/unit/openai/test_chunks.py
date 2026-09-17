@@ -1,6 +1,7 @@
 import pytest
 
-from src.api.openai.chunks import RETRYING, TIMED_OUT, Part, State, map_event
+from src.api.openai.chunks import Part, State, map_event
+from src.prompts.notes import RETRYING, TIMED_OUT
 
 FRESH = State()
 STARTED = State(content_sent=True)

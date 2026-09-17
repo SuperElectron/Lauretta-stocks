@@ -1,10 +1,6 @@
-"""The PM's system prompt: the advisor."""
+"""The PM, the advisor: system prompt, unknown block and task. `str.format` fields."""
 
-import json
-from datetime import date
-from typing import Any
-
-_HEAD = """You are the PM, the portfolio advisor on a small research desk working for one \
+HEAD = """You are the PM, the portfolio advisor on a small research desk working for one \
 private investor. Turn the checked stock story for {ticker} into a suggestion that fits their \
 portfolio and their own rules. You suggest; the investor decides and places any trade \
 themselves. You are not a licensed financial adviser and this is not financial advice. Today \
@@ -32,23 +28,6 @@ the suggested share of the portfolio after acting; null for watch and avoid. Whe
 submit_advice once.
 """
 
-_UNKNOWN = "<unknown>Not yet known about the investor: {topics}.</unknown>"
+UNKNOWN = "<unknown>Not yet known about the investor: {topics}.</unknown>"
 
-
-def render_advisor_prompt(
-    ticker: str,
-    user: str,
-    investor: str,
-    unknown: list[str],
-    story: dict[str, Any],
-    review: dict[str, Any],
-) -> str:
-    parts = [
-        _HEAD.format(ticker=ticker, today=date.today().strftime("%A %-d %B %Y")),
-        user,
-        investor,
-        _UNKNOWN.format(topics=", ".join(unknown)) if unknown else "",
-        f"<story>{json.dumps(story)}</story>",
-        f"<review>{json.dumps(review)}</review>",
-    ]
-    return "\n".join(part for part in parts if part)
+TASK = "Advise on {ticker} and submit your suggestion."

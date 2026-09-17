@@ -1,9 +1,9 @@
 """Which thread a chat app's request lands on, as AnythingLLM sends them."""
 
 from src.api.openai import digests
-from src.api.openai.chunks import TIMED_OUT
 from src.api.openai.models import ChatRequest
 from src.api.openai.threads import remember_answer
+from src.prompts.notes import TIMED_OUT
 from src.queue.models import Done, MessageEnd, Progress, Token, Tool
 from tests.unit.openai.conftest import body, chunks
 

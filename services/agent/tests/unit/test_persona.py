@@ -3,13 +3,16 @@ import re
 import pytest
 from pydantic import ValidationError
 
-from src.api.openai.chunks import TIMED_OUT, TITLES, WAITING, State, map_event
+from src.api.openai.chunks import State, map_event
 from src.errors import PersonaInvalid
-from src.graph.prompts.assistant import render_assistant_prompt
+from src.graph.render import render_assistant_prompt
 from src.graph.state import stage
 from src.memory.keys import KEYS, keys_of
 from src.persona.layers import build_persona, render_fields, render_persona, unnamed
-from src.persona.soul import DEFAULT_SOUL, SOUL_MAX_CHARS, check_soul
+from src.persona.soul import check_soul
+from src.prompts.notes import TIMED_OUT, WAITING
+from src.prompts.progress import TITLES
+from src.prompts.soul import DEFAULT_SOUL, SOUL_MAX_CHARS
 from src.tools.models import ProposeSoulArgs, SetIdentityArgs, SetUserDetailsArgs
 
 
@@ -63,8 +66,7 @@ def test_no_court_theme_in_the_assistant_prompt_or_the_notes():
         prompt = render_assistant_prompt(render_persona(persona), "", [], unnamed(persona), current)
         assert not COURT.search(prompt), COURT.search(prompt)
     error, _ = map_event(State(), "error", {"code": "X", "message": "busy"})
-    waiting = WAITING.delta["reasoning_content"]
-    notes = [*TITLES.values(), TIMED_OUT, waiting, error[0].delta["content"]]
+    notes = [*TITLES.values(), TIMED_OUT, WAITING, error[0].delta["content"]]
     assert not [note for note in notes if COURT.search(note)]
     assert set(TITLES.values()) >= {"Analyst", "Risk", "PM"}
 

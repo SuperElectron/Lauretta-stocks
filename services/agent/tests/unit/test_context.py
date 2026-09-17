@@ -1,7 +1,7 @@
 from src.data.market import trailing_returns
 from src.db.queries.memories import content_hash
 from src.graph.context import render_holdings, render_investor, unknown_topics
-from src.graph.prompts.assistant import render_assistant_prompt
+from src.graph.render import render_assistant_prompt
 from src.graph.state import stage
 from src.tools.portfolio import valued
 

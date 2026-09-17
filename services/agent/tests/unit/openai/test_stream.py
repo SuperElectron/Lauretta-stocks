@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from src.api.openai import stream, threads
-from src.api.openai.chunks import STILL_WORKING
+from src.prompts.notes import STILL_WORKING
 from src.queue import events, keys
 from src.queue.models import Done, Error, Notice, Progress, Token
 from tests.unit.openai.conftest import body, chunks, client_for, content

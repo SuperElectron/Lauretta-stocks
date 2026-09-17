@@ -19,11 +19,12 @@ from redis.asyncio import Redis
 from src.api.openai import settle
 from src.api.openai.chunks import KEEPALIVE, ROLE, WAITING, Part, State, map_event
 from src.api.openai.models import OpenAIError
+from src.prompts import notes
 from src.queue import events, keys
 
 KEEPALIVE_SECONDS = 15.0
 DONE_FRAME = "data: [DONE]\n\n"
-LOST = {"code": "JOB_LOST", "message": "its record expired before it finished; ask again"}
+LOST = {"code": "JOB_LOST", "message": notes.JOB_LOST}
 # A failed turn is not worth the SDK's automatic retry: it would fail the same way.
 NO_RETRY = {"x-should-retry": "false"}
 

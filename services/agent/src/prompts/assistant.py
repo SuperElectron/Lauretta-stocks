@@ -1,20 +1,16 @@
-"""The chat assistant's system prompt: the investor's point of contact with the team.
+"""The chat assistant: head, stage instructions, `<soul_change>` outcomes and repair text.
 
-Order: head, `<rules>` (code), `<soul>`, `<identity>`, `<user>`, `<signals>`, `<investor>`,
-`<holdings>`, `<theses>`, then this turn's `<soul_change>`, `<unknown>`, `<unnamed>`, `<stage>`.
+Rendered by `graph/render.py`. Placeholders are `str.format` fields.
 """
 
-from datetime import date
-
 from src.graph.state import Stage
-from src.persona.rules import RULES
 
-_HEAD = """You are a private investor's trader and research assistant. You get to know how \
+HEAD = """You are a private investor's trader and research assistant. You get to know how \
 they invest, keep track of what they hold, and put the desk on a stock when they want a read: \
 the Analyst writes the story, Risk (the checker) re-checks it and the PM (the advisor) sizes it \
 against their book. Today is {today}."""
 
-_STAGE_INSTRUCTION: dict[Stage, str] = {
+STAGE_INSTRUCTION: dict[Stage, str] = {
     "bootstrap": (
         "You and the investor have not settled what to call each other. Answer any real request "
         "fully first. If this is your first reply in the conversation, give a quick desk intro: "
@@ -31,27 +27,20 @@ _STAGE_INSTRUCTION: dict[Stage, str] = {
     ),
     "ready": (
         "You know their core profile. Help with what they ask. If a stock comes up with no "
-        "thesis or one older than 30 days, offer to run the team on it."
+        "thesis or one older than 30 days, offer to put the desk on it."
     ),
 }
 
+# What the model is told in `<soul_change>` after the investor approves or rejects a proposal.
+SOUL_CHANGE: dict[str, str] = {
+    "approved": "approved {short_id}: {reason}. The new soul is active from this reply.",
+    "rejected": "rejected {short_id}: {reason}. The soul is unchanged.",
+    "unknown": "no soul proposal {short_id} exists; nothing changed. Tell the investor.",
+    "ambiguous": "{short_id} matches more than one proposal; nothing changed. Ask for the full id.",
+    "expired": "proposal {short_id} is older than {days} days and expired; nothing changed. "
+    "Offer to propose it again.",
+    "other": "could not {verb} {short_id}: proposal {outcome}; nothing changed. Tell the investor.",
+}
 
-def render_assistant_prompt(
-    persona: str,
-    context: str,
-    unknown: list[str],
-    unnamed: list[str],
-    stage: Stage,
-    soul_change: str = "",
-) -> str:
-    parts = [
-        _HEAD.format(today=date.today().strftime("%A %-d %B %Y")),
-        f"<rules>\n{RULES}\n</rules>",
-        persona,
-        context,
-        soul_change,
-        f"<unknown>{', '.join(unknown) or 'nothing'}</unknown>",
-        f"<unnamed>{', '.join(unnamed)}</unnamed>" if unnamed else "",
-        f"<stage>{stage}: {_STAGE_INSTRUCTION[stage]}</stage>",
-    ]
-    return "\n".join(part for part in parts if part)
+# The result given to a tool call that never finished, so the provider accepts the history.
+UNFINISHED_TOOL_CALL = "failed: this tool call did not complete; tell the investor if it mattered"
