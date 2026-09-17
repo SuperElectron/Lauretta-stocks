@@ -415,8 +415,8 @@ services:
 
   # The tailnet's only way in: this node (lauretta-host, tag:lauretta) hosts the Tailscale Service
   # svc:lauretta, HTTPS on 443 at https://lauretta.tailae2b1.ts.net, proxied to the gateway
-  # (services/tailscale/serve.json). containerboot (v1.96+) advertises the Services in
-  # TS_SERVE_CONFIG itself. Funnel is off; the tailnet policy decides who may connect. Userspace
+  # (services/tailscale/serve.json). containerboot applies TS_SERVE_CONFIG but does not always
+  # advertise the Service on a fresh container (#45), so the entrypoint does. Funnel is off; the tailnet policy decides who may connect. Userspace
   # networking needs no capabilities or tun device: netstack accepts connections to Service IPs.
   # The Service withdraws when this container stops and returns about 20 s after it starts.
   tailscale:
@@ -446,7 +446,9 @@ services:
         trap 'kill -TERM $$pid; wait $$pid' TERM INT;
         until tailscale serve status --json 2>/dev/null | grep -q '"svc:lauretta"'; do
         kill -0 $$pid || exit 1; sleep 2; done;
-        tailscale serve advertise svc:lauretta && touch /tmp/advertised;
+        tailscale serve advertise svc:lauretta
+        || { echo "tailscale: could not advertise svc:lauretta" >&2; kill -TERM $$pid; exit 1; };
+        touch /tmp/advertised;
         wait $$pid
     volumes:
       - tsstate:/var/lib/tailscale
