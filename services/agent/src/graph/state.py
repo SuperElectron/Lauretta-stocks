@@ -41,8 +41,8 @@ class ChatState(MessagesState):
 
 
 def stage(unknown: list[str], unnamed: list[str]) -> Stage:
-    """Bootstrap until names are settled, then onboard until the core investor profile is known.
-    The model never decides this."""
+    """Bootstrap until the investor's name is known, then onboard until the core investor
+    profile is known. The model never decides this."""
     if unnamed:
         return "bootstrap"
     return "onboard" if unknown else "ready"

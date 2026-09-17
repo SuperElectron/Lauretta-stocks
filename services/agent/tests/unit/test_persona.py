@@ -37,10 +37,15 @@ def test_prompt_renders_layers_in_order():
     assert "channel: cli (since 2026-09-16)" in prompt
 
 
-def test_defaults_leave_both_names_unset_and_stored_facts_win():
+def test_default_name_is_the_director_and_stored_facts_win():
     default = build_persona([])
-    assert default.soul == DEFAULT_SOUL and default.identity["bot_name"] is None
-    assert unnamed(default) == ["what the investor wants to call you", "what to call the investor"]
+    assert default.soul == DEFAULT_SOUL and default.identity["bot_name"] == "the Director"
+    assert "bot_name: the Director" in render_persona(default)
+    # Only the investor's name is missing, so the stage waits on that alone.
+    assert unnamed(default) == ["what to call the investor"]
+    assert stage([], unnamed(default)) == "bootstrap"
+    named = build_persona([keyed("profile", "preferred_name", "Boss")])
+    assert unnamed(named) == [] and stage([], unnamed(named)) == "ready"
 
     stored = build_persona(
         [
@@ -56,7 +61,7 @@ def test_defaults_leave_both_names_unset_and_stored_facts_win():
 
 COURT = re.compile(
     r"\b(royal|court|inspector|privy|counsellor|chamberlain|sovereign|excellency|treasury|"
-    r"grand entrance|sayings|director)\b",
+    r"grand entrance|sayings)\b",
     re.IGNORECASE,
 )
 ROOT = Path(__file__).resolve().parents[4]
@@ -88,6 +93,14 @@ def test_no_court_theme_in_the_wording_readme_or_compose():
         and COURT.search(NETWORK.sub("", line))
     ]
     assert hits == []
+
+
+def test_bootstrap_intro_lists_the_desk_as_bullets():
+    persona = build_persona([])
+    prompt = render_assistant_prompt(render_persona(persona), "", [], unnamed(persona), "bootstrap")
+    for line in ("- **Analyst**:", "- **Risk**:", "- **PM**:", "the Director"):
+        assert line in prompt, line
+    assert "markdown bullets are fine" in prompt and "what should I call you?" in prompt
 
 
 def test_advisor_user_block_has_no_nickname():

@@ -7,7 +7,7 @@ court for the running of his financial empire.
 Behind it sits a trading desk straight from the bullpen: cool, direct and professional, always
 working for the best risk-adjusted outcome for the portfolio and blunt about the downside.
 
-- **The desk** (chat assistant) remembers the investor's preferences, their appetite for risk
+- **The Director** (the chat assistant, running the desk) remembers the investor's preferences, their appetite for risk
   and every holding in the book, leads with the call and then the why, and says plainly what
   would make it wrong.
 - **The Analyst** reads the filings and the market, then writes a stock story: what the company

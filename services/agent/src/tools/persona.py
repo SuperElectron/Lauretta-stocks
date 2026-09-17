@@ -16,8 +16,8 @@ def build_set_identity(pool: AsyncConnectionPool, embedder: Embedder, user_id: s
     async def set_identity(
         name: str | None = None, emoji: str | None = None, vibe: str | None = None
     ) -> dict[str, Any]:
-        """Set how you present yourself: your name, emoji or vibe. Only use a name the
-        investor chose or confirmed; you may offer options, but never invent one and save it.
+        """Set how you present yourself: your name, emoji or vibe. Keep your current name
+        unless the investor asks to rename you; only save a name they chose or confirmed.
         Fields you leave out stay as they are.
         """
         values = {"bot_name": name, "bot_emoji": emoji, "bot_vibe": vibe}
