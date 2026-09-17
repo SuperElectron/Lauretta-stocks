@@ -1,7 +1,8 @@
 """Each agent's system prompt, stitched from the wording in `src/prompts` and this run's blocks.
 
 Assistant order: head, `<rules>` (code), `<soul>`, `<identity>`, `<user>`, `<signals>`,
-`<investor>`, `<holdings>`, `<theses>`, then this turn's `<soul_change>`, `<setup>`, `<stage>`.
+`<investor>`, `<holdings>`, `<theses>`, `<conversation_summary>`, then this turn's `<soul_change>`,
+`<setup>`, `<stage>`.
 """
 
 import json
@@ -9,7 +10,7 @@ from datetime import date
 from typing import Any
 
 from src.graph.state import Opening, Stage
-from src.prompts import analyst, assistant, checker, strategist
+from src.prompts import analyst, assistant, checker, compaction, strategist
 from src.prompts.rules import RULES
 
 
@@ -25,6 +26,7 @@ def render_assistant_prompt(
     names: dict[str, str],
     soul_change: str = "",
     opening: Opening = "",
+    summary: str = "",
 ) -> str:
     """`setup` is the rendered `<setup>` block; `names` the desk's current names by key;
     `opening` adds the first-contact intro or the greeting to the stage."""
@@ -36,6 +38,7 @@ def render_assistant_prompt(
         f"<rules>\n{RULES}\n</rules>",
         persona,
         context,
+        compaction.BLOCK.format(summary=summary) if summary else "",
         soul_change,
         setup,
         f"<stage>{stage}: {instruction}</stage>",

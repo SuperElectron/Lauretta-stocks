@@ -41,6 +41,11 @@ research pipeline (LangGraph)                                                   
   is todo and the thread has no earlier reply; with the name known a new thread greets by name.
   Persona facts, memories and holdings are read once per turn or run (`context.load_known`); the
   pipeline builds the same setup from them for the Strategist's unknown core topics.
+- **Compaction** (`graph/compaction.py`, wording in `prompts/compaction.py`): after a reply,
+  once 20 messages have left the model's 40-message window, a silent flush saves the durable
+  facts the investor stated in them to memory (deduplicated), then a running summary of them is
+  stored in the checkpoint (`summary`, `summarized`) and shown as `<conversation_summary>`. No
+  message is ever deleted; a failed flush or summary logs an error and changes nothing.
 - **Stage** (`setup`/`ready`) is decided in code from `setup`, never by the model: `setup` while
   any step is still to do.
 - **Persona** (chat assistant only): `<rules>` (code, `prompts/rules.py`) then `<soul>`,

@@ -14,9 +14,10 @@ from langgraph.graph.state import CompiledStateGraph
 from src.data.sec import SecClient
 from src.db.checkpointer import build_checkpointer
 from src.db.pool import open_pool
-from src.db.queries import facts
+from src.db.queries import facts, memories
 from src.graph import toolsets
-from src.graph.chat import build_chat
+from src.graph.chat import HISTORY_MESSAGES, build_chat
+from src.graph.compaction import build_compact
 from src.graph.ctx import Ctx
 from src.graph.llm import build_model
 from src.graph.pipeline import Team, build_pipeline
@@ -71,7 +72,12 @@ async def open_app(settings: Settings) -> AsyncGenerator[App]:
             await facts.record_signals(pool, embedder, user_id, signals, source)
 
         tools = toolsets.assistant_tools(pool, embedder, run_research)
-        chat = build_chat(pool, checkpointer, tools, model, limit)
+
+        async def remember(user_id: str, topic: str, content: str) -> None:
+            await memories.add(pool, embedder, user_id, topic, content)
+
+        compact = build_compact(model, HISTORY_MESSAGES, remember)
+        chat = build_chat(pool, checkpointer, tools, model, limit, compact)
 
         async def signal_values(user_id: str) -> list[str]:
             return identifying_values(await facts.persona_rows(pool, user_id))
