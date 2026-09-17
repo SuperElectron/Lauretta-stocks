@@ -183,8 +183,12 @@ one-shot checkpoint `migrate`.
   own git worktree under `.claude/worktrees/`, named for what it is working on. Remove the
   worktree and stop the agent once its PR is merged.
 - **Branches:** branch off `staging`, one feature per branch, merged into `staging` by pull
-  request. `main` only receives `staging` once every issue in a phase is merged, reviewed and
-  deployed successfully.
+  request. `main` only receives `staging`, and only once every issue in a phase is merged,
+  reviewed and deployed successfully. `main` is protected on GitHub: no direct pushes (admins
+  included), no force pushes, no deletion, changes only by pull request. GitHub cannot enforce
+  which branch a pull request comes from, so "only from `staging`" is ours to keep.
+- **No CI and no Dependabot:** nothing runs on GitHub. Tests run locally (`just test`) and
+  image and package bumps are made by hand.
 - **Review:** every pull request gets a full code review, by a separate reviewer from the author,
   before it merges. Merging `staging` into `main` needs a full review of the phase.
 - **Testing:** write unit tests that match the issue's outcomes. `just test` must pass before
