@@ -41,12 +41,34 @@ def sse(deltas: list[dict[str, Any]], finish: str = "stop") -> bytes:
     return ("".join(frames) + "data: [DONE]\n\n").encode()
 
 
-def model(*turns: Turn) -> ReasoningChatOpenAI:
-    """Answers each request with the next turn's deltas and finish reason."""
+def completion(deltas: list[dict[str, Any]], finish: str = "stop") -> dict[str, Any]:
+    """The same reply as one non-streamed response, as vLLM sends it when `stream` is off."""
+    message: dict[str, Any] = {"role": "assistant", "content": ""}
+    for delta in deltas:
+        message["content"] += delta.get("content") or ""
+        if delta.get("reasoning"):
+            message["reasoning"] = message.get("reasoning", "") + delta["reasoning"]
+        for call in delta.get("tool_calls", []):
+            message.setdefault("tool_calls", []).append(
+                {k: v for k, v in call.items() if k != "index"}
+            )
+    choice = {"index": 0, "message": message, "finish_reason": finish}
+    return {"id": "gen-1", "object": "chat.completion", "created": 1, "model": "gpt-oss-120b",
+            "choices": [choice]}  # fmt: skip
+
+
+def model(*turns: Turn, requests: list[dict[str, Any]] | None = None) -> ReasoningChatOpenAI:
+    """Answers each request with the next turn's deltas and finish reason, and appends each
+    request body to `requests` when given."""
     queue = list(turns)
 
-    def reply(_request: httpx2.Request) -> httpx2.Response:
+    def reply(request: httpx2.Request) -> httpx2.Response:
+        body = json.loads(request.content)
+        if requests is not None:
+            requests.append(body)
         deltas, finish = queue.pop(0)
+        if not body.get("stream"):
+            return httpx2.Response(200, json=completion(deltas, finish))
         headers = {"content-type": "text/event-stream"}
         return httpx2.Response(200, headers=headers, content=sse(deltas, finish))
 

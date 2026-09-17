@@ -2,19 +2,25 @@
 
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, ToolMessage
 
+from src.graph.reasoning import without_reasoning
 from src.prompts.assistant import UNFINISHED_TOOL_CALL as UNFINISHED
 
 
 def answered(messages: list[AnyMessage]) -> list[AnyMessage]:
-    """Adds a failure result after any tool call that never got one, and drops empty replies.
+    """Adds a failure result after any tool call that never got one, drops empty replies, and
+    strips the reasoning kept on tool calls before the latest human message (earlier turns).
 
     A turn that raised mid-tool leaves its tool calls unanswered in the checkpoint, and the
     provider rejects every later request until each call has a result.
     """
+    humans = [i for i, message in enumerate(messages) if isinstance(message, HumanMessage)]
+    turn_start = humans[-1] if humans else 0
     shown: list[AnyMessage] = []
     for index, message in enumerate(messages):
         if isinstance(message, AIMessage) and not message.tool_calls and not message.text:
             continue
+        if isinstance(message, AIMessage) and index < turn_start:
+            message = without_reasoning(message)
         shown.append(message)
         if not isinstance(message, AIMessage) or not message.tool_calls:
             continue
